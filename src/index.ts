@@ -1,6 +1,11 @@
 export { useMount, type MountCallback } from './lifecycle/useMount';
 export { useUnmount, type UnmountCallback } from './lifecycle/useUnmount';
 export {
+  useAsyncState,
+  type UseAsyncStateOptions,
+  type UseAsyncStateReturn
+} from './async/useAsyncState';
+export {
   useClipboard,
   type UseClipboardOptions,
   type UseClipboardReturn
