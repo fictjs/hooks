@@ -6,4 +6,5 @@ export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalF
 export { useThrottleFn, type UseThrottleFnOptions } from './timing/useThrottleFn';
 export { useTimeoutFn, type UseTimeoutFnControls } from './timing/useTimeoutFn';
 export { useCounter, type UseCounterOptions, type UseCounterReturn } from './state/useCounter';
+export { usePrevious } from './state/usePrevious';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
