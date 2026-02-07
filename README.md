@@ -29,6 +29,7 @@ Official hooks package for Fict.
   - `useWindowScroll` -> `docs/hooks/useWindowScroll.md`
   - `useWindowSize` -> `docs/hooks/useWindowSize.md`
   - `useTitle` -> `docs/hooks/useTitle.md`
+  - `useFullscreen` -> `docs/hooks/useFullscreen.md`
   - `useMediaQuery` -> `docs/hooks/useMediaQuery.md`
   - `useDocumentVisibility` -> `docs/hooks/useDocumentVisibility.md`
   - `useNetwork` -> `docs/hooks/useNetwork.md`

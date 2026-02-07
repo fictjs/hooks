@@ -86,3 +86,8 @@ export {
 } from './browser/useWindowSize';
 export { useWindowScroll, type UseWindowScrollOptions } from './browser/useWindowScroll';
 export { useTitle, type UseTitleOptions, type UseTitleReturn } from './browser/useTitle';
+export {
+  useFullscreen,
+  type UseFullscreenOptions,
+  type UseFullscreenReturn
+} from './browser/useFullscreen';
