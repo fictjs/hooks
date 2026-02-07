@@ -18,6 +18,11 @@ export {
   type UseIntersectionObserverOptions,
   type UseIntersectionObserverReturn
 } from './observer/useIntersectionObserver';
+export {
+  useResizeObserver,
+  type UseResizeObserverOptions,
+  type UseResizeObserverReturn
+} from './observer/useResizeObserver';
 export { useCounter, type UseCounterOptions, type UseCounterReturn } from './state/useCounter';
 export { usePrevious } from './state/usePrevious';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
