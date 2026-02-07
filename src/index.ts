@@ -80,6 +80,12 @@ export {
   type UseScrollReturn
 } from './browser/useScroll';
 export {
+  usePermission,
+  type PermissionInput,
+  type UsePermissionOptions,
+  type UsePermissionReturn
+} from './browser/usePermission';
+export {
   useWindowSize,
   type UseWindowSizeOptions,
   type UseWindowSizeReturn
