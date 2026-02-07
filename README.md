@@ -1,12 +1,63 @@
 # @fictjs/hooks
 
-![Node CI](https://github.com/fictjs/hooks/workflows/Node%20CI/badge.svg)
+[![Node CI](https://github.com/fictjs/hooks/actions/workflows/nodejs.yml/badge.svg)](https://github.com/fictjs/hooks/actions/workflows/nodejs.yml)
 [![npm](https://img.shields.io/npm/v/@fictjs/hooks.svg)](https://www.npmjs.com/package/@fictjs/hooks)
 ![license](https://img.shields.io/npm/l/@fictjs/hooks)
 
 Official hooks package for Fict.
 
-## Hook docs
+`@fictjs/hooks` provides official, production-ready hooks built for Fict signal/lifecycle semantics.
+
+## Install
+
+For application usage:
+
+```bash
+pnpm add @fictjs/hooks @fictjs/runtime
+```
+
+For repository development:
+
+```bash
+pnpm install
+```
+
+## Requirements
+
+- Node.js >= 18
+- Peer dependency: `@fictjs/runtime@^0.8.0`
+
+## Quick Start
+
+```ts
+import { useCounter, useMount } from '@fictjs/hooks';
+
+export function CounterExample() {
+  const { count, inc, dec, reset } = useCounter(0);
+
+  useMount(() => {
+    inc();
+  });
+
+  return { count, inc, dec, reset };
+}
+```
+
+In plain TypeScript/JavaScript usage (without Fict compile transforms), read reactive values via accessors, for example `count()`.
+
+## Import Policy
+
+- Only import from `@fictjs/hooks`; deep imports are unsupported
+- Tree shaking is supported through ESM exports and `"sideEffects": false`
+
+## Runtime Semantics
+
+- Hooks follow Fict top-level hook rules (`useX` in component/hook top-level scope)
+- Effects/listeners/timers are auto-cleaned on root dispose
+- Browser hooks are SSR-safe and provide unsupported fallbacks
+- Browser globals can be injected with options like `window`, `document`, or `navigator` when needed
+
+## Hook Docs
 
 - Lifecycle
   - `useMount` -> `docs/hooks/useMount.md`
@@ -57,16 +108,6 @@ Official hooks package for Fict.
 - Clipboard
   - `useClipboard` -> `docs/hooks/useClipboard.md`
 
-## Requirements
-
-- Node.js >= 18
-
-## Setup
-
-```bash
-pnpm install
-```
-
 ## Demo Website
 
 Run interactive hook demos:
@@ -80,6 +121,18 @@ Build static demo site:
 ```bash
 pnpm demo:build
 ```
+
+## Quality Gates
+
+Before publish, these checks must pass:
+
+1. `pnpm lint`
+2. `pnpm typecheck`
+3. `pnpm test:types`
+4. `pnpm test`
+5. `pnpm build`
+
+`prepublishOnly` already enforces this pipeline.
 
 ## Scripts
 
@@ -95,16 +148,6 @@ pnpm demo:build
 - `pnpm test:coverage`: run tests with coverage threshold checks
 - `pnpm format`: format files with Prettier
 
-## Publish safety
-
-`prepublishOnly` runs:
-
-1. `pnpm lint`
-2. `pnpm typecheck`
-3. `pnpm test:types`
-4. `pnpm test`
-5. `pnpm build`
-
-## Entry
+## Package Entry
 
 Package entry is `src/index.ts`.
