@@ -18,6 +18,11 @@ export {
   type UseClickOutsideOptions
 } from './event/useClickOutside';
 export { useEventListener, type UseEventListenerControls } from './event/useEventListener';
+export {
+  useFocusWithin,
+  type UseFocusWithinOptions,
+  type UseFocusWithinReturn
+} from './event/useFocusWithin';
 export { useHover, type UseHoverOptions, type UseHoverReturn } from './event/useHover';
 export { useDebounceFn, type UseDebounceFnOptions } from './timing/useDebounceFn';
 export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalFn';

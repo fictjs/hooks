@@ -11,6 +11,7 @@ Official hooks package for Fict.
   - `useEventListener` -> `docs/hooks/useEventListener.md`
   - `useClickOutside` -> `docs/hooks/useClickOutside.md`
   - `useHover` -> `docs/hooks/useHover.md`
+  - `useFocusWithin` -> `docs/hooks/useFocusWithin.md`
 - Timing
   - `useDebounceFn` -> `docs/hooks/useDebounceFn.md`
   - `useThrottleFn` -> `docs/hooks/useThrottleFn.md`
