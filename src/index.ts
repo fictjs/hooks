@@ -45,6 +45,12 @@ export { useCounter, type UseCounterOptions, type UseCounterReturn } from './sta
 export { usePrevious } from './state/usePrevious';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
 export {
+  useVirtualList,
+  type UseVirtualListOptions,
+  type UseVirtualListReturn,
+  type VirtualItem
+} from './state/useVirtualList';
+export {
   useDocumentVisibility,
   type UseDocumentVisibilityOptions,
   type UseDocumentVisibilityReturn
