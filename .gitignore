@@ -141,3 +141,4 @@ vite.config.ts.timestamp-*
 # Local research assets
 .DS_Store
 3rd-hooks/
+playground/dist/

@@ -1,0 +1,236 @@
+:root {
+  --bg-0: #f4f0e7;
+  --bg-1: #f0e3d0;
+  --ink: #1d1b18;
+  --muted: #5d5650;
+  --card: rgba(255, 253, 248, 0.86);
+  --line: rgba(38, 33, 27, 0.15);
+  --accent: #c4472d;
+  --accent-soft: rgba(196, 71, 45, 0.14);
+  --ok: #1e8f54;
+  --warn: #b48219;
+  --err: #bc3120;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 171, 74, 0.24), transparent 42%),
+    radial-gradient(circle at 80% 5%, rgba(196, 71, 45, 0.22), transparent 40%),
+    linear-gradient(170deg, var(--bg-0), var(--bg-1));
+  font-family: 'Space Grotesk', ui-sans-serif, sans-serif;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(42, 37, 31, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(42, 37, 31, 0.03) 1px, transparent 1px);
+  background-size: 30px 30px;
+  opacity: 0.65;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 32px 16px 56px;
+}
+
+.hero {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 26px;
+  background: linear-gradient(140deg, rgba(255, 251, 244, 0.98), rgba(250, 235, 207, 0.84));
+  box-shadow:
+    0 16px 40px rgba(79, 55, 24, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  animation: rise 0.45s ease;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  letter-spacing: -0.02em;
+}
+
+.hero p {
+  margin: 8px 0 0;
+  max-width: 840px;
+  color: var(--muted);
+}
+
+.hero code {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.9rem;
+  background: rgba(52, 41, 30, 0.08);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.grid {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  backdrop-filter: blur(2px);
+  box-shadow: 0 14px 26px rgba(80, 54, 17, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-height: 192px;
+  animation: rise 0.52s ease;
+}
+
+.card-head {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(61, 52, 44, 0.1);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  letter-spacing: -0.01em;
+}
+
+.tag {
+  margin-top: 6px;
+  display: inline-block;
+  font-size: 0.75rem;
+  color: #5f2a1e;
+  background: rgba(196, 71, 45, 0.14);
+  border: 1px solid rgba(196, 71, 45, 0.26);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.card-body {
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.mono,
+.output {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+.output {
+  border: 1px dashed var(--line);
+  background: rgba(255, 255, 255, 0.56);
+  padding: 8px;
+  border-radius: 10px;
+  min-height: 36px;
+  color: #2f2b27;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button,
+input,
+select {
+  border-radius: 10px;
+  border: 1px solid rgba(53, 44, 35, 0.24);
+  padding: 7px 10px;
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: #fff;
+}
+
+button:hover {
+  border-color: rgba(53, 44, 35, 0.44);
+}
+
+button.primary {
+  color: #fff;
+  border-color: #a63a26;
+  background: linear-gradient(135deg, #b83f2a, #d45d39);
+}
+
+.small {
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.err {
+  color: var(--err);
+}
+
+.virtual-box {
+  height: 180px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.virtual-inner {
+  position: relative;
+}
+
+.virtual-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 28px;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(50, 40, 32, 0.07);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.84rem;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  #app {
+    padding: 18px 12px 32px;
+  }
+
+  .hero {
+    border-radius: 16px;
+    padding: 18px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

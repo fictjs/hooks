@@ -51,10 +51,27 @@ Official hooks package for Fict.
 npm install
 ```
 
+## Demo Website
+
+Run interactive hook demos:
+
+```bash
+npm run demo:dev
+```
+
+Build static demo site:
+
+```bash
+npm run demo:build
+```
+
 ## Scripts
 
 - `npm run dev`: watch mode build with tsup
 - `npm run build`: build ESM + CJS + d.ts to `dist`
+- `npm run demo:dev`: run Vite demo website (`playground/`)
+- `npm run demo:build`: build Vite demo website
+- `npm run demo:preview`: preview built demo website
 - `npm run typecheck`: TypeScript type checking
 - `npm run lint`: ESLint check
 - `npm run test`: run unit tests with Vitest
