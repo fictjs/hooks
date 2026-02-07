@@ -5,4 +5,5 @@ export { useDebounceFn, type UseDebounceFnOptions } from './timing/useDebounceFn
 export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalFn';
 export { useThrottleFn, type UseThrottleFnOptions } from './timing/useThrottleFn';
 export { useTimeoutFn, type UseTimeoutFnControls } from './timing/useTimeoutFn';
+export { useCounter, type UseCounterOptions, type UseCounterReturn } from './state/useCounter';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
