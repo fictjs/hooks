@@ -62,6 +62,12 @@ export {
 } from './browser/useMediaQuery';
 export { useNetwork, type UseNetworkOptions, type UseNetworkReturn } from './browser/useNetwork';
 export {
+  useScroll,
+  type ScrollPosition,
+  type UseScrollOptions,
+  type UseScrollReturn
+} from './browser/useScroll';
+export {
   useWindowSize,
   type UseWindowSizeOptions,
   type UseWindowSizeReturn
