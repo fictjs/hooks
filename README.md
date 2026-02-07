@@ -73,8 +73,10 @@ npm run demo:build
 - `npm run demo:build`: build Vite demo website
 - `npm run demo:preview`: preview built demo website
 - `npm run typecheck`: TypeScript type checking
+- `npm run test:types`: API type assertion tests
 - `npm run lint`: ESLint check
 - `npm run test`: run unit tests with Vitest
+- `npm run test:coverage`: run tests with coverage threshold checks
 - `npm run format`: format files with Prettier
 
 ## Publish safety
@@ -83,8 +85,9 @@ npm run demo:build
 
 1. `npm run lint`
 2. `npm run typecheck`
-3. `npm run test`
-4. `npm run build`
+3. `npm run test:types`
+4. `npm run test`
+5. `npm run build`
 
 ## Entry
 
