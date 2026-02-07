@@ -23,6 +23,7 @@ Official hooks package for Fict.
   - `useVirtualList` -> `docs/hooks/useVirtualList.md`
 - Browser
   - `useScroll` -> `docs/hooks/useScroll.md`
+  - `useWindowScroll` -> `docs/hooks/useWindowScroll.md`
   - `useWindowSize` -> `docs/hooks/useWindowSize.md`
   - `useTitle` -> `docs/hooks/useTitle.md`
   - `useMediaQuery` -> `docs/hooks/useMediaQuery.md`

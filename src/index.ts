@@ -72,4 +72,5 @@ export {
   type UseWindowSizeOptions,
   type UseWindowSizeReturn
 } from './browser/useWindowSize';
+export { useWindowScroll, type UseWindowScrollOptions } from './browser/useWindowScroll';
 export { useTitle, type UseTitleOptions, type UseTitleReturn } from './browser/useTitle';
