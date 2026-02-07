@@ -1,6 +1,11 @@
 export { useMount, type MountCallback } from './lifecycle/useMount';
 export { useUnmount, type UnmountCallback } from './lifecycle/useUnmount';
 export {
+  useClipboard,
+  type UseClipboardOptions,
+  type UseClipboardReturn
+} from './clipboard/useClipboard';
+export {
   useClickOutside,
   type UseClickOutsideControls,
   type UseClickOutsideOptions
