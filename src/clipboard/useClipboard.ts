@@ -2,11 +2,11 @@ import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultDocument, defaultNavigator, defaultWindow } from '../internal/env';
 
-interface NavigatorClipboardLike extends Navigator {
+type NavigatorClipboardLike = {
   clipboard?: {
     writeText: (text: string) => Promise<void>;
   };
-}
+};
 
 export interface UseClipboardOptions {
   navigator?: NavigatorClipboardLike | null;
@@ -62,7 +62,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
   );
 
   const copiedDuring = options.copiedDuring ?? 1500;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: number | undefined;
 
   const resetCopiedLater = () => {
     if (!windowRef) {

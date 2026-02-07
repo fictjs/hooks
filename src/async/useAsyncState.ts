@@ -59,7 +59,7 @@ export function useAsyncState<T, Args extends unknown[] = []>(
   };
 
   if (options.immediate) {
-    void execute().catch(() => {
+    void execute(...([] as unknown as Args)).catch(() => {
       // ignore by default; error signal + onError handle it
     });
   }

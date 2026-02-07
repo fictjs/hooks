@@ -48,17 +48,9 @@ export function useMediaQuery(
       matches(event.matches);
     };
 
-    if ('addEventListener' in mql) {
-      mql.addEventListener('change', listener);
-      onCleanup(() => {
-        mql.removeEventListener('change', listener);
-      });
-      return;
-    }
-
-    mql.addListener(listener);
+    mql.addEventListener('change', listener);
     onCleanup(() => {
-      mql.removeListener(listener);
+      mql.removeEventListener('change', listener);
     });
   });
 

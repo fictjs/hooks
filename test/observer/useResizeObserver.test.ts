@@ -40,7 +40,7 @@ describe('useResizeObserver', () => {
     const instance = MockResizeObserver.instances[0]!;
     expect(instance.observe).toHaveBeenCalledWith(element, undefined);
 
-    const entry = { target: element } as ResizeObserverEntry;
+    const entry = { target: element } as unknown as ResizeObserverEntry;
     instance.trigger([entry]);
 
     expect(state.entries()).toEqual([entry]);

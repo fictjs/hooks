@@ -13,7 +13,7 @@ describe('useClipboard', () => {
       clipboard: {
         writeText
       }
-    } as Navigator;
+    } as unknown as Navigator;
 
     const { value: state } = createRoot(() =>
       useClipboard({
@@ -39,7 +39,7 @@ describe('useClipboard', () => {
       clipboard: {
         writeText
       }
-    } as Navigator;
+    } as unknown as Navigator;
 
     const { value: state } = createRoot(() =>
       useClipboard({ navigator: navigatorRef as never, window, document, copiedDuring: 100 })

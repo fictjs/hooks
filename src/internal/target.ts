@@ -17,7 +17,7 @@ export function resolveTarget<T>(target: MaybeRefOrAccessor<T>): T | undefined {
   }
 
   if (typeof target === 'function') {
-    return target() ?? undefined;
+    return (target as () => T | null | undefined)() ?? undefined;
   }
 
   if (typeof target === 'object' && 'current' in target) {

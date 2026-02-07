@@ -42,7 +42,7 @@ describe('useMutationObserver', () => {
       expect.objectContaining({ subtree: true, childList: true })
     );
 
-    const record = { type: 'childList', target: element } as MutationRecord;
+    const record = { type: 'childList', target: element } as unknown as MutationRecord;
     instance.trigger([record]);
 
     expect(state.records()).toEqual([record]);

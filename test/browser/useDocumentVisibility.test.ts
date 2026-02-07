@@ -34,10 +34,10 @@ describe('useDocumentVisibility', () => {
 
   it('uses fallback without document', () => {
     const { value: state } = createRoot(() =>
-      useDocumentVisibility({ document: null, initialVisibility: 'prerender' })
+      useDocumentVisibility({ document: null, initialVisibility: 'hidden' })
     );
 
-    expect(state.visibility()).toBe('prerender');
+    expect(state.visibility()).toBe('hidden');
     expect(state.hidden()).toBe(true);
   });
 });

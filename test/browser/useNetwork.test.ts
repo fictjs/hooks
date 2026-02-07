@@ -16,7 +16,7 @@ describe('useNetwork', () => {
     const navigatorRef = {
       onLine: true,
       connection
-    } as Navigator;
+    } as unknown as Navigator;
     const windowRef = new EventTarget() as Window;
 
     const { value: state } = createRoot(() =>
@@ -55,7 +55,7 @@ describe('useNetwork', () => {
     const navigatorRef = {
       onLine: true,
       connection
-    } as Navigator;
+    } as unknown as Navigator;
     const windowRef = new EventTarget() as Window;
 
     const { value: state } = createRoot(() =>

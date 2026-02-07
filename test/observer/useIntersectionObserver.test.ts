@@ -40,7 +40,7 @@ describe('useIntersectionObserver', () => {
     const instance = MockIntersectionObserver.instances[0]!;
     expect(instance.observe).toHaveBeenCalledWith(element);
 
-    const entry = { isIntersecting: true, target: element } as IntersectionObserverEntry;
+    const entry = { isIntersecting: true, target: element } as unknown as IntersectionObserverEntry;
     instance.trigger([entry]);
 
     expect(state.entries()).toEqual([entry]);

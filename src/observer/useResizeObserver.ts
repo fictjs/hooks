@@ -27,8 +27,11 @@ export function useResizeObserver(
   options: UseResizeObserverOptions = {}
 ): UseResizeObserverReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
+  const observerCtor =
+    (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)?.ResizeObserver ??
+    globalThis.ResizeObserver;
   const entries = createSignal<ResizeObserverEntry[]>([]);
-  const isSupported = createSignal(!!windowRef?.ResizeObserver);
+  const isSupported = createSignal(!!observerCtor);
   const active = createSignal(true);
 
   let cleanup = () => {};
@@ -40,16 +43,19 @@ export function useResizeObserver(
       return;
     }
 
-    if (!windowRef?.ResizeObserver) {
+    const Observer = observerCtor;
+    if (!Observer) {
       isSupported(false);
       return;
     }
 
     isSupported(true);
-    const observer = new windowRef.ResizeObserver((nextEntries, currentObserver) => {
-      entries(nextEntries);
-      callback?.(nextEntries, currentObserver);
-    });
+    const observer = new Observer(
+      (nextEntries: ResizeObserverEntry[], currentObserver: ResizeObserver) => {
+        entries(nextEntries);
+        callback?.(nextEntries, currentObserver);
+      }
+    );
 
     const targets = resolveTargetList(target);
     for (const element of targets) {
