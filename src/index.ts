@@ -9,6 +9,11 @@ export { useCounter, type UseCounterOptions, type UseCounterReturn } from './sta
 export { usePrevious } from './state/usePrevious';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
 export {
+  useMediaQuery,
+  type UseMediaQueryOptions,
+  type UseMediaQueryReturn
+} from './browser/useMediaQuery';
+export {
   useWindowSize,
   type UseWindowSizeOptions,
   type UseWindowSizeReturn
