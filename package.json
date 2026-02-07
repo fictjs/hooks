@@ -4,6 +4,7 @@
   "description": "Official hooks package for Fict",
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@9.1.1",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -41,7 +42,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "prepare": "husky",
-    "prepublishOnly": "npm run lint && npm run typecheck && npm run test:types && npm run test && npm run build"
+    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [

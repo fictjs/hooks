@@ -60,7 +60,7 @@ Official hooks package for Fict.
 ## Setup
 
 ```bash
-npm install
+pnpm install
 ```
 
 ## Demo Website
@@ -68,38 +68,38 @@ npm install
 Run interactive hook demos:
 
 ```bash
-npm run demo:dev
+pnpm demo:dev
 ```
 
 Build static demo site:
 
 ```bash
-npm run demo:build
+pnpm demo:build
 ```
 
 ## Scripts
 
-- `npm run dev`: watch mode build with tsup
-- `npm run build`: build ESM + CJS + d.ts to `dist`
-- `npm run demo:dev`: run Vite demo website (`playground/`)
-- `npm run demo:build`: build Vite demo website
-- `npm run demo:preview`: preview built demo website
-- `npm run typecheck`: TypeScript type checking
-- `npm run test:types`: API type assertion tests
-- `npm run lint`: ESLint check
-- `npm run test`: run unit tests with Vitest
-- `npm run test:coverage`: run tests with coverage threshold checks
-- `npm run format`: format files with Prettier
+- `pnpm dev`: watch mode build with tsup
+- `pnpm build`: build ESM + CJS + d.ts to `dist`
+- `pnpm demo:dev`: run Vite demo website (`playground/`)
+- `pnpm demo:build`: build Vite demo website
+- `pnpm demo:preview`: preview built demo website
+- `pnpm typecheck`: TypeScript type checking
+- `pnpm test:types`: API type assertion tests
+- `pnpm lint`: ESLint check
+- `pnpm test`: run unit tests with Vitest
+- `pnpm test:coverage`: run tests with coverage threshold checks
+- `pnpm format`: format files with Prettier
 
 ## Publish safety
 
 `prepublishOnly` runs:
 
-1. `npm run lint`
-2. `npm run typecheck`
-3. `npm run test:types`
-4. `npm run test`
-5. `npm run build`
+1. `pnpm lint`
+2. `pnpm typecheck`
+3. `pnpm test:types`
+4. `pnpm test`
+5. `pnpm build`
 
 ## Entry
 
