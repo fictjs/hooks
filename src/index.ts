@@ -91,6 +91,7 @@ export {
   type UseGeolocationOptions,
   type UseGeolocationReturn
 } from './browser/useGeolocation';
+export { useIdle, type UseIdleOptions, type UseIdleReturn } from './browser/useIdle';
 export {
   useWindowSize,
   type UseWindowSizeOptions,
