@@ -92,6 +92,7 @@ export {
   type UseGeolocationReturn
 } from './browser/useGeolocation';
 export { useIdle, type UseIdleOptions, type UseIdleReturn } from './browser/useIdle';
+export { useSize, type UseSizeOptions, type UseSizeReturn } from './browser/useSize';
 export {
   useWindowSize,
   type UseWindowSizeOptions,
