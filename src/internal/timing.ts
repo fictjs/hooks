@@ -134,24 +134,18 @@ export function createThrottledFn<T extends Procedure>(
     fn(...args);
   };
 
-  const schedule = () => {
-    if (!trailing || !lastArgs) {
+  const tick = () => {
+    if (trailing && lastArgs) {
+      const args = lastArgs;
+      lastArgs = undefined;
       pending = false;
-      timer = undefined;
+      invoke(args);
+      timer = setTimeout(tick, wait);
       return;
     }
 
-    timer = setTimeout(() => {
-      if (!lastArgs) {
-        pending = false;
-        timer = undefined;
-        return;
-      }
-      const args = lastArgs;
-      lastArgs = undefined;
-      invoke(args);
-      schedule();
-    }, wait);
+    timer = undefined;
+    pending = false;
   };
 
   const run = (...args: Parameters<T>) => {
@@ -160,12 +154,9 @@ export function createThrottledFn<T extends Procedure>(
         invoke(args);
       } else if (trailing) {
         lastArgs = args;
+        pending = true;
       }
-      pending = !!lastArgs;
-      timer = setTimeout(() => {
-        timer = undefined;
-        schedule();
-      }, wait);
+      timer = setTimeout(tick, wait);
       return;
     }
 
