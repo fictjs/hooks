@@ -19,6 +19,11 @@ export {
   type UseIntersectionObserverReturn
 } from './observer/useIntersectionObserver';
 export {
+  useMutationObserver,
+  type UseMutationObserverOptions,
+  type UseMutationObserverReturn
+} from './observer/useMutationObserver';
+export {
   useResizeObserver,
   type UseResizeObserverOptions,
   type UseResizeObserverReturn
