@@ -10,6 +10,7 @@ Official hooks package for Fict.
 - Event
   - `useEventListener` -> `docs/hooks/useEventListener.md`
   - `useClickOutside` -> `docs/hooks/useClickOutside.md`
+  - `useHover` -> `docs/hooks/useHover.md`
 - Timing
   - `useDebounceFn` -> `docs/hooks/useDebounceFn.md`
   - `useThrottleFn` -> `docs/hooks/useThrottleFn.md`

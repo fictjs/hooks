@@ -18,6 +18,7 @@ export {
   type UseClickOutsideOptions
 } from './event/useClickOutside';
 export { useEventListener, type UseEventListenerControls } from './event/useEventListener';
+export { useHover, type UseHoverOptions, type UseHoverReturn } from './event/useHover';
 export { useDebounceFn, type UseDebounceFnOptions } from './timing/useDebounceFn';
 export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalFn';
 export { useRafFn, type UseRafFnOptions, type UseRafFnReturn } from './timing/useRafFn';
