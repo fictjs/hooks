@@ -94,6 +94,13 @@ export {
 export { useIdle, type UseIdleOptions, type UseIdleReturn } from './browser/useIdle';
 export { useSize, type UseSizeOptions, type UseSizeReturn } from './browser/useSize';
 export {
+  useWebSocket,
+  type UseWebSocketOptions,
+  type UseWebSocketReconnectOptions,
+  type UseWebSocketReturn,
+  type WebSocketStatus
+} from './browser/useWebSocket';
+export {
   useWindowSize,
   type UseWindowSizeOptions,
   type UseWindowSizeReturn

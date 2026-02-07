@@ -34,6 +34,7 @@ Official hooks package for Fict.
   - `useGeolocation` -> `docs/hooks/useGeolocation.md`
   - `useIdle` -> `docs/hooks/useIdle.md`
   - `useSize` -> `docs/hooks/useSize.md`
+  - `useWebSocket` -> `docs/hooks/useWebSocket.md`
   - `useMediaQuery` -> `docs/hooks/useMediaQuery.md`
   - `useDocumentVisibility` -> `docs/hooks/useDocumentVisibility.md`
   - `useNetwork` -> `docs/hooks/useNetwork.md`
