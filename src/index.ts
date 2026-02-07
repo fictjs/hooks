@@ -1,6 +1,1 @@
-/**
- * Official hooks for Fict.
- *
- * This package is scaffolded and ready for new hooks exports.
- */
-export {};
+export { useMount, type MountCallback } from './lifecycle/useMount';
