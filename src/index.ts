@@ -11,6 +11,7 @@ export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalF
 export { useThrottleFn, type UseThrottleFnOptions } from './timing/useThrottleFn';
 export { useTimeoutFn, type UseTimeoutFnControls } from './timing/useTimeoutFn';
 export { useLocalStorage } from './storage/useLocalStorage';
+export { useSessionStorage } from './storage/useSessionStorage';
 export { useStorage, type UseStorageHookOptions } from './storage/useStorage';
 export { useCounter, type UseCounterOptions, type UseCounterReturn } from './state/useCounter';
 export { usePrevious } from './state/usePrevious';
