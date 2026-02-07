@@ -13,6 +13,11 @@ export { useTimeoutFn, type UseTimeoutFnControls } from './timing/useTimeoutFn';
 export { useLocalStorage } from './storage/useLocalStorage';
 export { useSessionStorage } from './storage/useSessionStorage';
 export { useStorage, type UseStorageHookOptions } from './storage/useStorage';
+export {
+  useIntersectionObserver,
+  type UseIntersectionObserverOptions,
+  type UseIntersectionObserverReturn
+} from './observer/useIntersectionObserver';
 export { useCounter, type UseCounterOptions, type UseCounterReturn } from './state/useCounter';
 export { usePrevious } from './state/usePrevious';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
