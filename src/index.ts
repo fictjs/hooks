@@ -18,6 +18,7 @@ export {
   type UseMediaQueryOptions,
   type UseMediaQueryReturn
 } from './browser/useMediaQuery';
+export { useNetwork, type UseNetworkOptions, type UseNetworkReturn } from './browser/useNetwork';
 export {
   useWindowSize,
   type UseWindowSizeOptions,
