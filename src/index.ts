@@ -66,3 +66,4 @@ export {
   type UseWindowSizeOptions,
   type UseWindowSizeReturn
 } from './browser/useWindowSize';
+export { useTitle, type UseTitleOptions, type UseTitleReturn } from './browser/useTitle';
