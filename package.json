@@ -2,6 +2,14 @@
   "name": "@fictjs/hooks",
   "version": "0.1.0",
   "description": "Official hooks package for Fict",
+  "keywords": [
+    "fict",
+    "fictjs",
+    "hooks",
+    "signals",
+    "reactive",
+    "typescript"
+  ],
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@9.1.1",

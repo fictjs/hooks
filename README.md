@@ -8,18 +8,23 @@ Official hooks package for Fict.
 
 `@fictjs/hooks` provides official, production-ready hooks built for Fict signal/lifecycle semantics.
 
+## Highlights
+
+- 39 official hooks across lifecycle, event, timing, state, browser, storage, observer, async and clipboard
+- SSR-safe browser hooks with injectable globals (`window`, `document`, `navigator`) for non-browser/test environments
+- Root-only public entry (`@fictjs/hooks`) with ESM tree shaking support
+- Strong type coverage and CI quality gates (`lint`, `typecheck`, `test:types`, `test`, `build`)
+
 ## Install
 
 For application usage:
 
 ```bash
+npm add @fictjs/hooks @fictjs/runtime
+# or
+yarn add @fictjs/hooks @fictjs/runtime
+# or
 pnpm add @fictjs/hooks @fictjs/runtime
-```
-
-For repository development:
-
-```bash
-pnpm install
 ```
 
 ## Requirements
@@ -59,54 +64,17 @@ In plain TypeScript/JavaScript usage (without Fict compile transforms), read rea
 
 ## Hook Docs
 
-- Lifecycle
-  - `useMount` -> `docs/hooks/useMount.md`
-  - `useUnmount` -> `docs/hooks/useUnmount.md`
-- Event
-  - `useEventListener` -> `docs/hooks/useEventListener.md`
-  - `useClickOutside` -> `docs/hooks/useClickOutside.md`
-  - `useHover` -> `docs/hooks/useHover.md`
-  - `useFocusWithin` -> `docs/hooks/useFocusWithin.md`
-  - `useKeyPress` -> `docs/hooks/useKeyPress.md`
-- Timing
-  - `useDebounceFn` -> `docs/hooks/useDebounceFn.md`
-  - `useThrottleFn` -> `docs/hooks/useThrottleFn.md`
-  - `useTimeoutFn` -> `docs/hooks/useTimeoutFn.md`
-  - `useIntervalFn` -> `docs/hooks/useIntervalFn.md`
-  - `useRafFn` -> `docs/hooks/useRafFn.md`
-- State
-  - `useToggle` -> `docs/hooks/useToggle.md`
-  - `useCounter` -> `docs/hooks/useCounter.md`
-  - `usePrevious` -> `docs/hooks/usePrevious.md`
-  - `useVirtualList` -> `docs/hooks/useVirtualList.md`
-- Browser
-  - `useScroll` -> `docs/hooks/useScroll.md`
-  - `useWindowScroll` -> `docs/hooks/useWindowScroll.md`
-  - `useWindowSize` -> `docs/hooks/useWindowSize.md`
-  - `useTitle` -> `docs/hooks/useTitle.md`
-  - `useFullscreen` -> `docs/hooks/useFullscreen.md`
-  - `usePermission` -> `docs/hooks/usePermission.md`
-  - `useGeolocation` -> `docs/hooks/useGeolocation.md`
-  - `useIdle` -> `docs/hooks/useIdle.md`
-  - `useSize` -> `docs/hooks/useSize.md`
-  - `useWebSocket` -> `docs/hooks/useWebSocket.md`
-  - `useMediaQuery` -> `docs/hooks/useMediaQuery.md`
-  - `useDocumentVisibility` -> `docs/hooks/useDocumentVisibility.md`
-  - `useNetwork` -> `docs/hooks/useNetwork.md`
-- Storage
-  - `useStorage` -> `docs/hooks/useStorage.md`
-  - `useLocalStorage` -> `docs/hooks/useLocalStorage.md`
-  - `useSessionStorage` -> `docs/hooks/useSessionStorage.md`
-- Observer
-  - `useIntersectionObserver` -> `docs/hooks/useIntersectionObserver.md`
-  - `useResizeObserver` -> `docs/hooks/useResizeObserver.md`
-  - `useMutationObserver` -> `docs/hooks/useMutationObserver.md`
-- Async
-  - `useAsyncState` -> `docs/hooks/useAsyncState.md`
-  - `useFetch` -> `docs/hooks/useFetch.md`
-  - `useRequest` -> `docs/hooks/useRequest.md`
-- Clipboard
-  - `useClipboard` -> `docs/hooks/useClipboard.md`
+All hook docs live in [`docs/hooks`](docs/hooks).
+
+- Lifecycle: [`useMount`](docs/hooks/useMount.md), [`useUnmount`](docs/hooks/useUnmount.md)
+- Event: [`useEventListener`](docs/hooks/useEventListener.md), [`useClickOutside`](docs/hooks/useClickOutside.md), [`useHover`](docs/hooks/useHover.md), [`useFocusWithin`](docs/hooks/useFocusWithin.md), [`useKeyPress`](docs/hooks/useKeyPress.md)
+- Timing: [`useDebounceFn`](docs/hooks/useDebounceFn.md), [`useThrottleFn`](docs/hooks/useThrottleFn.md), [`useTimeoutFn`](docs/hooks/useTimeoutFn.md), [`useIntervalFn`](docs/hooks/useIntervalFn.md), [`useRafFn`](docs/hooks/useRafFn.md)
+- State: [`useToggle`](docs/hooks/useToggle.md), [`useCounter`](docs/hooks/useCounter.md), [`usePrevious`](docs/hooks/usePrevious.md), [`useVirtualList`](docs/hooks/useVirtualList.md)
+- Browser: [`useScroll`](docs/hooks/useScroll.md), [`useWindowScroll`](docs/hooks/useWindowScroll.md), [`useWindowSize`](docs/hooks/useWindowSize.md), [`useTitle`](docs/hooks/useTitle.md), [`useFullscreen`](docs/hooks/useFullscreen.md), [`usePermission`](docs/hooks/usePermission.md), [`useGeolocation`](docs/hooks/useGeolocation.md), [`useIdle`](docs/hooks/useIdle.md), [`useSize`](docs/hooks/useSize.md), [`useWebSocket`](docs/hooks/useWebSocket.md), [`useMediaQuery`](docs/hooks/useMediaQuery.md), [`useDocumentVisibility`](docs/hooks/useDocumentVisibility.md), [`useNetwork`](docs/hooks/useNetwork.md)
+- Storage: [`useStorage`](docs/hooks/useStorage.md), [`useLocalStorage`](docs/hooks/useLocalStorage.md), [`useSessionStorage`](docs/hooks/useSessionStorage.md)
+- Observer: [`useIntersectionObserver`](docs/hooks/useIntersectionObserver.md), [`useResizeObserver`](docs/hooks/useResizeObserver.md), [`useMutationObserver`](docs/hooks/useMutationObserver.md)
+- Async: [`useAsyncState`](docs/hooks/useAsyncState.md), [`useFetch`](docs/hooks/useFetch.md), [`useRequest`](docs/hooks/useRequest.md)
+- Clipboard: [`useClipboard`](docs/hooks/useClipboard.md)
 
 ## Demo Website
 
@@ -133,20 +101,6 @@ Before publish, these checks must pass:
 5. `pnpm build`
 
 `prepublishOnly` already enforces this pipeline.
-
-## Scripts
-
-- `pnpm dev`: watch mode build with tsup
-- `pnpm build`: build ESM + CJS + d.ts to `dist`
-- `pnpm demo:dev`: run Vite demo website (`playground/`)
-- `pnpm demo:build`: build Vite demo website
-- `pnpm demo:preview`: preview built demo website
-- `pnpm typecheck`: TypeScript type checking
-- `pnpm test:types`: API type assertion tests
-- `pnpm lint`: ESLint check
-- `pnpm test`: run unit tests with Vitest
-- `pnpm test:coverage`: run tests with coverage threshold checks
-- `pnpm format`: format files with Prettier
 
 ## Package Entry
 
