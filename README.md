@@ -1,5 +1,9 @@
 # @fictjs/hooks
 
+![Node CI](https://github.com/fictjs/hooks/workflows/Node%20CI/badge.svg)
+[![npm](https://img.shields.io/npm/v/@fictjs/hooks.svg)](https://www.npmjs.com/package/@fictjs/hooks)
+![license](https://img.shields.io/npm/l/@fictjs/hooks)
+
 Official hooks package for Fict.
 
 ## Hook docs

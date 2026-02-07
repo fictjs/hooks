@@ -25,6 +25,19 @@
   "peerDependencies": {
     "@fictjs/runtime": "^0.8.0"
   },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fictjs/hooks.git"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -42,6 +55,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "prepare": "husky",
+    "commit": "pnpm git-cz",
     "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build"
   },
   "lint-staged": {
@@ -58,6 +72,7 @@
     "@fictjs/runtime": "^0.8.0",
     "@types/node": "^22.13.1",
     "@vitest/coverage-v8": "^3.2.4",
+    "commitizen": "^4.3.1",
     "eslint": "^9.20.1",
     "husky": "^9.1.7",
     "jsdom": "^27.4.0",
