@@ -18,6 +18,7 @@ export {
 export { useEventListener, type UseEventListenerControls } from './event/useEventListener';
 export { useDebounceFn, type UseDebounceFnOptions } from './timing/useDebounceFn';
 export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalFn';
+export { useRafFn, type UseRafFnOptions, type UseRafFnReturn } from './timing/useRafFn';
 export { useThrottleFn, type UseThrottleFnOptions } from './timing/useThrottleFn';
 export { useTimeoutFn, type UseTimeoutFnControls } from './timing/useTimeoutFn';
 export { useLocalStorage } from './storage/useLocalStorage';
