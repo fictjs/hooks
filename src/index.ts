@@ -86,6 +86,12 @@ export {
   type UsePermissionReturn
 } from './browser/usePermission';
 export {
+  useGeolocation,
+  type GeolocationCoordsState,
+  type UseGeolocationOptions,
+  type UseGeolocationReturn
+} from './browser/useGeolocation';
+export {
   useWindowSize,
   type UseWindowSizeOptions,
   type UseWindowSizeReturn
