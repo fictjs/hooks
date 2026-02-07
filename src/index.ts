@@ -6,6 +6,7 @@ export {
   type UseAsyncStateReturn
 } from './async/useAsyncState';
 export { useFetch, type UseFetchOptions, type UseFetchReturn } from './async/useFetch';
+export { useRequest, type UseRequestOptions, type UseRequestReturn } from './async/useRequest';
 export {
   useClipboard,
   type UseClipboardOptions,
