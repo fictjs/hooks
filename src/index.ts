@@ -8,3 +8,8 @@ export { useTimeoutFn, type UseTimeoutFnControls } from './timing/useTimeoutFn';
 export { useCounter, type UseCounterOptions, type UseCounterReturn } from './state/useCounter';
 export { usePrevious } from './state/usePrevious';
 export { useToggle, type UseToggleReturn } from './state/useToggle';
+export {
+  useWindowSize,
+  type UseWindowSizeOptions,
+  type UseWindowSizeReturn
+} from './browser/useWindowSize';

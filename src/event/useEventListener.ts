@@ -18,7 +18,7 @@ export interface UseEventListenerControls {
 export function useEventListener<E extends Event = Event>(
   target: MaybeTarget<EventTarget> | Array<MaybeTarget<EventTarget>>,
   event: EventName | MaybeAccessor<EventName>,
-  handler: ((event: E) => void) | MaybeAccessor<(event: E) => void>,
+  handler: (event: E) => void,
   options: UseEventListenerOptions = {}
 ): UseEventListenerControls {
   const active = createSignal(options.immediate ?? true);
@@ -33,8 +33,7 @@ export function useEventListener<E extends Event = Event>(
     }
 
     const listener = (eventObject: Event) => {
-      const fn = toValue(handler as MaybeAccessor<(event: E) => void>);
-      fn(eventObject as E);
+      handler(eventObject as E);
     };
 
     const listenerOptions: AddEventListenerOptions = {
