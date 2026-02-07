@@ -24,6 +24,12 @@ export {
   type UseFocusWithinReturn
 } from './event/useFocusWithin';
 export { useHover, type UseHoverOptions, type UseHoverReturn } from './event/useHover';
+export {
+  useKeyPress,
+  type KeyEventName,
+  type KeyFilter,
+  type UseKeyPressOptions
+} from './event/useKeyPress';
 export { useDebounceFn, type UseDebounceFnOptions } from './timing/useDebounceFn';
 export { useIntervalFn, type UseIntervalFnControls } from './timing/useIntervalFn';
 export { useRafFn, type UseRafFnOptions, type UseRafFnReturn } from './timing/useRafFn';
