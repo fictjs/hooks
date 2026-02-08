@@ -102,6 +102,6 @@ Before publish, these checks must pass:
 
 `prepublishOnly` already enforces this pipeline.
 
-## Package Entry
+## License
 
-Package entry is `src/index.ts`.
+[MIT](./LICENSE)
