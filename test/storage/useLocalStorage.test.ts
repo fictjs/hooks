@@ -59,6 +59,7 @@ describe('useLocalStorage', () => {
 
     state.set(3);
     expect(onError).toHaveBeenCalled();
-    expect((onError.mock.calls.at(-1)?.[0] as Error).message).toBe('cannot write');
+    const lastOnErrorCall = onError.mock.calls[onError.mock.calls.length - 1];
+    expect((lastOnErrorCall?.[0] as Error).message).toBe('cannot write');
   });
 });

@@ -31,15 +31,13 @@ function fallbackCopy(value: string, documentRef: Document): boolean {
   documentRef.body.appendChild(textarea);
   textarea.select();
 
-  let ok = false;
   try {
-    ok = documentRef.execCommand('copy');
+    return documentRef.execCommand('copy');
   } catch {
-    ok = false;
+    return false;
+  } finally {
+    documentRef.body.removeChild(textarea);
   }
-
-  documentRef.body.removeChild(textarea);
-  return ok;
 }
 
 /**

@@ -109,7 +109,7 @@ describe('useRequest', () => {
 
     await state.runAsync(2);
     expect(failure).toHaveBeenCalled();
-    const [, failedParams] = failure.mock.calls.at(-1)!;
+    const [, failedParams] = failure.mock.calls[failure.mock.calls.length - 1]!;
     expect(failedParams).toEqual([2]);
     expect((state.error() as Error).message).toBe('boom');
   });
