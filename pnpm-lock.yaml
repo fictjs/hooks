@@ -12,8 +12,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
       '@fictjs/runtime':
-        specifier: ^0.10.0
-        version: 0.10.0
+        specifier: ^0.12.0
+        version: 0.12.0
       '@types/node':
         specifier: ^25.2.2
         version: 25.2.2
@@ -351,8 +351,8 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@fictjs/runtime@0.10.0':
-    resolution: {integrity: sha512-tgYx1jUNOFwyZjf7kErYo1mgipN1p1jlnh9OZTbcRE58dFnEQUZfK13VB8pjz5m/VBhzsXzo7uWC8ZENurRKeQ==}
+  '@fictjs/runtime@0.12.0':
+    resolution: {integrity: sha512-atVF56ADPV4areNls4WMOl2Th8H5xT12vgpYLLzaTGaaqxNQ5iURQlY/XV1SjGqq14vwXBBIC7Kh1C7wHdjRmA==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -2182,7 +2182,7 @@ snapshots:
 
   '@exodus/bytes@1.11.0': {}
 
-  '@fictjs/runtime@0.10.0': {}
+  '@fictjs/runtime@0.12.0': {}
 
   '@humanfs/core@0.19.1': {}
 
