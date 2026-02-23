@@ -114,6 +114,36 @@ describe('useRequest', () => {
     expect((state.error() as Error).message).toBe('boom');
   });
 
+  it('passes request-scoped data to onFinally in concurrent runs', async () => {
+    let resolveFirst: ((value: number) => void) | undefined;
+    const service = vi.fn((value: number) => {
+      if (value === 1) {
+        return new Promise<number>((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return Promise.resolve(2);
+    });
+    const done = vi.fn();
+
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        onFinally: done
+      })
+    );
+
+    const first = state.runAsync(1);
+    const second = state.runAsync(2);
+    await second;
+
+    resolveFirst!(1);
+    await first;
+
+    expect(done).toHaveBeenCalledWith([2], 2, null);
+    expect(done).toHaveBeenCalledWith([1], 1, null);
+  });
+
   it('refreshes with latest params', async () => {
     const service = vi.fn(async (name: string) => `hello ${name}`);
 
