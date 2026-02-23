@@ -83,6 +83,28 @@ describe('useWebSocket', () => {
     expect(state.data()).toEqual({ value: 1 });
   });
 
+  it('captures deserialize errors instead of throwing globally', () => {
+    const onError = vi.fn();
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        deserialize: () => {
+          throw new Error('bad payload');
+        },
+        onError
+      })
+    );
+
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.message('broken');
+
+    const currentError = state.error() as unknown as Error;
+    expect(currentError).toBeInstanceOf(Error);
+    expect(currentError.message).toBe('bad payload');
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
   it('serializes outgoing payload with send', () => {
     const { value: state } = createRoot(() =>
       useWebSocket<{ ok: boolean }, { ok: boolean }>('ws://fict.test', {

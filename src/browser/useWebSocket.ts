@@ -203,9 +203,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         return;
       }
       const messageEvent = event as MessageEvent;
-      const nextData = deserialize(messageEvent);
-      data(nextData);
-      options.onMessage?.(nextData, messageEvent);
+      try {
+        const nextData = deserialize(messageEvent);
+        data(nextData);
+        options.onMessage?.(nextData, messageEvent);
+      } catch (nextError) {
+        error(nextError as Event);
+        options.onError?.(nextError as Event);
+      }
     };
 
     const onError = (event: Event) => {
