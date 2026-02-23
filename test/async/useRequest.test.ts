@@ -154,6 +154,31 @@ describe('useRequest', () => {
     expect(state.loading()).toBe(false);
   });
 
+  it('does not retry after cancel during retry interval', async () => {
+    vi.useFakeTimers();
+    const service = vi
+      .fn<(...args: []) => Promise<number>>()
+      .mockRejectedValue(new Error('retry failure'));
+
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        retryCount: 2,
+        retryInterval: 20
+      })
+    );
+
+    const pending = state.runAsync();
+    await Promise.resolve();
+
+    state.cancel();
+    await vi.advanceTimersByTimeAsync(100);
+    await pending;
+
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(state.loading()).toBe(false);
+  });
+
   it('polls repeatedly and stops polling on dispose', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');

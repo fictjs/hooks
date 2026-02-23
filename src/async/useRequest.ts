@@ -7,6 +7,7 @@ interface CacheEntry<T> {
 }
 
 const requestCache = new Map<string, CacheEntry<unknown>>();
+const REQUEST_CANCELED = Symbol('REQUEST_CANCELED');
 
 export interface UseRequestOptions<TData, TParams extends unknown[]> {
   manual?: boolean;
@@ -109,11 +110,15 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
     let attempt = 0;
     while (true) {
+      if (currentId !== callId) {
+        throw REQUEST_CANCELED;
+      }
+
       try {
         return await service(...currentParams);
       } catch (err) {
         if (currentId !== callId) {
-          throw err;
+          throw REQUEST_CANCELED;
         }
 
         if (attempt >= retryCount) {
@@ -146,7 +151,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       schedulePolling(currentParams);
       return result;
     } catch (err) {
-      if (id !== callId) {
+      if (id !== callId || err === REQUEST_CANCELED) {
         return data();
       }
 
