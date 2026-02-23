@@ -30,7 +30,7 @@ pnpm add @fictjs/hooks @fictjs/runtime
 ## Requirements
 
 - Node.js >= 18
-- Peer dependency: `@fictjs/runtime@^0.12.0`
+- Peer dependency: `@fictjs/runtime@^0.13.0`
 
 ## Quick Start
 
