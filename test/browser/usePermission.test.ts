@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import { createSignal } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { usePermission } from '../../src/browser/usePermission';
 
@@ -67,6 +68,38 @@ describe('usePermission', () => {
     );
 
     await Promise.resolve();
+    await Promise.resolve();
+    expect(state.state()).toBe('granted');
+  });
+
+  it('keeps latest permission state when queries resolve out of order', async () => {
+    const pending = new Map<string, (status: PermissionStatus) => void>();
+    const navigatorRef = {
+      permissions: {
+        query: vi.fn((input: PermissionDescriptor) => {
+          return new Promise<PermissionStatus>((resolve) => {
+            pending.set(String(input.name), resolve);
+          });
+        })
+      }
+    } as unknown as Navigator;
+
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: navigatorRef as never
+      })
+    );
+
+    await Promise.resolve();
+    permission('geolocation');
+    await Promise.resolve();
+
+    pending.get('geolocation')!(new MockPermissionStatus('geolocation', 'granted'));
+    await Promise.resolve();
+    expect(state.state()).toBe('granted');
+
+    pending.get('camera')!(new MockPermissionStatus('camera', 'denied'));
     await Promise.resolve();
     expect(state.state()).toBe('granted');
   });

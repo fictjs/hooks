@@ -49,6 +49,7 @@ export function usePermission(
 
   let activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
   let cleanup = () => {};
+  let queryId = 0;
 
   const bindStatus = (nextStatus: PermissionStatus) => {
     cleanup();
@@ -71,19 +72,28 @@ export function usePermission(
       return null;
     }
 
+    const currentQueryId = ++queryId;
+    const currentPermission = activePermission;
+
     isSupported(true);
 
     try {
-      const nextStatus = await navigatorRef.permissions.query(activePermission);
+      const nextStatus = await navigatorRef.permissions.query(currentPermission);
+      if (currentQueryId !== queryId) {
+        return null;
+      }
       bindStatus(nextStatus);
       return nextStatus;
     } catch {
-      state(initialState);
+      if (currentQueryId === queryId) {
+        state(initialState);
+      }
       return null;
     }
   };
 
   createEffect(() => {
+    cleanup();
     activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
     if (options.immediate ?? true) {
       void query();
