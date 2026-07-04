@@ -4,8 +4,10 @@ on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
+
+concurrency:
+  group: npm-publish-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   publish-npm:
@@ -43,7 +45,7 @@ jobs:
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
-      - run: npm publish --provenance --access public
+      - run: npm publish --access public
         if: steps.published.outputs.published != 'true'
         env:
           CI: true
