@@ -44,8 +44,7 @@ jobs:
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
-      - run: npm publish --provenance
+      - run: npm publish --provenance --access public
         if: steps.published.outputs.published != 'true'
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
           CI: true
