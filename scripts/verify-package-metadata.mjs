@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 
@@ -64,6 +65,25 @@ function parseNpmPackJson(stdout) {
   return JSON.parse(match[1]);
 }
 
+function assertSameSet(label, actual, expected) {
+  const actualSet = new Set(actual);
+  const expectedSet = new Set(expected);
+  const missing = [...expectedSet].filter((entry) => !actualSet.has(entry)).sort();
+  const unexpected = [...actualSet].filter((entry) => !expectedSet.has(entry)).sort();
+
+  if (missing.length > 0 || unexpected.length > 0) {
+    fail(
+      `${label} mismatch` +
+        (missing.length > 0 ? `; missing: ${missing.join(', ')}` : '') +
+        (unexpected.length > 0 ? `; unexpected: ${unexpected.join(', ')}` : '')
+    );
+  }
+}
+
+function toRootRelative(absolutePath) {
+  return path.relative(root, absolutePath).replace(/\\/g, '/');
+}
+
 const requiredDistFiles = [
   'dist/fict.manifest.json',
   'dist/index.cjs',
@@ -72,6 +92,7 @@ const requiredDistFiles = [
   'dist/index.fict.meta.json',
   'dist/index.js'
 ];
+const requiredPackageFiles = ['LICENSE', 'README.md', 'package.json', ...requiredDistFiles];
 
 const pkg = readJson('package.json');
 if (pkg.name !== '@fictjs/hooks') {
@@ -86,12 +107,33 @@ if (
 if (pkg.fict?.metadata !== './dist/index.fict.meta.json') {
   fail('package.json must declare fict.metadata as ./dist/index.fict.meta.json');
 }
+assertSameSet('package.json files allowlist', pkg.files ?? [], ['dist']);
 
-for (const file of requiredDistFiles) {
-  if (!existsSync(path.join(root, file))) {
-    fail(`missing build artifact ${file}`);
+const packageEntryPaths = [
+  ['main', pkg.main],
+  ['module', pkg.module],
+  ['types', pkg.types],
+  ['exports["."].types', pkg.exports?.['.']?.types],
+  ['exports["."].import', pkg.exports?.['.']?.import],
+  ['exports["."].require', pkg.exports?.['.']?.require]
+];
+for (const [field, value] of packageEntryPaths) {
+  if (typeof value !== 'string') {
+    fail(`package.json ${field} must be a string path`);
+  }
+
+  const normalized = value.replace(/^\.\//, '');
+  if (!requiredDistFiles.includes(normalized)) {
+    fail(`package.json ${field} points at ${value}, which is not a required dist artifact`);
   }
 }
+
+const distDir = path.join(root, 'dist');
+if (!existsSync(distDir)) {
+  fail('missing build artifact directory dist');
+}
+const distFiles = walkFiles(distDir).map(toRootRelative);
+assertSameSet('dist artifacts', distFiles, requiredDistFiles);
 
 const metadata = readJson('dist/index.fict.meta.json');
 if (metadata.version !== 1) {
@@ -104,10 +146,25 @@ const missingHooks = [...expectedHooks].filter((hook) => !metadataHooks.has(hook
 if (missingHooks.length > 0) {
   fail(`metadata is missing reactive hook entries: ${missingHooks.sort().join(', ')}`);
 }
+const unexpectedHooks = [...metadataHooks].filter((hook) => !expectedHooks.has(hook));
+if (unexpectedHooks.length > 0) {
+  fail(`metadata includes unexpected hook entries: ${unexpectedHooks.sort().join(', ')}`);
+}
 
 const manifest = readJson('dist/fict.manifest.json');
 if (Object.keys(manifest).length === 0) {
   fail('dist/fict.manifest.json must not be empty');
+}
+const sourceFiles = walkFiles(path.join(root, 'src'))
+  .filter((file) => file.endsWith('.ts'))
+  .map((file) => pathToFileURL(file).href);
+assertSameSet('manifest source entries', Object.keys(manifest), sourceFiles);
+
+const invalidManifestTargets = Object.entries(manifest)
+  .filter(([, target]) => target !== '/index.js' && target !== '/index.cjs')
+  .map(([source, target]) => `${source} -> ${target}`);
+if (invalidManifestTargets.length > 0) {
+  fail(`manifest contains invalid output targets: ${invalidManifestTargets.sort().join(', ')}`);
 }
 
 const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
@@ -131,11 +188,7 @@ if (packed.version !== pkg.version) {
 }
 
 const packedFiles = new Set(packed.files.map((file) => file.path));
-for (const file of ['package.json', 'README.md', 'LICENSE', ...requiredDistFiles]) {
-  if (!packedFiles.has(file)) {
-    fail(`npm pack output is missing ${file}`);
-  }
-}
+assertSameSet('npm pack output files', packedFiles, requiredPackageFiles);
 
 console.log(
   `metadata verification passed: ${expectedHooks.size} reactive hooks, ${packed.files.length} packed files`
