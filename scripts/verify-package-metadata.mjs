@@ -77,8 +77,11 @@ const pkg = readJson('package.json');
 if (pkg.name !== '@fictjs/hooks') {
   fail(`unexpected package name ${pkg.name}`);
 }
-if (pkg.version !== '0.22.0') {
-  fail(`expected package version 0.22.0, got ${pkg.version}`);
+if (
+  typeof pkg.version !== 'string' ||
+  !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(pkg.version)
+) {
+  fail(`unexpected package version ${pkg.version}`);
 }
 if (pkg.fict?.metadata !== './dist/index.fict.meta.json') {
   fail('package.json must declare fict.metadata as ./dist/index.fict.meta.json');
@@ -119,6 +122,12 @@ if (pack.status !== 0) {
 const [packed] = parseNpmPackJson(pack.stdout);
 if (!packed || !Array.isArray(packed.files)) {
   fail('npm pack result did not include a files list');
+}
+if (packed.name !== pkg.name) {
+  fail(`npm pack result used package name ${packed.name}, expected ${pkg.name}`);
+}
+if (packed.version !== pkg.version) {
+  fail(`npm pack result used package version ${packed.version}, expected ${pkg.version}`);
 }
 
 const packedFiles = new Set(packed.files.map((file) => file.path));
