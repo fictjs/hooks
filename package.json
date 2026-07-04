@@ -22,6 +22,9 @@
       "require": "./dist/index.cjs"
     }
   },
+  "fict": {
+    "metadata": "./dist/index.fict.meta.json"
+  },
   "files": [
     "dist"
   ],
@@ -43,8 +46,10 @@
     "url": "git+https://github.com/fictjs/hooks.git"
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "pnpm run clean && pnpm run build:js && pnpm run build:types",
+    "build:js": "vite build",
+    "build:types": "tsup",
+    "dev": "vite build --watch",
     "demo:dev": "vite playground",
     "demo:build": "vite build playground",
     "demo:preview": "vite preview playground",
@@ -77,6 +82,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@fictjs/runtime": "^0.22.0",
+    "@fictjs/vite-plugin": "^0.22.0",
     "@types/node": "^25.2.2",
     "@vitest/coverage-v8": "^4.0.18",
     "commitizen": "^4.3.1",

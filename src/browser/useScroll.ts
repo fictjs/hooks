@@ -93,7 +93,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
 
   const x = createSignal(fallback.x);
   const y = createSignal(fallback.y);
-  let previous = { ...fallback };
+  const previous = { current: { ...fallback } };
 
   const resolveScrollTarget = (): Element | Document | Window | undefined => {
     if (options.target === null) {
@@ -107,14 +107,14 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
 
   const update = () => {
     const next = readScrollPosition(resolveScrollTarget(), windowRef, fallback);
-    const shouldUpdate = options.shouldUpdate?.(next, previous) ?? true;
+    const shouldUpdate = options.shouldUpdate?.(next, previous.current) ?? true;
     if (!shouldUpdate) {
       return;
     }
-    if (next.x === previous.x && next.y === previous.y) {
+    if (next.x === previous.current.x && next.y === previous.current.y) {
       return;
     }
-    previous = next;
+    previous.current = next;
     x(next.x);
     y(next.y);
   };

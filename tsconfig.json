@@ -16,5 +16,12 @@
     "verbatimModuleSyntax": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "test", "tsup.config.ts", "vitest.config.ts", "eslint.config.mjs"]
+  "include": [
+    "src",
+    "test",
+    "tsup.config.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "eslint.config.mjs"
+  ]
 }

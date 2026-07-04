@@ -27,6 +27,24 @@ export interface UseVirtualListReturn<T> {
   onScroll: (event: Event) => void;
 }
 
+function buildVirtualItems<T>(
+  items: T[],
+  from: number,
+  to: number,
+  itemHeight: number
+): VirtualItem<T>[] {
+  const result: VirtualItem<T>[] = [];
+  for (let index = from; index < to; index += 1) {
+    result.push({
+      index,
+      data: items[index]!,
+      start: index * itemHeight,
+      end: (index + 1) * itemHeight
+    });
+  }
+  return result;
+}
+
 /**
  * Fixed-height virtual list state helper.
  *
@@ -60,17 +78,7 @@ export function useVirtualList<T>(
     const from = start();
     const to = end();
 
-    const result: VirtualItem<T>[] = [];
-    for (let index = from; index < to; index += 1) {
-      result.push({
-        index,
-        data: items[index]!,
-        start: index * itemHeight,
-        end: (index + 1) * itemHeight
-      });
-    }
-
-    return result;
+    return buildVirtualItems(items, from, to, itemHeight);
   });
 
   const setScrollTop = (value: number) => {

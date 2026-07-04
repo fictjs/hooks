@@ -69,10 +69,7 @@ export function useNetwork(options: UseNetworkOptions = {}): UseNetworkReturn {
 
   useEventListener(windowRef, 'online', update, { passive: true });
   useEventListener(windowRef, 'offline', update, { passive: true });
-
-  if (connection) {
-    useEventListener(connection, 'change', update, { passive: true });
-  }
+  useEventListener(connection ?? null, 'change', update, { passive: true });
 
   update();
 
