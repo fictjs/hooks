@@ -19,7 +19,7 @@
   "include": [
     "src",
     "test",
-    "tsup.config.ts",
+    "tsdown.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "eslint.config.mjs"
