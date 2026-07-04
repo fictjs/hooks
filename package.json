@@ -54,6 +54,8 @@
     "demo:build": "vite build playground",
     "demo:preview": "vite preview playground",
     "clean": "rimraf dist coverage",
+    "verify:metadata": "node scripts/verify-package-metadata.mjs",
+    "pack:dry": "pnpm run build && pnpm run verify:metadata",
     "typecheck": "tsc --noEmit",
     "test:types": "tsc -p test-dts/tsconfig.json --noEmit",
     "lint": "eslint .",
@@ -65,7 +67,7 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "commit": "git-cz",
-    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build"
+    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build && pnpm run verify:metadata"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [

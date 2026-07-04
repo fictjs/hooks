@@ -13,6 +13,7 @@ Official hooks package for Fict.
 - 39 official hooks across lifecycle, event, timing, state, browser, storage, observer, async and clipboard
 - SSR-safe browser hooks with injectable globals (`window`, `document`, `navigator`) for non-browser/test environments
 - Root-only public entry (`@fictjs/hooks`) with ESM tree shaking support
+- Published Fict package metadata (`dist/index.fict.meta.json`) for cross-package hook return reactivity
 - Strong type coverage and CI quality gates (`lint`, `typecheck`, `test:types`, `test`, `build`)
 
 ## Install
@@ -54,6 +55,19 @@ In plain TypeScript/JavaScript usage (without Fict compile transforms), read rea
 
 - Only import from `@fictjs/hooks`; deep imports are unsupported
 - Tree shaking is supported through ESM exports and `"sideEffects": false`
+
+## Fict Metadata
+
+`pnpm build` emits:
+
+- `dist/index.fict.meta.json`
+- `dist/fict.manifest.json`
+- ESM/CJS runtime files
+- `.d.ts` and `.d.cts` type declarations
+
+`package.json#fict.metadata` points at the generated metadata file so Fict 0.22.0 consumers can recover hook return reactivity from the published npm package.
+
+Run `pnpm verify:metadata` after `pnpm build` to verify the generated metadata and the npm tarball contents.
 
 ## Runtime Semantics
 
@@ -99,6 +113,7 @@ Before publish, these checks must pass:
 3. `pnpm test:types`
 4. `pnpm test`
 5. `pnpm build`
+6. `pnpm verify:metadata`
 
 `prepublishOnly` already enforces this pipeline.
 
