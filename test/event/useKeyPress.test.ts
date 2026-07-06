@@ -114,4 +114,26 @@ describe('useKeyPress', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     root.dispose();
   });
+
+  it('can ignore repeated keydown events', () => {
+    const handler = vi.fn();
+    const root = createRoot(() => useKeyPress('a', handler, { ignoreRepeat: true }));
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', repeat: true }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    root.dispose();
+  });
+
+  it('ignores composing keyboard events by default', () => {
+    const handler = vi.fn();
+    const root = createRoot(() => useKeyPress('a', handler));
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', isComposing: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    root.dispose();
+  });
 });

@@ -14,6 +14,8 @@ export interface UseKeyPressOptions {
   capture?: boolean;
   preventDefault?: boolean;
   immediate?: boolean;
+  ignoreRepeat?: boolean;
+  ignoreComposing?: boolean;
 }
 
 const modifierAliases: Record<string, 'ctrl' | 'alt' | 'shift' | 'meta'> = {
@@ -148,12 +150,20 @@ export function useKeyPress(
   const exactMatch = options.exactMatch ?? false;
   const target = options.target === undefined ? defaultWindow : options.target;
   const passive = options.preventDefault ? false : options.passive;
+  const ignoreComposing = options.ignoreComposing ?? true;
 
   return useEventListener(
     target,
     events,
     (event) => {
       const keyboardEvent = event as KeyboardEvent;
+      if (
+        (options.ignoreRepeat && keyboardEvent.repeat) ||
+        (ignoreComposing && keyboardEvent.isComposing)
+      ) {
+        return;
+      }
+
       if (!matchesFilter(keyboardEvent, filter, exactMatch)) {
         return;
       }
