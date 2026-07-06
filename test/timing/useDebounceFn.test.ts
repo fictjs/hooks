@@ -121,4 +121,33 @@ describe('useDebounceFn', () => {
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenLastCalledWith(3);
   });
+
+  it('does not run maxWait before wait', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+
+    const { value: controls } = createRoot(() => useDebounceFn(callback, 100, { maxWait: 50 }));
+
+    controls.run('value');
+    vi.advanceTimersByTime(50);
+    expect(callback).toHaveBeenCalledTimes(0);
+
+    vi.advanceTimersByTime(50);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenLastCalledWith('value');
+  });
+
+  it('does not run maxWait when trailing is disabled', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+
+    const { value: controls } = createRoot(() =>
+      useDebounceFn(callback, 100, { trailing: false, maxWait: 50 })
+    );
+
+    controls.run('value');
+    vi.advanceTimersByTime(100);
+
+    expect(callback).toHaveBeenCalledTimes(0);
+  });
 });

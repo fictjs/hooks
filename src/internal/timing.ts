@@ -72,10 +72,11 @@ export function createDebouncedFn<T extends Procedure>(
       }
     }, wait);
 
-    if (maxWait != null && maxWait >= 0 && !state.maxTimer) {
+    if (trailing && maxWait != null && maxWait >= 0 && !state.maxTimer) {
+      const effectiveMaxWait = Math.max(maxWait, wait);
       state.maxTimer = setTimeout(() => {
         invoke();
-      }, maxWait);
+      }, effectiveMaxWait);
     }
   };
 
