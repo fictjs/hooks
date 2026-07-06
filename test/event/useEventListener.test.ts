@@ -58,6 +58,22 @@ describe('useEventListener', () => {
     expect(handler).toHaveBeenCalledTimes(0);
   });
 
+  it('passes abort signal to listener options', () => {
+    const target = new EventTarget();
+    const handler = vi.fn();
+    const controller = new AbortController();
+
+    createRoot(() => {
+      useEventListener(target, 'abortable', handler, { signal: controller.signal });
+    });
+
+    target.dispatchEvent(new Event('abortable'));
+    controller.abort();
+    target.dispatchEvent(new Event('abortable'));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('reacts to target changes', async () => {
     const targetA = new EventTarget();
     const targetB = new EventTarget();

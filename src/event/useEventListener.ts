@@ -40,7 +40,8 @@ export function useEventListener<E extends Event = Event>(
     const listenerOptions: AddEventListenerOptions = {
       capture: options.capture,
       once: options.once,
-      passive: options.passive
+      passive: options.passive,
+      signal: options.signal
     };
     const controller = addEventListeners(targets, eventNames, listener, listenerOptions);
     return () => controller.stop();
