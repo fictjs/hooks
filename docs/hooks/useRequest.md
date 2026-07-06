@@ -17,6 +17,8 @@ function useRequest<TData, TParams extends unknown[] = []>(
     pollingInterval?: number;
     cacheKey?: string;
     staleTime?: number;
+    cacheTime?: number;
+    cacheSize?: number;
     onSuccess?: (data: TData, params: TParams) => void;
     onError?: (error: unknown, params: TParams) => void;
     onFinally?: (params: TParams, data?: TData, error?: unknown) => void;
@@ -33,3 +35,10 @@ function useRequest<TData, TParams extends unknown[] = []>(
   mutate: (value: TData | ((prev: TData | undefined) => TData)) => void;
 };
 ```
+
+## Notes
+
+- `cacheKey` enables shared in-memory cache across hook instances.
+- `staleTime` controls when cached data is considered too old to apply.
+- `cacheTime` bounds how long a cache entry stays in the global cache; the default is five minutes.
+- `cacheSize` bounds the global request cache; the default keeps the newest 100 entries.

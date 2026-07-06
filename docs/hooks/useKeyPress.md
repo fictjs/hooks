@@ -20,6 +20,8 @@ function useKeyPress(
     capture?: boolean;
     preventDefault?: boolean;
     immediate?: boolean;
+    ignoreRepeat?: boolean;
+    ignoreComposing?: boolean;
   }
 ): {
   start: () => void;
@@ -31,5 +33,8 @@ function useKeyPress(
 ## Notes
 
 - Supports combo syntax like `ctrl.k` or `ctrl+k`.
+- Literal `+` and `.` keys are valid filters; use `ctrl.+` or `ctrl++` for control-plus.
 - `exactMatch` requires modifier keys to match exactly.
 - `preventDefault` automatically disables passive listener mode.
+- `ignoreRepeat` skips repeated keydown events.
+- `ignoreComposing` defaults to `true` to avoid firing shortcuts during IME composition.
