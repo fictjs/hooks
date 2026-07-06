@@ -63,4 +63,26 @@ describe('useThrottleFn', () => {
     expect(callback).toHaveBeenNthCalledWith(2, 'z');
     expect(callback).toHaveBeenNthCalledWith(3, 'zz');
   });
+
+  it('preserves throttle window after flush', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+
+    const { value: controls } = createRoot(() => useThrottleFn(callback, 100));
+
+    controls.run('a');
+    vi.advanceTimersByTime(10);
+    controls.run('b');
+    controls.flush();
+    controls.run('c');
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenNthCalledWith(1, 'a');
+    expect(callback).toHaveBeenNthCalledWith(2, 'b');
+
+    vi.advanceTimersByTime(90);
+
+    expect(callback).toHaveBeenCalledTimes(3);
+    expect(callback).toHaveBeenNthCalledWith(3, 'c');
+  });
 });

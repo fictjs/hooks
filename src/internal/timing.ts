@@ -185,10 +185,6 @@ export function createThrottledFn<T extends Procedure>(
       pending = false;
       invoke(args);
     }
-    if (timer) {
-      clearTimeout(timer);
-      timer = undefined;
-    }
   };
 
   tryOnDestroy(cancel);
