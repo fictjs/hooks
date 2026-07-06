@@ -32,6 +32,16 @@ describe('useCounter', () => {
     expect(counter.count()).toBe(10);
   });
 
+  it('clamps direct count signal writes', () => {
+    const { value: counter } = createRoot(() => useCounter(5, { min: 0, max: 10 }));
+
+    (counter.count as (next: number) => void)(999);
+    expect(counter.count()).toBe(10);
+
+    (counter.count as (next: number) => void)(-999);
+    expect(counter.count()).toBe(0);
+  });
+
   it('resets to clamped initial value', () => {
     const { value: counter } = createRoot(() => useCounter(20, { max: 5 }));
 

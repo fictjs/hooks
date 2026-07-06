@@ -31,21 +31,32 @@ function clamp(value: number, min: number | undefined, max: number | undefined):
  */
 export function useCounter(initial = 0, options: UseCounterOptions = {}): UseCounterReturn {
   const start = clamp(initial, options.min, options.max);
-  const count = createSignal(start);
+  const countSignal = createSignal(start);
+
+  const setCount = (next: number) => {
+    countSignal(clamp(next, options.min, options.max));
+  };
+
+  const count = function count(next?: number) {
+    if (arguments.length === 0) {
+      return countSignal();
+    }
+    setCount(next ?? 0);
+  } as typeof countSignal;
 
   return {
     count,
     set(next) {
-      count(clamp(next, options.min, options.max));
+      setCount(next);
     },
     inc(delta = 1) {
-      count(clamp(count() + delta, options.min, options.max));
+      setCount(count() + delta);
     },
     dec(delta = 1) {
-      count(clamp(count() - delta, options.min, options.max));
+      setCount(count() - delta);
     },
     reset() {
-      count(start);
+      setCount(start);
     }
   };
 }
