@@ -316,17 +316,20 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
   };
 
-  if (options.immediate ?? true) {
-    createEffect(() => {
-      const resolvedUrl = toValue(url);
-      if (!resolvedUrl) {
-        stopReconnectTimer();
-        status('CLOSED');
-        return;
-      }
-      open();
-    });
-  }
+  const immediate = options.immediate ?? true;
+  createEffect(() => {
+    if (!immediate) {
+      return;
+    }
+
+    const resolvedUrl = toValue(url);
+    if (!resolvedUrl) {
+      stopReconnectTimer();
+      status('CLOSED');
+      return;
+    }
+    open();
+  });
 
   tryOnDestroy(() => {
     stopReconnectTimer();
