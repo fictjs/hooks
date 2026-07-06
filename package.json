@@ -1,6 +1,6 @@
 {
   "name": "@fictjs/hooks",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Official hooks package for Fict",
   "keywords": [
     "fict",
@@ -77,12 +77,12 @@
     ]
   },
   "peerDependencies": {
-    "@fictjs/runtime": "^0.23.0"
+    "@fictjs/runtime": "^0.24.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@fictjs/runtime": "^0.23.0",
-    "@fictjs/vite-plugin": "^0.23.0",
+    "@fictjs/runtime": "^0.24.0",
+    "@fictjs/vite-plugin": "^0.24.0",
     "@types/node": "^25.2.2",
     "@vitest/coverage-v8": "^4.0.18",
     "commitizen": "^4.3.1",

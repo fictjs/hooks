@@ -31,7 +31,7 @@ pnpm add @fictjs/hooks @fictjs/runtime
 ## Requirements
 
 - Node.js >= 18
-- Peer dependency: `@fictjs/runtime@^0.23.0`
+- Peer dependency: `@fictjs/runtime@^0.24.0`
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ In plain TypeScript/JavaScript usage (without Fict compile transforms), read rea
 - ESM/CJS runtime files
 - `.d.ts` and `.d.cts` type declarations
 
-`package.json#fict.metadata` points at the generated metadata file so Fict 0.23.0 consumers can recover hook return reactivity from the published npm package.
+`package.json#fict.metadata` points at the generated metadata file so Fict 0.24.0 consumers can recover hook return reactivity from the published npm package.
 
 Run `pnpm verify:metadata` after `pnpm build` to verify the generated metadata and the npm tarball contents.
 
