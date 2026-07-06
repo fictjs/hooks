@@ -4,10 +4,13 @@ import { tryOnDestroy } from '../internal/lifecycle';
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
+  expiresAt: number;
 }
 
 const requestCache = new Map<string, CacheEntry<unknown>>();
 const REQUEST_CANCELED = Symbol('REQUEST_CANCELED');
+const DEFAULT_CACHE_TIME = 5 * 60 * 1000;
+const DEFAULT_CACHE_SIZE = 100;
 
 export interface UseRequestOptions<TData, TParams extends unknown[]> {
   manual?: boolean;
@@ -17,6 +20,8 @@ export interface UseRequestOptions<TData, TParams extends unknown[]> {
   pollingInterval?: number;
   cacheKey?: string;
   staleTime?: number;
+  cacheTime?: number;
+  cacheSize?: number;
   onSuccess?: (data: TData, params: TParams) => void;
   onError?: (error: unknown, params: TParams) => void;
   onFinally?: (params: TParams, data?: TData, error?: unknown) => void;
@@ -36,6 +41,28 @@ export interface UseRequestReturn<TData, TParams extends unknown[]> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function pruneExpiredCache(now = Date.now()): void {
+  for (const [key, entry] of requestCache) {
+    if (entry.expiresAt <= now) {
+      requestCache.delete(key);
+    }
+  }
+}
+
+function pruneCacheSize(maxSize: number): void {
+  if (maxSize < 0) {
+    return;
+  }
+
+  while (requestCache.size > maxSize) {
+    const oldestKey = requestCache.keys().next().value as string | undefined;
+    if (oldestKey == null) {
+      return;
+    }
+    requestCache.delete(oldestKey);
+  }
 }
 
 /**
@@ -60,6 +87,8 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       return;
     }
 
+    pruneExpiredCache();
+
     const entry = requestCache.get(options.cacheKey) as CacheEntry<TData> | undefined;
     if (!entry) {
       return;
@@ -79,10 +108,21 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       return;
     }
 
+    const cacheTime = options.cacheTime ?? DEFAULT_CACHE_TIME;
+    const cacheSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
+    if (cacheTime <= 0 || cacheSize <= 0) {
+      requestCache.delete(options.cacheKey);
+      return;
+    }
+
+    const now = Date.now();
+    pruneExpiredCache(now);
     requestCache.set(options.cacheKey, {
       data: value,
-      timestamp: Date.now()
+      timestamp: now,
+      expiresAt: Number.isFinite(cacheTime) ? now + cacheTime : Infinity
     });
+    pruneCacheSize(cacheSize);
   };
 
   const stopPolling = () => {

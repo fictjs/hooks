@@ -288,4 +288,72 @@ describe('useRequest', () => {
 
     expect(second.data()).toBeUndefined();
   });
+
+  it('evicts cache entries after cacheTime', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => 10);
+
+    const first = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'cache-time-key',
+        cacheTime: 5
+      })
+    ).value;
+
+    await first.runAsync();
+    expect(first.data()).toBe(10);
+
+    await vi.advanceTimersByTimeAsync(6);
+
+    const second = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'cache-time-key',
+        cacheTime: 5
+      })
+    ).value;
+
+    expect(second.data()).toBeUndefined();
+  });
+
+  it('evicts oldest cache entries over cacheSize', async () => {
+    const service = vi.fn(async (value: number) => value);
+
+    const first = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'cache-size-first',
+        cacheSize: 1
+      })
+    ).value;
+    const second = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'cache-size-second',
+        cacheSize: 1
+      })
+    ).value;
+
+    await first.runAsync(1);
+    await second.runAsync(2);
+
+    const firstCached = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'cache-size-first',
+        cacheSize: 1
+      })
+    ).value;
+    const secondCached = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'cache-size-second',
+        cacheSize: 1
+      })
+    ).value;
+
+    expect(firstCached.data()).toBeUndefined();
+    expect(secondCached.data()).toBe(2);
+  });
 });
