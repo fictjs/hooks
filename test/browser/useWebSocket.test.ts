@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import { createSignal } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useWebSocket } from '../../src/browser/useWebSocket';
 
@@ -230,6 +231,26 @@ describe('useWebSocket', () => {
 
     expect(state.isSupported()).toBe(false);
     expect(state.open()).toBe(false);
+  });
+
+  it('tracks an accessor url and opens when it becomes available', async () => {
+    const source = createSignal<string | null>(null);
+    const { value: state } = createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+
+    expect(state.isSupported()).toBe(true);
+    expect(state.status()).toBe('CLOSED');
+    expect(MockWebSocket.instances).toHaveLength(0);
+
+    source('ws://fict.test');
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(MockWebSocket.instances[0]?.url).toBe('ws://fict.test');
+    expect(state.status()).toBe('CONNECTING');
   });
 
   it('closes socket on dispose', () => {

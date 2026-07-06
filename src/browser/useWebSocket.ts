@@ -1,3 +1,4 @@
+import { createEffect } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
 import { tryOnDestroy } from '../internal/lifecycle';
@@ -159,8 +160,13 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
   const open = (): boolean => {
     const resolvedUrl = toValue(url);
-    if (!webSocketCtor || !resolvedUrl) {
+    if (!webSocketCtor) {
       isSupported(false);
+      return false;
+    }
+    isSupported(true);
+    if (!resolvedUrl) {
+      status('CLOSED');
       return false;
     }
 
@@ -307,7 +313,15 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   if (options.immediate ?? true) {
-    open();
+    createEffect(() => {
+      const resolvedUrl = toValue(url);
+      if (!resolvedUrl) {
+        stopReconnectTimer();
+        status('CLOSED');
+        return;
+      }
+      open();
+    });
   }
 
   tryOnDestroy(() => {
