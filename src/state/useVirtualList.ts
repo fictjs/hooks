@@ -57,7 +57,13 @@ export function useVirtualList<T>(
   const overscan = options.overscan ?? 2;
   const itemHeight = options.itemHeight;
 
-  const scrollTop = createSignal(options.initialScrollTop ?? 0);
+  const scrollTopSignal = createSignal(Math.max(0, options.initialScrollTop ?? 0));
+  const scrollTop = function scrollTop(next?: number) {
+    if (arguments.length === 0) {
+      return scrollTopSignal();
+    }
+    scrollTopSignal(Math.max(0, next ?? 0));
+  } as typeof scrollTopSignal;
 
   const totalHeight = createMemo(() => toValue(source as MaybeAccessor<T[]>).length * itemHeight);
 

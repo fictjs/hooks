@@ -38,6 +38,22 @@ describe('useVirtualList', () => {
     expect(list[0]?.index).toBe(9);
   });
 
+  it('clamps direct scrollTop signal writes', () => {
+    const items = Array.from({ length: 100 }, (_, i) => i + 1);
+
+    const { value: state } = createRoot(() =>
+      useVirtualList(items, {
+        itemHeight: 20,
+        containerHeight: 100
+      })
+    );
+
+    (state.scrollTop as (next: number) => void)(-10);
+
+    expect(state.scrollTop()).toBe(0);
+    expect(state.start()).toBe(0);
+  });
+
   it('includes partially visible trailing item with zero overscan', () => {
     const items = Array.from({ length: 100 }, (_, i) => i + 1);
 
