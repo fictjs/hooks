@@ -38,6 +38,25 @@ describe('useVirtualList', () => {
     expect(list[0]?.index).toBe(9);
   });
 
+  it('includes partially visible trailing item with zero overscan', () => {
+    const items = Array.from({ length: 100 }, (_, i) => i + 1);
+
+    const { value: state } = createRoot(() =>
+      useVirtualList(items, {
+        itemHeight: 20,
+        containerHeight: 100,
+        initialScrollTop: 5,
+        overscan: 0
+      })
+    );
+
+    const list = state.list();
+    expect(state.start()).toBe(0);
+    expect(state.end()).toBe(6);
+    expect(list).toHaveLength(6);
+    expect(list[list.length - 1]?.index).toBe(5);
+  });
+
   it('supports scrollTo and onScroll', () => {
     const items = Array.from({ length: 50 }, (_, i) => i + 1);
 

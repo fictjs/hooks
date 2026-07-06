@@ -69,7 +69,8 @@ export function useVirtualList<T>(
   const end = createMemo(() => {
     const items = toValue(source as MaybeAccessor<T[]>);
     const containerHeight = toValue(options.containerHeight as MaybeAccessor<number>);
-    const visibleCount = Math.ceil(containerHeight / itemHeight) + overscan * 2;
+    const visibleCount =
+      Math.ceil((containerHeight + (scrollTop() % itemHeight)) / itemHeight) + overscan * 2;
     return Math.min(items.length, start() + visibleCount);
   });
 
