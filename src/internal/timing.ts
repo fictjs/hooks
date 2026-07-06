@@ -24,79 +24,83 @@ export function createDebouncedFn<T extends Procedure>(
   const trailing = options.trailing ?? true;
   const maxWait = options.maxWait;
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let maxTimer: ReturnType<typeof setTimeout> | undefined;
-  let lastArgs: Parameters<T> | undefined;
-  let pending = false;
+  const state: {
+    timer?: ReturnType<typeof setTimeout>;
+    maxTimer?: ReturnType<typeof setTimeout>;
+    lastArgs?: Parameters<T>;
+    pending: boolean;
+  } = {
+    pending: false
+  };
 
   const clearTimers = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = undefined;
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = undefined;
     }
-    if (maxTimer) {
-      clearTimeout(maxTimer);
-      maxTimer = undefined;
+    if (state.maxTimer) {
+      clearTimeout(state.maxTimer);
+      state.maxTimer = undefined;
     }
   };
 
   const invoke = () => {
-    if (!lastArgs) {
-      pending = false;
+    if (!state.lastArgs) {
+      state.pending = false;
       clearTimers();
       return;
     }
 
-    const args = lastArgs;
-    lastArgs = undefined;
-    pending = false;
+    const args = state.lastArgs;
+    state.lastArgs = undefined;
+    state.pending = false;
     clearTimers();
     fn(...args);
   };
 
   const scheduleTimers = () => {
-    if (timer) {
-      clearTimeout(timer);
+    if (state.timer) {
+      clearTimeout(state.timer);
     }
 
-    timer = setTimeout(() => {
+    state.timer = setTimeout(() => {
       if (trailing) {
         invoke();
       } else {
-        pending = false;
+        state.pending = false;
         clearTimers();
       }
     }, wait);
 
-    if (maxWait != null && maxWait >= 0 && !maxTimer) {
-      maxTimer = setTimeout(() => {
+    if (maxWait != null && maxWait >= 0 && !state.maxTimer) {
+      state.maxTimer = setTimeout(() => {
         invoke();
       }, maxWait);
     }
   };
 
   const run = (...args: Parameters<T>) => {
-    const shouldCallLeading = leading && !timer;
-    lastArgs = args;
-    pending = true;
+    const shouldCallLeading = leading && !state.timer;
+    state.lastArgs = args;
+    state.pending = true;
 
     if (shouldCallLeading) {
       fn(...args);
-      lastArgs = undefined;
-      pending = false;
+      state.lastArgs = undefined;
+      state.pending = false;
     }
 
     scheduleTimers();
   };
 
   const cancel = () => {
-    pending = false;
-    lastArgs = undefined;
+    state.pending = false;
+    state.lastArgs = undefined;
     clearTimers();
   };
 
   const flush = () => {
-    if (pending) {
+    if (state.pending) {
       invoke();
     }
   };
@@ -107,7 +111,7 @@ export function createDebouncedFn<T extends Procedure>(
     run,
     cancel,
     flush,
-    pending: () => pending
+    pending: () => state.pending
   };
 }
 

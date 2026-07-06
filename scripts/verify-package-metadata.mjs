@@ -1,11 +1,13 @@
 /* global console, process */
 
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
+const require = createRequire(import.meta.url);
 
 function fail(message) {
   console.error(`metadata verification failed: ${message}`);
@@ -127,6 +129,31 @@ function assertHookMetadataMatches(hookName, expected, actual) {
   }
 }
 
+function smokeDistEntry(entry, label) {
+  if (typeof entry.useDebounceFn !== 'function') {
+    fail(`${label} dist entry does not export useDebounceFn`);
+  }
+
+  const calls = [];
+  const controls = entry.useDebounceFn(
+    (value) => {
+      calls.push(value);
+    },
+    10,
+    {
+      leading: true,
+      trailing: false
+    }
+  );
+
+  controls.run(label);
+  controls.cancel();
+
+  if (calls.length !== 1 || calls[0] !== label) {
+    fail(`${label} dist entry failed useDebounceFn smoke test`);
+  }
+}
+
 function parseNpmPackJson(stdout) {
   const match = stdout.match(/(\[\s*\{[\s\S]*\}\s*\])\s*$/);
   if (!match) {
@@ -221,6 +248,11 @@ if (!existsSync(distDir)) {
 }
 const distFiles = walkFiles(distDir).map(toRootRelative);
 assertSameSet('dist artifacts', distFiles, requiredDistFiles);
+
+const esmEntry = await import(pathToFileURL(path.join(root, 'dist/index.js')).href);
+smokeDistEntry(esmEntry, 'esm');
+const cjsEntry = require(path.join(root, 'dist/index.cjs'));
+smokeDistEntry(cjsEntry, 'cjs');
 
 const metadata = readJson('dist/index.fict.meta.json');
 if (metadata.version !== 1) {
