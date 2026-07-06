@@ -1,3 +1,4 @@
+import { createMemo } from '@fictjs/runtime';
 import { useEventListener } from './useEventListener';
 import {
   resolveIgnoreElement,
@@ -29,7 +30,7 @@ function isNodeInside(elements: Element[], node: Node): boolean {
 /**
  * Trigger handler when pointer interaction happens outside target elements.
  *
- * @fictReturn { active: 'signal' }
+ * @fictReturn { active: 'memo' }
  */
 export function useClickOutside(
   target: MaybeElement | MaybeElement[],
@@ -87,6 +88,7 @@ export function useClickOutside(
     capture: options.capture ?? true,
     passive: true
   });
+  const active = createMemo(() => downControls.active() && clickControls.active());
 
   return {
     start() {
@@ -97,9 +99,7 @@ export function useClickOutside(
       downControls.stop();
       clickControls.stop();
     },
-    active() {
-      return downControls.active() && clickControls.active();
-    },
+    active,
     trigger(event) {
       handler(event ?? new Event('click'));
     }

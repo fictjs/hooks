@@ -68,11 +68,14 @@ describe('useClickOutside', () => {
 
     const { value: controls } = createRoot(() => useClickOutside(target, handler));
 
+    expect(controls.active()).toBe(true);
     controls.stop();
+    expect(controls.active()).toBe(false);
     outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     outside.dispatchEvent(new Event('click', { bubbles: true }));
 
     controls.start();
+    expect(controls.active()).toBe(true);
     outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     outside.dispatchEvent(new Event('click', { bubbles: true }));
 
