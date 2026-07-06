@@ -28,6 +28,33 @@ class MockMediaQueryList extends EventTarget {
   }
 }
 
+class LegacyMediaQueryList {
+  readonly media: string;
+  matches: boolean;
+  private listeners = new Set<(event: MediaQueryListEvent) => void>();
+
+  constructor(media: string, matches: boolean) {
+    this.media = media;
+    this.matches = matches;
+  }
+
+  addListener(listener: (event: MediaQueryListEvent) => void): void {
+    this.listeners.add(listener);
+  }
+
+  removeListener(listener: (event: MediaQueryListEvent) => void): void {
+    this.listeners.delete(listener);
+  }
+
+  setMatches(value: boolean): void {
+    this.matches = value;
+    const event = { matches: value } as MediaQueryListEvent;
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+}
+
 describe('useMediaQuery', () => {
   const originalMatchMedia = window.matchMedia;
 
@@ -63,6 +90,26 @@ describe('useMediaQuery', () => {
     const { value: state } = createRoot(() => useMediaQuery('(prefers-reduced-motion: reduce)'));
 
     mql.setMatches(true);
+    expect(state.matches()).toBe(true);
+  });
+
+  it('supports legacy media query listeners', () => {
+    const mql = new LegacyMediaQueryList('(prefers-reduced-motion: reduce)', false);
+
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => mql)
+    });
+
+    const { value: state, dispose } = createRoot(() =>
+      useMediaQuery('(prefers-reduced-motion: reduce)')
+    );
+
+    mql.setMatches(true);
+    expect(state.matches()).toBe(true);
+
+    dispose();
+    mql.setMatches(false);
     expect(state.matches()).toBe(true);
   });
 

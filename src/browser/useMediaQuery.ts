@@ -14,6 +14,29 @@ export interface UseMediaQueryReturn {
   isSupported: () => boolean;
 }
 
+interface LegacyMediaQueryList {
+  addListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+  removeListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+}
+
+function addMediaQueryListener(
+  mql: MediaQueryList,
+  listener: (event: MediaQueryListEvent) => void
+): () => void {
+  if (typeof mql.addEventListener === 'function') {
+    mql.addEventListener('change', listener);
+    return () => {
+      mql.removeEventListener('change', listener);
+    };
+  }
+
+  const legacy = mql as LegacyMediaQueryList;
+  legacy.addListener?.(listener);
+  return () => {
+    legacy.removeListener?.(listener);
+  };
+}
+
 /**
  * Reactive media query matching state.
  *
@@ -48,9 +71,9 @@ export function useMediaQuery(
       matches(event.matches);
     };
 
-    mql.addEventListener('change', listener);
+    const removeListener = addMediaQueryListener(mql, listener);
     onCleanup(() => {
-      mql.removeEventListener('change', listener);
+      removeListener();
     });
   });
 
