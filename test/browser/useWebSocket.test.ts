@@ -269,6 +269,21 @@ describe('useWebSocket', () => {
     expect(state.status()).toBe('CONNECTING');
   });
 
+  it('closes the active socket when accessor url becomes empty', async () => {
+    const source = createSignal<string | null>('ws://fict.test');
+    createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+
+    source(null);
+    await Promise.resolve();
+
+    expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
   it('closes socket on dispose', () => {
     const { dispose } = createRoot(() =>
       useWebSocket('ws://fict.test', {

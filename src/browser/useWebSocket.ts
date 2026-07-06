@@ -325,7 +325,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     const resolvedUrl = toValue(url);
     if (!resolvedUrl) {
       stopReconnectTimer();
-      status('CLOSED');
+      close();
       return;
     }
     open();
