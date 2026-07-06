@@ -1,4 +1,5 @@
 import { createSignal } from '@fictjs/runtime/advanced';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { toValue, type MaybeAccessor } from '../internal/value';
 
 export interface UseFetchOptions<T> {
@@ -111,6 +112,8 @@ export function useFetch<T = unknown>(
   if (options.immediate ?? true) {
     void execute();
   }
+
+  tryOnDestroy(abort);
 
   return {
     data,

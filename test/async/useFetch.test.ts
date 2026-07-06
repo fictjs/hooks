@@ -52,6 +52,26 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('aborts active request on dispose', () => {
+    let signal: AbortSignal | undefined;
+    const mockFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>(() => {});
+    });
+
+    const { value: state, dispose } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never
+      })
+    );
+
+    dispose();
+
+    expect(signal?.aborted).toBe(true);
+    expect(state.aborted()).toBe(true);
+    expect(state.isLoading()).toBe(false);
+  });
+
   it('stores error for failed responses', async () => {
     const onError = vi.fn();
     const mockFetch = vi.fn(async () => new Response('fail', { status: 500 }));
