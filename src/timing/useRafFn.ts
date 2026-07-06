@@ -35,7 +35,13 @@ export function useRafFn(
 
     const delta = lastTimestamp == null ? 0 : timestamp - lastTimestamp;
     lastTimestamp = timestamp;
-    callback(delta, timestamp);
+    try {
+      callback(delta, timestamp);
+    } catch (error) {
+      active(false);
+      lastTimestamp = undefined;
+      throw error;
+    }
 
     if (windowRef?.requestAnimationFrame) {
       rafId = windowRef.requestAnimationFrame(loop);

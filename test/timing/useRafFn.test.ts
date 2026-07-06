@@ -91,4 +91,25 @@ describe('useRafFn', () => {
     tick(2);
     expect(callback).toHaveBeenCalledTimes(1);
   });
+
+  it('can restart after callback throws', () => {
+    const { windowRef, tick } = createMockWindow();
+    const callback = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('frame failed');
+      })
+      .mockImplementation(() => {});
+
+    const { value: state } = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    expect(() => tick(1)).toThrow('frame failed');
+    expect(state.active()).toBe(false);
+
+    state.start();
+    tick(2);
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(state.active()).toBe(true);
+  });
 });
