@@ -1,6 +1,7 @@
-import { createEffect, onDestroy } from '@fictjs/runtime';
+import { createEffect } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultNavigator } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { toValue, type MaybeAccessor } from '../internal/value';
 
 interface PermissionNavigator {
@@ -100,7 +101,7 @@ export function usePermission(
     }
   });
 
-  onDestroy(() => {
+  tryOnDestroy(() => {
     cleanup();
   });
 

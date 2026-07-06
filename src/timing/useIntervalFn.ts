@@ -1,5 +1,5 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { toValue, type MaybeAccessor } from '../internal/value';
 
 export interface UseIntervalFnControls {
@@ -42,7 +42,7 @@ export function useIntervalFn(
     callback();
   };
 
-  onDestroy(cancel);
+  tryOnDestroy(cancel);
   run();
 
   return {

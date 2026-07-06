@@ -67,6 +67,17 @@ describe('useStorage', () => {
     expect(first.value()).toBe(15);
   });
 
+  it('keeps same-window sync listeners when created outside a root', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+
+    const first = useStorage('rootless-shared', 0, { storage, window: windowRef });
+    const second = useStorage('rootless-shared', 0, { storage, window: windowRef });
+
+    first.set(10);
+    expect(second.value()).toBe(10);
+  });
+
   it('handles serializer errors via onError', () => {
     const storage = new MemoryStorage();
     const onError = vi.fn();

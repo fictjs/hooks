@@ -1,4 +1,4 @@
-import { onDestroy } from '@fictjs/runtime';
+import { tryOnDestroy } from './lifecycle';
 
 export type Procedure = (...args: unknown[]) => void;
 
@@ -101,7 +101,7 @@ export function createDebouncedFn<T extends Procedure>(
     }
   };
 
-  onDestroy(cancel);
+  tryOnDestroy(cancel);
 
   return {
     run,
@@ -186,7 +186,7 @@ export function createThrottledFn<T extends Procedure>(
     }
   };
 
-  onDestroy(cancel);
+  tryOnDestroy(cancel);
 
   return {
     run,

@@ -1,5 +1,5 @@
 import { createSignal } from '@fictjs/runtime/advanced';
-import { onDestroy } from '@fictjs/runtime';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { toValue, type MaybeAccessor } from '../internal/value';
 
 export interface UseTimeoutFnControls {
@@ -49,7 +49,7 @@ export function useTimeoutFn(
     callback();
   };
 
-  onDestroy(cancel);
+  tryOnDestroy(cancel);
   run();
 
   return {

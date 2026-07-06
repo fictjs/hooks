@@ -1,6 +1,6 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultDocument, defaultNavigator, defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 type NavigatorClipboardLike = {
   clipboard?: {
@@ -104,7 +104,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     return false;
   };
 
-  onDestroy(() => {
+  tryOnDestroy(() => {
     if (timer) {
       clearTimeout(timer);
       timer = undefined;

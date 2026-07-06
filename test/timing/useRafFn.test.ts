@@ -48,6 +48,18 @@ describe('useRafFn', () => {
     expect(callback).toHaveBeenNthCalledWith(2, 16, 26);
   });
 
+  it('keeps running when created outside a root', () => {
+    const { windowRef, tick } = createMockWindow();
+    const callback = vi.fn();
+
+    useRafFn(callback, { window: windowRef });
+
+    tick(10);
+    tick(26);
+
+    expect(callback).toHaveBeenCalledTimes(2);
+  });
+
   it('supports stop/start controls', () => {
     const { windowRef, tick } = createMockWindow();
     const callback = vi.fn();

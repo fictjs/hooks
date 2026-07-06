@@ -1,7 +1,8 @@
-import { createEffect, onDestroy } from '@fictjs/runtime';
+import { createEffect } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultDocument } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { resolveMaybeTarget, type MaybeElement } from '../internal/target';
 
 interface FullscreenDocument extends Document {
@@ -194,7 +195,7 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
   };
 
   if (options.autoExit) {
-    onDestroy(() => {
+    tryOnDestroy(() => {
       void exit();
     });
   }

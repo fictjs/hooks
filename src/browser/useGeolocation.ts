@@ -1,6 +1,6 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultNavigator } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 interface GeolocationNavigator {
   geolocation?: {
@@ -119,7 +119,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
     resume();
   }
 
-  onDestroy(() => {
+  tryOnDestroy(() => {
     pause();
   });
 

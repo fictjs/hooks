@@ -15,13 +15,27 @@ describe('useUnmount', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
-  it('runs returned cleanup immediately after callback outside root', () => {
+  it('runs returned cleanup on root disposal', () => {
+    const cleanup = vi.fn();
+    const callback = vi.fn(() => cleanup);
+
+    const { dispose } = createRoot(() => {
+      useUnmount(callback);
+    });
+
+    dispose();
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run callback immediately outside root', () => {
     const cleanup = vi.fn();
     const callback = vi.fn(() => cleanup);
 
     useUnmount(callback);
 
-    expect(callback).toHaveBeenCalledTimes(1);
-    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledTimes(0);
+    expect(cleanup).toHaveBeenCalledTimes(0);
   });
 });

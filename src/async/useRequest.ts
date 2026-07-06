@@ -1,5 +1,5 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 interface CacheEntry<T> {
   data: T;
@@ -202,7 +202,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     void runAsync(...options.defaultParams);
   }
 
-  onDestroy(cancel);
+  tryOnDestroy(cancel);
 
   return {
     data,

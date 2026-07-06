@@ -1,6 +1,6 @@
 import { createSignal } from '@fictjs/runtime/advanced';
-import { onDestroy } from '@fictjs/runtime';
 import { defaultWindow } from './env';
+import { tryOnDestroy } from './lifecycle';
 
 export interface Serializer<T> {
   read: (raw: string) => T;
@@ -230,7 +230,7 @@ export function createStorageHook<T>(
     windowRef.addEventListener('storage', storageListener);
     windowRef.addEventListener(syncEvent, customListener);
 
-    onDestroy(() => {
+    tryOnDestroy(() => {
       windowRef.removeEventListener('storage', storageListener);
       windowRef.removeEventListener(syncEvent, customListener);
     });

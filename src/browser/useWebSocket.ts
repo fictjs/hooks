@@ -1,6 +1,6 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { toValue, type MaybeAccessor } from '../internal/value';
 
 export type WebSocketStatus = 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED';
@@ -304,7 +304,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     open();
   }
 
-  onDestroy(() => {
+  tryOnDestroy(() => {
     stopReconnectTimer();
     close();
   });

@@ -1,4 +1,5 @@
-import { onDestroy, type Cleanup } from '@fictjs/runtime';
+import type { Cleanup } from '@fictjs/runtime';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 export type UnmountCallback = () => void | Cleanup;
 
@@ -8,5 +9,5 @@ export type UnmountCallback = () => void | Cleanup;
  * @fictReturn {}
  */
 export function useUnmount(callback: UnmountCallback): void {
-  onDestroy(callback);
+  tryOnDestroy(callback);
 }

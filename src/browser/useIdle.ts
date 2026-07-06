@@ -1,7 +1,7 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultDocument, defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 const DEFAULT_IDLE_EVENTS = [
   'mousemove',
@@ -132,7 +132,7 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
     resume();
   }
 
-  onDestroy(() => {
+  tryOnDestroy(() => {
     pause();
   });
 

@@ -1,6 +1,6 @@
-import { onDestroy } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 export interface UseRafFnOptions {
   immediate?: boolean;
@@ -66,7 +66,7 @@ export function useRafFn(
     rafId = windowRef.requestAnimationFrame(loop);
   }
 
-  onDestroy(stop);
+  tryOnDestroy(stop);
 
   return {
     active,

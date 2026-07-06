@@ -23,6 +23,20 @@ describe('useRequest', () => {
     expect(state.data()).toBe(2);
   });
 
+  it('keeps auto-run result when created outside a root', async () => {
+    const service = vi.fn(async (value: number) => value + 1);
+
+    const state = useRequest(service, {
+      defaultParams: [1]
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service).toHaveBeenCalledWith(1);
+    expect(state.data()).toBe(2);
+  });
+
   it('supports manual run and mutate', async () => {
     const service = vi.fn(async (name: string) => `hello ${name}`);
 
