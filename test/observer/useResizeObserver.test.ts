@@ -47,6 +47,20 @@ describe('useResizeObserver', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
+  it('observes ref-like target after it is assigned', async () => {
+    globalThis.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+
+    createRoot(() => useResizeObserver(ref));
+    ref.current = element;
+    await Promise.resolve();
+
+    const instance = MockResizeObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenCalledWith(element, undefined);
+  });
+
   it('stops observing with controls', () => {
     globalThis.ResizeObserver = MockResizeObserver as never;
 

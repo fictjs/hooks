@@ -49,6 +49,23 @@ describe('useMutationObserver', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
+  it('observes ref-like target after it is assigned', async () => {
+    globalThis.MutationObserver = MockMutationObserver as never;
+
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+
+    createRoot(() => useMutationObserver(ref));
+    ref.current = element;
+    await Promise.resolve();
+
+    const instance = MockMutationObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenCalledWith(
+      element,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+  });
+
   it('stops observing with controls', () => {
     globalThis.MutationObserver = MockMutationObserver as never;
 

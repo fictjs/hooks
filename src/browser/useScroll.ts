@@ -1,8 +1,8 @@
-import { createEffect } from '@fictjs/runtime';
+import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultWindow } from '../internal/env';
-import { resolveMaybeTarget, type MaybeTarget } from '../internal/target';
+import { deferTargetResolution, resolveMaybeTarget, type MaybeTarget } from '../internal/target';
 
 export interface ScrollPosition {
   x: number;
@@ -94,6 +94,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   const x = createSignal(fallback.x);
   const y = createSignal(fallback.y);
   const previous = { current: { ...fallback } };
+  let cancelDeferredUpdate = () => {};
 
   const resolveScrollTarget = (): Element | Document | Window | undefined => {
     if (options.target === null) {
@@ -125,7 +126,20 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   });
 
   createEffect(() => {
+    cancelDeferredUpdate();
+    cancelDeferredUpdate = () => {};
     update();
+    if (!resolveScrollTarget()) {
+      cancelDeferredUpdate = deferTargetResolution(() => {
+        cancelDeferredUpdate = () => {};
+        update();
+      });
+    }
+
+    onCleanup(() => {
+      cancelDeferredUpdate();
+      cancelDeferredUpdate = () => {};
+    });
   });
 
   return {

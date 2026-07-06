@@ -1,7 +1,7 @@
 import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { addEventListeners, type EventName, type UseEventListenerOptions } from '../internal/event';
-import { resolveTargetList, type MaybeTarget } from '../internal/target';
+import { deferTargetResolution, resolveTargetList, type MaybeTarget } from '../internal/target';
 import { toArray, toValue, type MaybeAccessor } from '../internal/value';
 
 export interface UseEventListenerControls {
@@ -23,6 +23,7 @@ export function useEventListener<E extends Event = Event>(
 ): UseEventListenerControls {
   const active = createSignal(options.immediate ?? true);
   let stopCurrent = () => {};
+  let cancelDeferredBind = () => {};
 
   const bind = (): (() => void) | undefined => {
     const targets = resolveTargetList(target);
@@ -45,7 +46,37 @@ export function useEventListener<E extends Event = Event>(
     return () => controller.stop();
   };
 
+  const applyStop = (stop: () => void) => {
+    stopCurrent = () => {
+      stop();
+      stopCurrent = () => {};
+    };
+  };
+
+  const bindCurrent = (): boolean => {
+    const stop = bind();
+    if (!stop) {
+      return false;
+    }
+    applyStop(stop);
+    return true;
+  };
+
+  const scheduleDeferredBind = () => {
+    cancelDeferredBind();
+    cancelDeferredBind = deferTargetResolution(() => {
+      cancelDeferredBind = () => {};
+      if (!active()) {
+        return;
+      }
+      stopCurrent();
+      bindCurrent();
+    });
+  };
+
   createEffect(() => {
+    cancelDeferredBind();
+    cancelDeferredBind = () => {};
     stopCurrent();
     stopCurrent = () => {};
 
@@ -53,16 +84,13 @@ export function useEventListener<E extends Event = Event>(
       return;
     }
 
-    const stop = bind();
-    if (!stop) {
-      return;
+    if (!bindCurrent()) {
+      scheduleDeferredBind();
     }
-    stopCurrent = () => {
-      stop();
-      stopCurrent = () => {};
-    };
 
     onCleanup(() => {
+      cancelDeferredBind();
+      cancelDeferredBind = () => {};
       stopCurrent();
     });
   });
@@ -71,12 +99,10 @@ export function useEventListener<E extends Event = Event>(
     start() {
       if (!active()) {
         active(true);
-        const stop = bind();
-        if (stop) {
-          stopCurrent = () => {
-            stop();
-            stopCurrent = () => {};
-          };
+        stopCurrent();
+        stopCurrent = () => {};
+        if (!bindCurrent()) {
+          scheduleDeferredBind();
         }
       }
     },
@@ -85,6 +111,8 @@ export function useEventListener<E extends Event = Event>(
         return;
       }
       active(false);
+      cancelDeferredBind();
+      cancelDeferredBind = () => {};
       stopCurrent();
     },
     active

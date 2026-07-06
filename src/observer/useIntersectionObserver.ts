@@ -2,6 +2,7 @@ import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
 import {
+  deferTargetResolution,
   resolveMaybeTarget,
   resolveTargetList,
   type MaybeElement,
@@ -40,15 +41,19 @@ export function useIntersectionObserver(
   const active = createSignal(true);
 
   let cleanup = () => {};
+  let cancelDeferredSetup = () => {};
 
-  const setup = () => {
+  const setup = (): boolean => {
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
-      return;
+      return true;
     }
 
-    isSupported(true);
+    const targets = resolveTargetList(target);
+    if (targets.length === 0) {
+      return false;
+    }
 
     const rootElement = options.root ? resolveMaybeTarget(options.root) : undefined;
     const observer = new Observer(
@@ -63,7 +68,7 @@ export function useIntersectionObserver(
       }
     );
 
-    const targets = resolveTargetList(target);
+    isSupported(true);
     for (const element of targets) {
       observer.observe(element);
     }
@@ -72,18 +77,38 @@ export function useIntersectionObserver(
       observer.disconnect();
       cleanup = () => {};
     };
+
+    return true;
+  };
+
+  const scheduleDeferredSetup = () => {
+    cancelDeferredSetup();
+    cancelDeferredSetup = deferTargetResolution(() => {
+      cancelDeferredSetup = () => {};
+      if (!active()) {
+        return;
+      }
+      cleanup();
+      setup();
+    });
   };
 
   createEffect(() => {
+    cancelDeferredSetup();
+    cancelDeferredSetup = () => {};
     cleanup();
 
     if (!active()) {
       return;
     }
 
-    setup();
+    if (!setup()) {
+      scheduleDeferredSetup();
+    }
 
     onCleanup(() => {
+      cancelDeferredSetup();
+      cancelDeferredSetup = () => {};
       cleanup();
     });
   });
@@ -96,6 +121,8 @@ export function useIntersectionObserver(
     },
     stop() {
       active(false);
+      cancelDeferredSetup();
+      cancelDeferredSetup = () => {};
       cleanup();
     },
     active

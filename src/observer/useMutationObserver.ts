@@ -1,7 +1,7 @@
 import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
-import { resolveTargetList, type MaybeElement } from '../internal/target';
+import { deferTargetResolution, resolveTargetList, type MaybeElement } from '../internal/target';
 
 export interface UseMutationObserverOptions extends MutationObserverInit {
   window?: Window | null;
@@ -34,21 +34,19 @@ export function useMutationObserver(
   const active = createSignal(true);
 
   let cleanup = () => {};
+  let cancelDeferredSetup = () => {};
 
-  createEffect(() => {
-    cleanup();
-
-    if (!active()) {
-      return;
-    }
-
+  const setup = (): boolean => {
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
-      return;
+      return true;
     }
 
-    isSupported(true);
+    const targets = resolveTargetList(target);
+    if (targets.length === 0) {
+      return false;
+    }
 
     const observer = new Observer(
       (nextRecords: MutationRecord[], currentObserver: MutationObserver) => {
@@ -57,7 +55,6 @@ export function useMutationObserver(
       }
     );
 
-    const targets = resolveTargetList(target);
     const observeOptions: MutationObserverInit = {
       subtree: options.subtree ?? true,
       childList: options.childList ?? true,
@@ -68,6 +65,7 @@ export function useMutationObserver(
       characterDataOldValue: options.characterDataOldValue
     };
 
+    isSupported(true);
     for (const element of targets) {
       observer.observe(element, observeOptions);
     }
@@ -77,7 +75,37 @@ export function useMutationObserver(
       cleanup = () => {};
     };
 
+    return true;
+  };
+
+  const scheduleDeferredSetup = () => {
+    cancelDeferredSetup();
+    cancelDeferredSetup = deferTargetResolution(() => {
+      cancelDeferredSetup = () => {};
+      if (!active()) {
+        return;
+      }
+      cleanup();
+      setup();
+    });
+  };
+
+  createEffect(() => {
+    cancelDeferredSetup();
+    cancelDeferredSetup = () => {};
+    cleanup();
+
+    if (!active()) {
+      return;
+    }
+
+    if (!setup()) {
+      scheduleDeferredSetup();
+    }
+
     onCleanup(() => {
+      cancelDeferredSetup();
+      cancelDeferredSetup = () => {};
       cleanup();
     });
   });
@@ -91,6 +119,8 @@ export function useMutationObserver(
     },
     stop() {
       active(false);
+      cancelDeferredSetup();
+      cancelDeferredSetup = () => {};
       cleanup();
     }
   };

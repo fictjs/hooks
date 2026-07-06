@@ -120,6 +120,23 @@ describe('useSize', () => {
     expect(state.height()).toBe(30);
   });
 
+  it('observes ref-like target after it is assigned', async () => {
+    globalThis.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 42, height: 24 });
+    const ref = { current: null as Element | null };
+
+    const { value: state } = createRoot(() => useSize(ref));
+    ref.current = element;
+    await Promise.resolve();
+
+    const instance = MockResizeObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenCalledWith(element, undefined);
+    expect(state.width()).toBe(42);
+    expect(state.height()).toBe(24);
+  });
+
   it('supports stop and start controls', async () => {
     globalThis.ResizeObserver = MockResizeObserver as never;
 

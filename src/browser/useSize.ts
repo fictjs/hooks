@@ -2,7 +2,7 @@ import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultWindow } from '../internal/env';
-import { resolveMaybeTarget, type MaybeElement } from '../internal/target';
+import { deferTargetResolution, resolveMaybeTarget, type MaybeElement } from '../internal/target';
 
 export interface UseSizeOptions {
   window?: Window | null;
@@ -63,6 +63,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
   const active = createSignal(options.immediate ?? true);
 
   let observer: ResizeObserver | null = null;
+  let cancelDeferredTarget = () => {};
 
   const applyRect = (nextTarget: Element) => {
     const rect = readRect(nextTarget);
@@ -95,15 +96,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     observer = null;
   };
 
-  createEffect(() => {
-    stopObserver();
-
-    const nextTarget = target ? resolveMaybeTarget(target) : undefined;
-    if (!active() || !nextTarget) {
-      resizeListener.stop();
-      return;
-    }
-
+  const startObserving = (nextTarget: Element) => {
     applyRect(nextTarget);
     if (windowRef) {
       resizeListener.start();
@@ -128,8 +121,50 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     });
 
     observer.observe(nextTarget, options.box ? { box: options.box } : undefined);
+  };
+
+  const scheduleDeferredTarget = () => {
+    cancelDeferredTarget();
+    cancelDeferredTarget = deferTargetResolution(() => {
+      cancelDeferredTarget = () => {};
+      if (!active()) {
+        return;
+      }
+
+      const nextTarget = target ? resolveMaybeTarget(target) : undefined;
+      if (!nextTarget) {
+        resizeListener.stop();
+        return;
+      }
+
+      stopObserver();
+      startObserving(nextTarget);
+    });
+  };
+
+  createEffect(() => {
+    cancelDeferredTarget();
+    cancelDeferredTarget = () => {};
+    stopObserver();
+
+    const nextTarget = target ? resolveMaybeTarget(target) : undefined;
+    if (!active() || !nextTarget) {
+      resizeListener.stop();
+      if (active() && target) {
+        scheduleDeferredTarget();
+      }
+      onCleanup(() => {
+        cancelDeferredTarget();
+        cancelDeferredTarget = () => {};
+      });
+      return;
+    }
+
+    startObserving(nextTarget);
 
     onCleanup(() => {
+      cancelDeferredTarget();
+      cancelDeferredTarget = () => {};
       stopObserver();
     });
   });
@@ -149,6 +184,8 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     },
     stop() {
       active(false);
+      cancelDeferredTarget();
+      cancelDeferredTarget = () => {};
       resizeListener.stop();
       stopObserver();
     }

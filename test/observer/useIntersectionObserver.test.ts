@@ -47,6 +47,20 @@ describe('useIntersectionObserver', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
+  it('observes ref-like target after it is assigned', async () => {
+    globalThis.IntersectionObserver = MockIntersectionObserver as never;
+
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+
+    createRoot(() => useIntersectionObserver(ref));
+    ref.current = element;
+    await Promise.resolve();
+
+    const instance = MockIntersectionObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenCalledWith(element);
+  });
+
   it('supports stop/start controls', async () => {
     globalThis.IntersectionObserver = MockIntersectionObserver as never;
 

@@ -77,4 +77,21 @@ describe('useEventListener', () => {
 
     expect(handler).toHaveBeenCalledTimes(2);
   });
+
+  it('binds ref-like target after it is assigned', async () => {
+    const target = new EventTarget();
+    const ref = { current: null as EventTarget | null };
+    const handler = vi.fn();
+
+    createRoot(() => {
+      useEventListener(ref, 'ready', handler);
+    });
+
+    ref.current = target;
+    await Promise.resolve();
+
+    target.dispatchEvent(new Event('ready'));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
 });

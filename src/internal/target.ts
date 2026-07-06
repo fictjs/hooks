@@ -40,6 +40,25 @@ export function resolveTargetList<T>(target: MaybeTarget<T> | Array<MaybeTarget<
     .filter((item): item is T => item != null);
 }
 
+export function deferTargetResolution(callback: () => void): () => void {
+  let canceled = false;
+  const run = () => {
+    if (!canceled) {
+      callback();
+    }
+  };
+
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(run);
+  } else {
+    void Promise.resolve().then(run);
+  }
+
+  return () => {
+    canceled = true;
+  };
+}
+
 export type MaybeElement = MaybeTarget<Element>;
 
 export type IgnoreTarget = MaybeElement | string;
