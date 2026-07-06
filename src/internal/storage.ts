@@ -288,8 +288,15 @@ export function createStorageHook<T>(
     });
   }
 
+  const value = function value(next?: T | ((prev: T) => T)) {
+    if (arguments.length === 0) {
+      return state();
+    }
+    set(next as T | ((prev: T) => T));
+  } as typeof state;
+
   return {
-    value: state,
+    value,
     set,
     remove
   };

@@ -98,6 +98,24 @@ describe('useStorage', () => {
     expect(first.value()).toBe(15);
   });
 
+  it('persists and syncs direct value signal writes', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+
+    const first = createRoot(() =>
+      useStorage('direct-write', 0, { storage, window: windowRef })
+    ).value;
+    const second = createRoot(() =>
+      useStorage('direct-write', 0, { storage, window: windowRef })
+    ).value;
+
+    (first.value as (next: number) => void)(7);
+
+    expect(storage.getItem('direct-write')).toBe('7');
+    expect(first.value()).toBe(7);
+    expect(second.value()).toBe(7);
+  });
+
   it('resets value when another document clears the storage area', () => {
     localStorage.removeItem('fict-clear-target');
 
