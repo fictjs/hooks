@@ -42,6 +42,32 @@ function readRect(target: Element) {
   };
 }
 
+function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions | undefined) {
+  const sizeSource =
+    box === 'border-box'
+      ? entry.borderBoxSize
+      : box === 'device-pixel-content-box'
+        ? entry.devicePixelContentBoxSize
+        : entry.contentBoxSize;
+  const size = Array.isArray(sizeSource) ? sizeSource[0] : sizeSource;
+
+  if (size) {
+    return {
+      width: size.inlineSize,
+      height: size.blockSize
+    };
+  }
+
+  if (!box || box === 'content-box') {
+    return {
+      width: entry.contentRect.width,
+      height: entry.contentRect.height
+    };
+  }
+
+  return null;
+}
+
 /**
  * Track element size/position reactively.
  *
@@ -69,6 +95,14 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     const rect = readRect(nextTarget);
     width(rect.width);
     height(rect.height);
+    top(rect.top);
+    left(rect.left);
+    x(rect.x);
+    y(rect.y);
+  };
+
+  const applyPosition = (nextTarget: Element) => {
+    const rect = readRect(nextTarget);
     top(rect.top);
     left(rect.left);
     x(rect.x);
@@ -111,9 +145,14 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     isSupported(true);
     observer = new Observer((entries: ResizeObserverEntry[]) => {
       const entry = entries[0];
-      if (entry?.contentRect) {
-        width(entry.contentRect.width);
-        height(entry.contentRect.height);
+      if (entry) {
+        const boxSize = readBoxSize(entry, options.box);
+        if (boxSize) {
+          width(boxSize.width);
+          height(boxSize.height);
+          applyPosition(nextTarget);
+          return;
+        }
         applyRect(nextTarget);
         return;
       }

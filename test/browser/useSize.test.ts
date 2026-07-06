@@ -97,6 +97,44 @@ describe('useSize', () => {
     expect(state.left()).toBe(25);
   });
 
+  it('uses the requested ResizeObserver box for size updates', () => {
+    globalThis.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60, top: 10, left: 20 });
+
+    const { value: state } = createRoot(() => useSize(element, { box: 'border-box' }));
+    const instance = MockResizeObserver.instances[0]!;
+
+    expect(instance.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
+
+    mockRect(element, { width: 100, height: 60, top: 12, left: 24 });
+    instance.trigger([
+      {
+        target: element,
+        contentRect: {
+          width: 100,
+          height: 60,
+          top: 0,
+          left: 0,
+          right: 100,
+          bottom: 60,
+          x: 0,
+          y: 0,
+          toJSON() {
+            return {};
+          }
+        } as DOMRectReadOnly,
+        borderBoxSize: [{ inlineSize: 140, blockSize: 80 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+
+    expect(state.width()).toBe(140);
+    expect(state.height()).toBe(80);
+    expect(state.top()).toBe(12);
+    expect(state.left()).toBe(24);
+  });
+
   it('rebinds observer when target changes', async () => {
     globalThis.ResizeObserver = MockResizeObserver as never;
 
