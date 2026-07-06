@@ -45,10 +45,33 @@ function normalizeKey(key: string): string {
 }
 
 function parseCombo(combo: string): string[] {
-  return combo
-    .split(/[.+]/g)
-    .map((part) => normalizeToken(part))
-    .filter(Boolean);
+  const tokens: string[] = [];
+  let current = '';
+
+  for (let index = 0; index < combo.length; index += 1) {
+    const char = combo[index]!;
+    if (char !== '.' && char !== '+') {
+      current += char;
+      continue;
+    }
+
+    if (current.trim()) {
+      tokens.push(current);
+      current = '';
+      if (index === combo.length - 1) {
+        tokens.push(char);
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.trim()) {
+    tokens.push(current);
+  }
+
+  return tokens.map((part) => normalizeToken(part)).filter(Boolean);
 }
 
 function isModifierToken(token: string): boolean {

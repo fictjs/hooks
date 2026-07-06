@@ -40,6 +40,26 @@ describe('useKeyPress', () => {
     root.dispose();
   });
 
+  it('matches punctuation keys used as combo separators', () => {
+    const plus = vi.fn();
+    const dot = vi.fn();
+    const ctrlPlus = vi.fn();
+    const root = createRoot(() => {
+      useKeyPress('+', plus);
+      useKeyPress('.', dot);
+      useKeyPress('ctrl.+', ctrlPlus, { exactMatch: true });
+    });
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '.' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '+', ctrlKey: true }));
+
+    expect(plus).toHaveBeenCalledTimes(2);
+    expect(dot).toHaveBeenCalledTimes(1);
+    expect(ctrlPlus).toHaveBeenCalledTimes(1);
+    root.dispose();
+  });
+
   it('supports multiple key filters', () => {
     const handler = vi.fn();
     const root = createRoot(() => useKeyPress(['enter', 'escape'], handler));
