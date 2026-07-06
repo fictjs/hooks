@@ -29,9 +29,45 @@ function walkFiles(directory) {
   return result;
 }
 
-function extractReactiveHookNames() {
+const reactiveKinds = new Set(['signal', 'memo', 'store', 'effect']);
+
+function parseFictReturn(annotation, file) {
+  const trimmed = annotation.trim();
+  if (trimmed === '{}' || trimmed === '{ }') {
+    return null;
+  }
+
+  const directMatch = trimmed.match(/^['"]?(signal|memo|store|effect)['"]?$/);
+  if (directMatch) {
+    return { directAccessor: directMatch[1] };
+  }
+
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+    if (!/['"]?(signal|memo|store|effect)['"]?/.test(trimmed)) {
+      return null;
+    }
+    fail(`unsupported @fictReturn annotation in ${toRootRelative(file)}: ${trimmed}`);
+  }
+
+  const objectProps = {};
+  const body = trimmed.slice(1, -1);
+  const propPattern =
+    /(?:['"]?([A-Za-z_$][\w$]*)['"]?)\s*:\s*['"]?(signal|memo|store|effect)['"]?/g;
+  let match;
+  while ((match = propPattern.exec(body))) {
+    objectProps[match[1]] = match[2];
+  }
+
+  if (Object.keys(objectProps).length === 0) {
+    return null;
+  }
+
+  return { objectProps };
+}
+
+function extractReactiveHookMetadata() {
   const sourceDir = path.join(root, 'src');
-  const hooks = new Set();
+  const hooks = new Map();
 
   for (const file of walkFiles(sourceDir)) {
     if (!file.endsWith('.ts')) continue;
@@ -43,18 +79,52 @@ function extractReactiveHookNames() {
     if (!annotationMatch) continue;
 
     const annotation = annotationMatch[1]?.trim() ?? '';
-    if (
-      annotation === '{}' ||
-      annotation === '{ }' ||
-      !/['"]?(signal|memo|store|effect)['"]?/.test(annotation)
-    ) {
-      continue;
+    const hookMetadata = parseFictReturn(annotation, file);
+    if (hookMetadata) {
+      hooks.set(exportMatch[1], hookMetadata);
     }
-
-    hooks.add(exportMatch[1]);
   }
 
   return hooks;
+}
+
+function assertHookMetadataMatches(hookName, expected, actual) {
+  if (expected.directAccessor) {
+    if (actual?.directAccessor !== expected.directAccessor) {
+      fail(
+        `metadata mismatch for ${hookName}.directAccessor: expected ${expected.directAccessor}, got ${actual?.directAccessor}`
+      );
+    }
+    if (actual.objectProps) {
+      fail(`metadata mismatch for ${hookName}: expected direct accessor, got object props`);
+    }
+    return;
+  }
+
+  const expectedProps = expected.objectProps ?? {};
+  const actualProps = actual?.objectProps ?? {};
+  const expectedNames = Object.keys(expectedProps);
+  const actualNames = Object.keys(actualProps);
+  const missing = expectedNames.filter((name) => !(name in actualProps)).sort();
+  const unexpected = actualNames.filter((name) => !(name in expectedProps)).sort();
+  if (missing.length > 0 || unexpected.length > 0) {
+    fail(
+      `metadata props mismatch for ${hookName}` +
+        (missing.length > 0 ? `; missing: ${missing.join(', ')}` : '') +
+        (unexpected.length > 0 ? `; unexpected: ${unexpected.join(', ')}` : '')
+    );
+  }
+
+  for (const [propName, expectedKind] of Object.entries(expectedProps)) {
+    if (!reactiveKinds.has(expectedKind)) {
+      fail(`unsupported expected reactive kind for ${hookName}.${propName}: ${expectedKind}`);
+    }
+    if (actualProps[propName] !== expectedKind) {
+      fail(
+        `metadata kind mismatch for ${hookName}.${propName}: expected ${expectedKind}, got ${actualProps[propName]}`
+      );
+    }
+  }
 }
 
 function parseNpmPackJson(stdout) {
@@ -158,7 +228,8 @@ if (metadata.version !== 1) {
 }
 
 const metadataHooks = new Set(Object.keys(metadata.hooks ?? {}));
-const expectedHooks = extractReactiveHookNames();
+const expectedHookMetadata = extractReactiveHookMetadata();
+const expectedHooks = new Set(expectedHookMetadata.keys());
 const missingHooks = [...expectedHooks].filter((hook) => !metadataHooks.has(hook));
 if (missingHooks.length > 0) {
   fail(`metadata is missing reactive hook entries: ${missingHooks.sort().join(', ')}`);
@@ -166,6 +237,9 @@ if (missingHooks.length > 0) {
 const unexpectedHooks = [...metadataHooks].filter((hook) => !expectedHooks.has(hook));
 if (unexpectedHooks.length > 0) {
   fail(`metadata includes unexpected hook entries: ${unexpectedHooks.sort().join(', ')}`);
+}
+for (const [hookName, expected] of expectedHookMetadata) {
+  assertHookMetadataMatches(hookName, expected, metadata.hooks?.[hookName]);
 }
 
 const manifest = readJson('dist/fict.manifest.json');
