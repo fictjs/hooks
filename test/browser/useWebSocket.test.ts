@@ -220,6 +220,22 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(2);
   });
 
+  it('cleans stale socket listeners when opening during closing', () => {
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const first = MockWebSocket.instances[0]!;
+    const removeListener = vi.spyOn(first, 'removeEventListener');
+
+    first.readyState = MockWebSocket.CLOSING;
+
+    expect(state.open()).toBe(true);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(removeListener).toHaveBeenCalledTimes(4);
+  });
+
   it('returns unsupported state when constructor is missing', () => {
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {

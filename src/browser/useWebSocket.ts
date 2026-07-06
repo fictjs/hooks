@@ -173,6 +173,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     if (socket && (socket.readyState === socket.CONNECTING || socket.readyState === socket.OPEN)) {
       return true;
     }
+    if (socket) {
+      cleanupSocket();
+      socket = null;
+    }
 
     stopReconnectTimer();
     manuallyClosed = false;
