@@ -10,7 +10,7 @@ export type UseDebounceFnOptions = DebounceOptions;
 /**
  * Debounced function wrapper with lifecycle-aware cleanup.
  *
- * @fictReturn {}
+ * @fictReturn { pending: 'signal' }
  */
 export function useDebounceFn<T extends Procedure>(
   fn: T,

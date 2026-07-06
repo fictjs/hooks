@@ -19,10 +19,12 @@ describe('useThrottleFn', () => {
 
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenNthCalledWith(1, 'a');
+    expect(controls.pending()).toBe(true);
 
     vi.advanceTimersByTime(100);
     expect(callback).toHaveBeenCalledTimes(2);
     expect(callback).toHaveBeenNthCalledWith(2, 'c');
+    expect(controls.pending()).toBe(false);
   });
 
   it('supports leading false', () => {
@@ -57,7 +59,9 @@ describe('useThrottleFn', () => {
 
     controls.run('z');
     controls.run('zz');
+    expect(controls.pending()).toBe(true);
     controls.flush();
+    expect(controls.pending()).toBe(false);
 
     expect(callback).toHaveBeenCalledTimes(3);
     expect(callback).toHaveBeenNthCalledWith(2, 'z');

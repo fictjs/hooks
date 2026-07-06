@@ -10,7 +10,7 @@ export type UseThrottleFnOptions = ThrottleOptions;
 /**
  * Throttled function wrapper with lifecycle-aware cleanup.
  *
- * @fictReturn {}
+ * @fictReturn { pending: 'signal' }
  */
 export function useThrottleFn<T extends Procedure>(
   fn: T,

@@ -1,3 +1,4 @@
+import { createSignal } from '@fictjs/runtime/advanced';
 import { tryOnDestroy } from './lifecycle';
 
 export type Procedure = (...args: unknown[]) => void;
@@ -28,10 +29,8 @@ export function createDebouncedFn<T extends Procedure>(
     timer?: ReturnType<typeof setTimeout>;
     maxTimer?: ReturnType<typeof setTimeout>;
     lastArgs?: Parameters<T>;
-    pending: boolean;
-  } = {
-    pending: false
-  };
+  } = {};
+  const pending = createSignal(false);
 
   const clearTimers = () => {
     if (state.timer) {
@@ -46,14 +45,14 @@ export function createDebouncedFn<T extends Procedure>(
 
   const invoke = () => {
     if (!state.lastArgs) {
-      state.pending = false;
+      pending(false);
       clearTimers();
       return;
     }
 
     const args = state.lastArgs;
     state.lastArgs = undefined;
-    state.pending = false;
+    pending(false);
     clearTimers();
     fn(...args);
   };
@@ -67,7 +66,7 @@ export function createDebouncedFn<T extends Procedure>(
       if (trailing) {
         invoke();
       } else {
-        state.pending = false;
+        pending(false);
         clearTimers();
       }
     }, wait);
@@ -83,25 +82,25 @@ export function createDebouncedFn<T extends Procedure>(
   const run = (...args: Parameters<T>) => {
     const shouldCallLeading = leading && !state.timer;
     state.lastArgs = args;
-    state.pending = true;
+    pending(true);
 
     if (shouldCallLeading) {
       fn(...args);
       state.lastArgs = undefined;
-      state.pending = false;
+      pending(false);
     }
 
     scheduleTimers();
   };
 
   const cancel = () => {
-    state.pending = false;
+    pending(false);
     state.lastArgs = undefined;
     clearTimers();
   };
 
   const flush = () => {
-    if (state.pending) {
+    if (pending()) {
       invoke();
     }
   };
@@ -112,7 +111,7 @@ export function createDebouncedFn<T extends Procedure>(
     run,
     cancel,
     flush,
-    pending: () => state.pending
+    pending
   };
 }
 
@@ -131,7 +130,7 @@ export function createThrottledFn<T extends Procedure>(
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastArgs: Parameters<T> | undefined;
-  let pending = false;
+  const pending = createSignal(false);
 
   const invoke = (args: Parameters<T>) => {
     fn(...args);
@@ -141,14 +140,14 @@ export function createThrottledFn<T extends Procedure>(
     if (trailing && lastArgs) {
       const args = lastArgs;
       lastArgs = undefined;
-      pending = false;
+      pending(false);
       invoke(args);
       timer = setTimeout(tick, wait);
       return;
     }
 
     timer = undefined;
-    pending = false;
+    pending(false);
   };
 
   const run = (...args: Parameters<T>) => {
@@ -157,7 +156,7 @@ export function createThrottledFn<T extends Procedure>(
         invoke(args);
       } else if (trailing) {
         lastArgs = args;
-        pending = true;
+        pending(true);
       }
       timer = setTimeout(tick, wait);
       return;
@@ -165,7 +164,7 @@ export function createThrottledFn<T extends Procedure>(
 
     if (trailing) {
       lastArgs = args;
-      pending = true;
+      pending(true);
     }
   };
 
@@ -175,14 +174,14 @@ export function createThrottledFn<T extends Procedure>(
       timer = undefined;
     }
     lastArgs = undefined;
-    pending = false;
+    pending(false);
   };
 
   const flush = () => {
     if (lastArgs) {
       const args = lastArgs;
       lastArgs = undefined;
-      pending = false;
+      pending(false);
       invoke(args);
     }
   };
@@ -193,6 +192,6 @@ export function createThrottledFn<T extends Procedure>(
     run,
     cancel,
     flush,
-    pending: () => pending
+    pending
   };
 }

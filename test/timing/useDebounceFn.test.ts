@@ -95,12 +95,16 @@ describe('useDebounceFn', () => {
     const { value: controls } = createRoot(() => useDebounceFn(callback, 100));
 
     controls.run('x');
+    expect(controls.pending()).toBe(true);
     controls.cancel();
+    expect(controls.pending()).toBe(false);
     vi.advanceTimersByTime(200);
     expect(callback).toHaveBeenCalledTimes(0);
 
     controls.run('y');
+    expect(controls.pending()).toBe(true);
     controls.flush();
+    expect(controls.pending()).toBe(false);
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenLastCalledWith('y');
   });
