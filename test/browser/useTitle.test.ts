@@ -27,6 +27,17 @@ describe('useTitle', () => {
     expect(state.title()).toBe('next');
   });
 
+  it('updates document title when returned signal is written', () => {
+    document.title = 'before';
+
+    const { value: state } = createRoot(() => useTitle('initial'));
+
+    (state.title as (next: string) => void)('manual');
+
+    expect(document.title).toBe('manual');
+    expect(state.title()).toBe('manual');
+  });
+
   it('restores previous title on dispose when enabled', () => {
     document.title = 'original';
 

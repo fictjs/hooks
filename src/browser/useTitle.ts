@@ -24,14 +24,25 @@ export function useTitle(
 ): UseTitleReturn {
   const documentRef = options.document === undefined ? defaultDocument : options.document;
   const initialTitle = documentRef?.title ?? '';
-  const title = createSignal(documentRef?.title ?? toValue(value as MaybeAccessor<string>));
+  const titleSignal = createSignal(documentRef?.title ?? toValue(value as MaybeAccessor<string>));
 
-  createEffect(() => {
-    const nextTitle = toValue(value as MaybeAccessor<string>);
-    title(nextTitle);
+  const setTitle = (nextTitle: string) => {
+    titleSignal(nextTitle);
     if (documentRef) {
       documentRef.title = nextTitle;
     }
+  };
+
+  const title = function title(nextTitle?: string) {
+    if (arguments.length === 0) {
+      return titleSignal();
+    }
+    setTitle(nextTitle ?? '');
+  } as typeof titleSignal;
+
+  createEffect(() => {
+    const nextTitle = toValue(value as MaybeAccessor<string>);
+    setTitle(nextTitle);
   });
 
   if (options.restoreOnUnmount) {
