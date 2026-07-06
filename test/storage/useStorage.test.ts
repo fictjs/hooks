@@ -67,6 +67,30 @@ describe('useStorage', () => {
     expect(first.value()).toBe(15);
   });
 
+  it('resets value when another document clears the storage area', () => {
+    localStorage.removeItem('fict-clear-target');
+
+    const state = createRoot(() =>
+      useStorage('fict-clear-target', 1, {
+        storage: localStorage,
+        window
+      })
+    ).value;
+
+    state.set(5);
+    expect(state.value()).toBe(5);
+
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: null,
+        newValue: null,
+        storageArea: localStorage
+      })
+    );
+
+    expect(state.value()).toBe(1);
+  });
+
   it('keeps same-window sync listeners when created outside a root', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;

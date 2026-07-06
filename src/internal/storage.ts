@@ -221,7 +221,7 @@ export function createStorageHook<T>(
 
   if (windowRef && storage && listenToStorageChanges) {
     const storageListener = (event: StorageEvent) => {
-      if (event.storageArea !== storage || event.key !== key) {
+      if (event.storageArea !== storage || (event.key !== key && event.key !== null)) {
         return;
       }
       syncFromRaw(event.newValue);
