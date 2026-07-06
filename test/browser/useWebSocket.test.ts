@@ -173,6 +173,39 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(1);
   });
 
+  it('calls onClose after manual close', () => {
+    const onClose = vi.fn();
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        onClose
+      })
+    );
+
+    state.close(1000, 'done');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose.mock.calls[0]?.[0]).toMatchObject({ code: 1000, reason: 'done' });
+    expect(state.status()).toBe('CLOSED');
+  });
+
+  it('recovers state when close throws', () => {
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    state.close();
+
+    expect(state.status()).toBe('CLOSED');
+    expect((state.error() as unknown as Error).message).toBe('close failed');
+  });
+
   it('supports explicit reconnect', () => {
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {

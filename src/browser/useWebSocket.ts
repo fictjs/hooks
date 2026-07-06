@@ -263,11 +263,17 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return;
     }
 
-    socket = null;
-    cleanupSocket();
     status('CLOSING');
-    currentSocket.close(code, reason);
-    status('CLOSED');
+    try {
+      currentSocket.close(code, reason);
+    } catch (nextError) {
+      if (socket === currentSocket) {
+        socket = null;
+        cleanupSocket();
+      }
+      error(nextError as Event);
+      status('CLOSED');
+    }
   };
 
   const reconnect = () => {
