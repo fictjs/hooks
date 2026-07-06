@@ -48,8 +48,8 @@ export function useAsyncState<T, Args extends unknown[] = []>(
     } catch (err) {
       if (id === callId) {
         error(err);
+        options.onError?.(err);
       }
-      options.onError?.(err);
       throw err;
     } finally {
       if (id === callId) {

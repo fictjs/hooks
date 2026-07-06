@@ -64,6 +64,38 @@ describe('useAsyncState', () => {
     expect(state.state()).toBe(2);
   });
 
+  it('does not call onError for stale failures', async () => {
+    let rejectA: ((error: Error) => void) | undefined;
+    let resolveB: ((value: number) => void) | undefined;
+    const onError = vi.fn();
+
+    const executor = vi.fn(
+      (tag: 'a' | 'b') =>
+        new Promise<number>((resolve, reject) => {
+          if (tag === 'a') {
+            rejectA = reject;
+          } else {
+            resolveB = resolve;
+          }
+        })
+    );
+
+    const { value: state } = createRoot(() => useAsyncState(executor, 0, { onError }));
+
+    const promiseA = state.execute('a');
+    const promiseB = state.execute('b');
+
+    resolveB!(2);
+    await promiseB;
+
+    rejectA!(new Error('stale'));
+    await expect(promiseA).rejects.toThrow('stale');
+
+    expect(onError).toHaveBeenCalledTimes(0);
+    expect(state.error()).toBeNull();
+    expect(state.state()).toBe(2);
+  });
+
   it('supports immediate execution', async () => {
     const { value: state } = createRoot(() => useAsyncState(async () => 7, 0, { immediate: true }));
 
