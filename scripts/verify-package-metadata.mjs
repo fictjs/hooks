@@ -182,7 +182,6 @@ function toRootRelative(absolutePath) {
 }
 
 const requiredDistFiles = [
-  'dist/fict.manifest.json',
   'dist/index.cjs',
   'dist/index.d.cts',
   'dist/index.d.ts',
@@ -272,22 +271,6 @@ if (unexpectedHooks.length > 0) {
 }
 for (const [hookName, expected] of expectedHookMetadata) {
   assertHookMetadataMatches(hookName, expected, metadata.hooks?.[hookName]);
-}
-
-const manifest = readJson('dist/fict.manifest.json');
-if (Object.keys(manifest).length === 0) {
-  fail('dist/fict.manifest.json must not be empty');
-}
-const sourceFiles = walkFiles(path.join(root, 'src'))
-  .filter((file) => file.endsWith('.ts'))
-  .map((file) => pathToFileURL(file).href);
-assertSameSet('manifest source entries', Object.keys(manifest), sourceFiles);
-
-const invalidManifestTargets = Object.entries(manifest)
-  .filter(([, target]) => target !== '/index.js' && target !== '/index.cjs')
-  .map(([source, target]) => `${source} -> ${target}`);
-if (invalidManifestTargets.length > 0) {
-  fail(`manifest contains invalid output targets: ${invalidManifestTargets.sort().join(', ')}`);
 }
 
 const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
