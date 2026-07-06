@@ -28,6 +28,11 @@ const jsonSerializer: Serializer<unknown> = {
   write: (value) => JSON.stringify(value)
 };
 
+function serializeValue<T>(serializer: Serializer<T>, value: T): string | undefined {
+  const serialized = serializer.write(value);
+  return typeof serialized === 'string' ? serialized : undefined;
+}
+
 function inferSerializer<T>(initial: T): Serializer<T> {
   const kind = typeof initial;
 
@@ -115,7 +120,10 @@ export function createStorageHook<T>(
       const raw = storage.getItem(key);
       if (raw == null) {
         if (options.writeDefaults ?? true) {
-          storage.setItem(key, serializer.write(initial));
+          const serializedInitial = serializeValue(serializer, initial);
+          if (serializedInitial !== undefined) {
+            storage.setItem(key, serializedInitial);
+          }
         }
         return initial;
       }
@@ -144,7 +152,43 @@ export function createStorageHook<T>(
     }
 
     try {
-      const serialized = serializer.write(value);
+      if (value === undefined) {
+        paused = true;
+        storage.removeItem(key);
+        writeState(value);
+        if (emitSync) {
+          windowRef.dispatchEvent(
+            new CustomEvent(syncEvent, {
+              detail: {
+                key,
+                value: null,
+                storage
+              }
+            })
+          );
+        }
+        return;
+      }
+
+      const serialized = serializeValue(serializer, value);
+      if (serialized === undefined) {
+        paused = true;
+        storage.removeItem(key);
+        writeState(value);
+        if (emitSync) {
+          windowRef.dispatchEvent(
+            new CustomEvent(syncEvent, {
+              detail: {
+                key,
+                value: null,
+                storage
+              }
+            })
+          );
+        }
+        return;
+      }
+
       const current = storage.getItem(key);
       if (current === serialized) {
         writeState(value);

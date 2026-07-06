@@ -53,6 +53,37 @@ describe('useStorage', () => {
     expect(storage.getItem('count')).toBeNull();
   });
 
+  it('removes storage entries instead of writing undefined', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+
+    const state = createRoot(() =>
+      useStorage<string | undefined>('maybe', 'ready', {
+        storage,
+        window: windowRef
+      })
+    ).value;
+
+    state.set(undefined);
+
+    expect(state.value()).toBeUndefined();
+    expect(storage.getItem('maybe')).toBeNull();
+  });
+
+  it('does not write an undefined default value', () => {
+    const storage = new MemoryStorage();
+
+    const state = createRoot(() =>
+      useStorage<string | undefined>('default-undefined', undefined, {
+        storage,
+        window: new EventTarget() as Window
+      })
+    ).value;
+
+    expect(state.value()).toBeUndefined();
+    expect(storage.getItem('default-undefined')).toBeNull();
+  });
+
   it('syncs between hooks in same window', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;
