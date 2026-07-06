@@ -48,7 +48,17 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
   const idle = createSignal(options.initialState ?? false);
   const lastActive = createSignal<number | null>(null);
   const isSupported = createSignal(!!windowRef);
-  const active = createSignal(false);
+  const activeSignal = createSignal(false);
+  const active = function active(next?: boolean) {
+    if (arguments.length === 0) {
+      return activeSignal();
+    }
+    if (next) {
+      resume();
+    } else {
+      pause();
+    }
+  } as typeof activeSignal;
 
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -97,18 +107,18 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
   );
 
   const pause = () => {
-    if (!active()) {
+    if (!activeSignal()) {
       return;
     }
 
-    active(false);
+    activeSignal(false);
     activityListener.stop();
     visibilityListener.stop();
     clearTimer();
   };
 
   const resume = () => {
-    if (!windowRef || active()) {
+    if (!windowRef || activeSignal()) {
       if (!windowRef) {
         isSupported(false);
       }
@@ -116,7 +126,7 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
     }
 
     isSupported(true);
-    active(true);
+    activeSignal(true);
     activityListener.start();
     if (listenForVisibilityChange) {
       visibilityListener.start();

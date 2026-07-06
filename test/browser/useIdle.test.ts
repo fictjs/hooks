@@ -77,6 +77,30 @@ describe('useIdle', () => {
     expect(state.idle()).toBe(true);
   });
 
+  it('routes direct active signal writes through pause and resume', () => {
+    vi.useFakeTimers();
+    const windowRef = new EventTarget() as Window;
+
+    const { value: state } = createRoot(() =>
+      useIdle({
+        window: windowRef,
+        timeout: 1000
+      })
+    );
+
+    (state.active as (next: boolean) => void)(false);
+    expect(state.active()).toBe(false);
+
+    vi.advanceTimersByTime(1000);
+    expect(state.idle()).toBe(false);
+
+    (state.active as (next: boolean) => void)(true);
+    expect(state.active()).toBe(true);
+
+    vi.advanceTimersByTime(1000);
+    expect(state.idle()).toBe(true);
+  });
+
   it('does not start when immediate is false', () => {
     vi.useFakeTimers();
     const windowRef = new EventTarget() as Window;
