@@ -1,7 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 interface TransformResultLike {
@@ -27,13 +26,8 @@ interface FictPluginFactory {
   (options?: Record<string, unknown>): FictPluginLike;
 }
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(currentDir, '../../..');
-const pluginEntry = path.resolve(repoRoot, 'packages/vite-plugin/dist/index.js');
-const hasLocalVitePlugin = existsSync(pluginEntry);
-
 async function loadFictPluginFactory(): Promise<FictPluginFactory> {
-  const pluginModule = (await import(pathToFileURL(pluginEntry).href)) as {
+  const pluginModule = (await import('@fictjs/vite-plugin')) as {
     default?: FictPluginFactory;
   };
   if (!pluginModule.default) {
@@ -67,73 +61,84 @@ async function runTransform(plugin: FictPluginLike, source: string, id: string) 
   throw new Error('transform hook is unavailable');
 }
 
-const runIfPluginAvailable = hasLocalVitePlugin ? it : it.skip;
-
 describe('compiler chain integration', () => {
-  runIfPluginAvailable(
-    'keeps reactive destructuring across bare @fictjs/hooks imports',
-    async () => {
-      const fict = await loadFictPluginFactory();
-      const plugin = fict({
-        dev: true,
-        include: ['**/*.ts', '**/*.tsx'],
-        useTypeScriptProject: false,
-        emitModuleMetadata: true
-      });
+  it('keeps reactive destructuring across bare @fictjs/hooks package metadata imports', async () => {
+    const fict = await loadFictPluginFactory();
+    const plugin = fict({
+      dev: true,
+      include: ['**/*.ts', '**/*.tsx'],
+      useTypeScriptProject: false
+    });
 
-      const tempRoot = mkdtempSync(path.join(tmpdir(), 'fict-hooks-compiler-chain-'));
-      const hooksPackageDir = path.join(tempRoot, 'hooks-package');
-      const hookEntry = path.join(hooksPackageDir, 'index.ts');
-      const appEntry = path.join(tempRoot, 'App.tsx');
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'fict-hooks-compiler-chain-'));
+    const hooksPackageDir = path.join(tempRoot, 'node_modules/@fictjs/hooks');
+    const hooksDistDir = path.join(hooksPackageDir, 'dist');
+    const appEntry = path.join(tempRoot, 'App.tsx');
 
-      mkdirSync(hooksPackageDir, { recursive: true });
+    mkdirSync(hooksDistDir, { recursive: true });
 
-      const hookSource = `
-        import { $state } from 'fict';
+    const appSource = `
+      import { useCounter } from '@fictjs/hooks';
 
-        /** @fictReturn { count: 'signal' } */
-        export function useCounter() {
-          const count = $state(0);
-          return { count };
-        }
-      `;
-
-      const appSource = `
-        import { useCounter } from '@fictjs/hooks';
-
-        export function App() {
-          const { count } = useCounter();
-          return <div>{count}</div>;
-        }
-      `;
-
-      writeFileSync(hookEntry, hookSource, 'utf8');
-      writeFileSync(appEntry, appSource, 'utf8');
-
-      plugin.configResolved?.({
-        command: 'build',
-        mode: 'test',
-        root: tempRoot,
-        base: '/',
-        build: { ssr: false },
-        resolve: {
-          alias: [{ find: '@fictjs/hooks', replacement: hooksPackageDir }]
-        },
-        logger: {
-          info() {}
-        }
-      });
-
-      try {
-        const hookResult = await runTransform(plugin, hookSource, hookEntry);
-        expect(hookResult).not.toBeNull();
-
-        const appResult = await runTransform(plugin, appSource, appEntry);
-        expect(appResult).not.toBeNull();
-        expect(appResult?.code).toMatch(/count\(\)/);
-      } finally {
-        rmSync(tempRoot, { recursive: true, force: true });
+      export function App() {
+        const { count } = useCounter();
+        return <div>{count}</div>;
       }
+    `;
+
+    writeFileSync(
+      path.join(hooksPackageDir, 'package.json'),
+      JSON.stringify({
+        name: '@fictjs/hooks',
+        version: '0.0.0-test',
+        type: 'module',
+        exports: {
+          '.': './dist/index.js'
+        },
+        fict: {
+          metadata: './dist/index.fict.meta.json'
+        }
+      }),
+      'utf8'
+    );
+    writeFileSync(path.join(hooksDistDir, 'index.js'), 'export function useCounter() {}', 'utf8');
+    writeFileSync(
+      path.join(hooksDistDir, 'index.fict.meta.json'),
+      JSON.stringify({
+        version: 1,
+        exports: {},
+        hooks: {
+          useCounter: {
+            objectProps: {
+              count: 'signal'
+            }
+          }
+        }
+      }),
+      'utf8'
+    );
+    writeFileSync(appEntry, appSource, 'utf8');
+
+    plugin.configResolved?.({
+      command: 'build',
+      mode: 'test',
+      root: tempRoot,
+      base: '/',
+      build: { ssr: false },
+      resolve: {
+        alias: []
+      },
+      logger: {
+        info() {}
+      }
+    });
+
+    try {
+      const appResult = await runTransform(plugin, appSource, appEntry);
+      expect(appResult).not.toBeNull();
+      expect(appResult?.code).toMatch(/count\(\)/);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
     }
-  );
+  });
 });
