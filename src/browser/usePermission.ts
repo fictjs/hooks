@@ -102,6 +102,7 @@ export function usePermission(
   });
 
   tryOnDestroy(() => {
+    queryId += 1;
     cleanup();
   });
 

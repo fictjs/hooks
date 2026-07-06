@@ -126,4 +126,32 @@ describe('usePermission', () => {
     status.update('denied');
     expect(state.state()).toBe('granted');
   });
+
+  it('does not bind listener when query resolves after dispose', async () => {
+    let resolveQuery: ((status: PermissionStatus) => void) | undefined;
+    const status = new MockPermissionStatus('camera', 'granted');
+    const addEventListener = vi.spyOn(status, 'addEventListener');
+    const navigatorRef = {
+      permissions: {
+        query: vi.fn(
+          () =>
+            new Promise<PermissionStatus>((resolve) => {
+              resolveQuery = resolve;
+            })
+        )
+      }
+    } as unknown as Navigator;
+
+    const { dispose } = createRoot(() =>
+      usePermission('camera', {
+        navigator: navigatorRef as never
+      })
+    );
+
+    dispose();
+    resolveQuery!(status);
+    await Promise.resolve();
+
+    expect(addEventListener).toHaveBeenCalledTimes(0);
+  });
 });
