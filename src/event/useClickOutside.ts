@@ -23,8 +23,22 @@ export interface UseClickOutsideControls {
   trigger: (event?: Event) => void;
 }
 
-function isNodeInside(elements: Element[], node: Node): boolean {
-  return elements.some((element) => element.contains(node));
+function getEventPath(event: Event): EventTarget[] {
+  return typeof event.composedPath === 'function' ? event.composedPath() : [];
+}
+
+function isKeyboardClick(event: Event): boolean {
+  return event instanceof MouseEvent && event.detail === 0;
+}
+
+function isNodeInside(elements: Element[], node: Node, event: Event): boolean {
+  const path = getEventPath(event);
+  return elements.some(
+    (element) =>
+      element.contains(node) ||
+      path.includes(element) ||
+      path.some((entry) => entry instanceof Node && element.contains(entry))
+  );
 }
 
 /**
@@ -62,7 +76,7 @@ export function useClickOutside(
       return Array.isArray(resolved) ? resolved : [resolved];
     });
 
-    if (isNodeInside(targetElements, node) || isNodeInside(ignoreElements, node)) {
+    if (isNodeInside(targetElements, node, event) || isNodeInside(ignoreElements, node, event)) {
       return false;
     }
 
@@ -74,7 +88,7 @@ export function useClickOutside(
   };
 
   const onClick = (event: Event) => {
-    if (pointerDownOutside && isOutside(event)) {
+    if ((pointerDownOutside || isKeyboardClick(event)) && isOutside(event)) {
       handler(event);
     }
     pointerDownOutside = false;

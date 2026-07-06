@@ -39,6 +39,42 @@ describe('useClickOutside', () => {
     expect(handler).toHaveBeenCalledTimes(0);
   });
 
+  it('does not trigger for target clicks inside shadow dom', () => {
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const target = document.createElement('button');
+    shadow.appendChild(target);
+    document.body.appendChild(host);
+
+    const handler = vi.fn();
+
+    createRoot(() => {
+      useClickOutside(target, handler);
+    });
+
+    target.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+    target.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+
+    expect(handler).toHaveBeenCalledTimes(0);
+  });
+
+  it('triggers for keyboard clicks outside target', () => {
+    const target = document.createElement('div');
+    const outside = document.createElement('button');
+    document.body.appendChild(target);
+    document.body.appendChild(outside);
+
+    const handler = vi.fn();
+
+    createRoot(() => {
+      useClickOutside(target, handler);
+    });
+
+    outside.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('supports ignore selectors', () => {
     const target = document.createElement('div');
     const ignore = document.createElement('button');
