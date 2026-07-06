@@ -37,5 +37,6 @@ jobs:
           pnpm test
           pnpm build
           pnpm verify:metadata
+          pnpm test:attw
         env:
           CI: true

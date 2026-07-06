@@ -65,10 +65,11 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:attw": "attw --pack",
     "test:watch": "vitest",
     "prepare": "husky",
     "commit": "git-cz",
-    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build && pnpm run verify:metadata"
+    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build && pnpm run verify:metadata && pnpm run test:attw"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
@@ -83,6 +84,7 @@
     "@fictjs/runtime": "^0.24.0 || ^0.25.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.4",
     "@eslint/js": "^10.0.1",
     "@fictjs/runtime": "^0.24.0",
     "@fictjs/vite-plugin": "^0.24.0",
