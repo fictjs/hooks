@@ -198,8 +198,9 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
   applyCache();
 
-  if (!options.manual && options.defaultParams) {
-    void runAsync(...options.defaultParams);
+  if (!options.manual) {
+    const initialParams = options.defaultParams ?? ([] as unknown as TParams);
+    void runAsync(...initialParams);
   }
 
   tryOnDestroy(cancel);

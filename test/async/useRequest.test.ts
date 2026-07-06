@@ -23,6 +23,20 @@ describe('useRequest', () => {
     expect(state.data()).toBe(2);
   });
 
+  it('auto runs with empty params by default', async () => {
+    const service = vi.fn(async () => 'ok');
+
+    const { value: state } = createRoot(() => useRequest(service));
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(service).toHaveBeenCalledWith();
+    expect(state.data()).toBe('ok');
+    expect(state.params()).toEqual([]);
+  });
+
   it('keeps auto-run result when created outside a root', async () => {
     const service = vi.fn(async (value: number) => value + 1);
 
