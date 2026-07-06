@@ -17,6 +17,12 @@ export interface UseStorageOptions<T> {
 
 const syncEvent = 'fict-storage-sync';
 
+interface StorageSyncDetail {
+  key: string;
+  value: string | null;
+  storage: Storage;
+}
+
 const jsonSerializer: Serializer<unknown> = {
   read: (raw) => JSON.parse(raw),
   write: (value) => JSON.stringify(value)
@@ -153,7 +159,8 @@ export function createStorageHook<T>(
           new CustomEvent(syncEvent, {
             detail: {
               key,
-              value: serialized
+              value: serialized,
+              storage
             }
           })
         );
@@ -180,7 +187,8 @@ export function createStorageHook<T>(
           new CustomEvent(syncEvent, {
             detail: {
               key,
-              value: null
+              value: null,
+              storage
             }
           })
         );
@@ -220,8 +228,8 @@ export function createStorageHook<T>(
     };
 
     const customListener = (event: Event) => {
-      const custom = event as CustomEvent<{ key: string; value: string | null }>;
-      if (custom.detail?.key !== key) {
+      const custom = event as CustomEvent<StorageSyncDetail>;
+      if (custom.detail?.storage !== storage || custom.detail.key !== key) {
         return;
       }
       syncFromRaw(custom.detail.value);

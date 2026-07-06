@@ -1,6 +1,7 @@
 import { createRoot } from '@fictjs/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { useLocalStorage } from '../../src/storage/useLocalStorage';
+import { useSessionStorage } from '../../src/storage/useSessionStorage';
 
 describe('useLocalStorage', () => {
   it('reads and writes localStorage', () => {
@@ -15,6 +16,20 @@ describe('useLocalStorage', () => {
 
     state.remove();
     expect(localStorage.getItem('fict-local')).toBeNull();
+  });
+
+  it('does not sync same-key updates into sessionStorage', () => {
+    localStorage.removeItem('fict-shared-area');
+    sessionStorage.removeItem('fict-shared-area');
+
+    const local = createRoot(() => useLocalStorage('fict-shared-area', 'local')).value;
+    const session = createRoot(() => useSessionStorage('fict-shared-area', 'session')).value;
+
+    local.set('changed');
+
+    expect(local.value()).toBe('changed');
+    expect(session.value()).toBe('session');
+    expect(sessionStorage.getItem('fict-shared-area')).toBe('session');
   });
 
   it('falls back to in-memory signal when window is unavailable', () => {
