@@ -113,11 +113,11 @@ const packageEntryPaths = [
   ['main', pkg.main],
   ['module', pkg.module],
   ['types', pkg.types],
-  ['exports["."].types', pkg.exports?.['.']?.types],
   ['exports["."].import', pkg.exports?.['.']?.import],
   ['exports["."].require', pkg.exports?.['.']?.require]
 ];
-for (const [field, value] of packageEntryPaths) {
+
+function assertPackageEntryPath(field, value) {
   if (typeof value !== 'string') {
     fail(`package.json ${field} must be a string path`);
   }
@@ -127,6 +127,23 @@ for (const [field, value] of packageEntryPaths) {
     fail(`package.json ${field} points at ${value}, which is not a required dist artifact`);
   }
 }
+
+for (const [field, value] of packageEntryPaths) {
+  assertPackageEntryPath(field, value);
+}
+
+const exportTypes = pkg.exports?.['.']?.types;
+if (!exportTypes || typeof exportTypes !== 'object' || Array.isArray(exportTypes)) {
+  fail('package.json exports["."].types must be an object with import and require paths');
+}
+if (exportTypes.import !== './dist/index.d.ts') {
+  fail('package.json exports["."].types.import must point at ./dist/index.d.ts');
+}
+if (exportTypes.require !== './dist/index.d.cts') {
+  fail('package.json exports["."].types.require must point at ./dist/index.d.cts');
+}
+assertPackageEntryPath('exports["."].types.import', exportTypes.import);
+assertPackageEntryPath('exports["."].types.require', exportTypes.require);
 
 const distDir = path.join(root, 'dist');
 if (!existsSync(distDir)) {
