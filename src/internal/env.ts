@@ -2,4 +2,5 @@ export const isClient = typeof window !== 'undefined' && typeof document !== 'un
 
 export const defaultWindow = isClient ? window : undefined;
 export const defaultDocument = isClient ? document : undefined;
-export const defaultNavigator = typeof navigator !== 'undefined' ? navigator : undefined;
+export const defaultNavigator =
+  isClient && typeof navigator !== 'undefined' ? navigator : undefined;
