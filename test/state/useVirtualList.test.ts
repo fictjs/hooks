@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import { createSignal } from '@fictjs/runtime/advanced';
 import { describe, expect, it } from 'vitest';
 import { useVirtualList } from '../../src/state/useVirtualList';
 
@@ -188,6 +189,43 @@ describe('useVirtualList', () => {
       expect(state.end()).toBe(4);
       expect(state.list()).toHaveLength(4);
     }
+  });
+
+  it('keeps range valid when scrollTop exceeds total height', () => {
+    const { value: state } = createRoot(() =>
+      useVirtualList([1, 2, 3], {
+        itemHeight: 20,
+        containerHeight: 40,
+        overscan: 0
+      })
+    );
+
+    state.setScrollTop(10_000);
+
+    expect(state.start()).toBe(1);
+    expect(state.end()).toBe(3);
+    expect(state.start()).toBeLessThanOrEqual(state.end());
+    expect(state.list().map((item) => item.index)).toEqual([1, 2]);
+  });
+
+  it('keeps range valid when source shrinks after scrolling', () => {
+    const source = createSignal(Array.from({ length: 100 }, (_, index) => index));
+
+    const { value: state } = createRoot(() =>
+      useVirtualList(source, {
+        itemHeight: 20,
+        containerHeight: 40,
+        overscan: 0
+      })
+    );
+
+    state.setScrollTop(1_900);
+    source([1, 2, 3]);
+
+    expect(state.start()).toBe(1);
+    expect(state.end()).toBe(3);
+    expect(state.start()).toBeLessThanOrEqual(state.end());
+    expect(state.list().map((item) => item.index)).toEqual([1, 2]);
   });
 
   it('supports scrollTo and onScroll', () => {

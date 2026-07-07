@@ -76,19 +76,23 @@ export function useVirtualList<T>(
 
   const totalHeight = createMemo(() => toValue(source as MaybeAccessor<T[]>).length * itemHeight);
 
+  const visibleCount = createMemo(() => {
+    const containerHeight = normalizeNonNegative(
+      toValue(options.containerHeight as MaybeAccessor<number>)
+    );
+    return Math.ceil((containerHeight + (scrollTop() % itemHeight)) / itemHeight) + overscan * 2;
+  });
+
   const start = createMemo(() => {
+    const items = toValue(source as MaybeAccessor<T[]>);
     const base = Math.floor(scrollTop() / itemHeight) - overscan;
-    return Math.max(0, base);
+    const maxStart = Math.max(0, items.length - visibleCount());
+    return Math.min(maxStart, Math.max(0, base));
   });
 
   const end = createMemo(() => {
     const items = toValue(source as MaybeAccessor<T[]>);
-    const containerHeight = normalizeNonNegative(
-      toValue(options.containerHeight as MaybeAccessor<number>)
-    );
-    const visibleCount =
-      Math.ceil((containerHeight + (scrollTop() % itemHeight)) / itemHeight) + overscan * 2;
-    return Math.min(items.length, start() + visibleCount);
+    return Math.min(items.length, start() + visibleCount());
   });
 
   const list = createMemo(() => {
