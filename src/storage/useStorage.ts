@@ -20,7 +20,7 @@ export function useStorage<T>(
   initial: T,
   options: UseStorageHookOptions<T> = {}
 ): UseStorageReturn<T> {
-  const windowRef = options.window ?? defaultWindow;
+  const windowRef = options.window === undefined ? defaultWindow : options.window;
   const storage = options.storage === undefined ? windowRef?.localStorage : options.storage;
 
   return createStorageHook(storage ?? undefined, key, initial, {

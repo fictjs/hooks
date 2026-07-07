@@ -42,6 +42,18 @@ describe('useLocalStorage', () => {
     expect(state.value()).toBe(2);
   });
 
+  it('does not touch real localStorage when window is null', () => {
+    const key = 'fict-local-window-null';
+    localStorage.removeItem(key);
+
+    const { value: state } = createRoot(() => useLocalStorage(key, 1, { window: null }));
+
+    state.set(2);
+
+    expect(state.value()).toBe(2);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it('forwards serializer errors to onError callback', () => {
     const onError = vi.fn();
     const storage = {

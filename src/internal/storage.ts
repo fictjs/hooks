@@ -8,7 +8,7 @@ export interface Serializer<T> {
 }
 
 export interface UseStorageOptions<T> {
-  window?: Window;
+  window?: Window | null;
   listenToStorageChanges?: boolean;
   writeDefaults?: boolean;
   serializer?: Serializer<T>;
@@ -107,7 +107,7 @@ export function createStorageHook<T>(
   initial: T,
   options: UseStorageOptions<T> = {}
 ): UseStorageReturn<T> {
-  const windowRef = options.window ?? defaultWindow;
+  const windowRef = options.window === undefined ? defaultWindow : options.window;
   const serializer = options.serializer ?? inferSerializer(initial);
   const emitSync = windowRef != null;
 

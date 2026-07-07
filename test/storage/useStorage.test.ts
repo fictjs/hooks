@@ -84,6 +84,18 @@ describe('useStorage', () => {
     expect(storage.getItem('default-undefined')).toBeNull();
   });
 
+  it('does not touch default localStorage when window is null', () => {
+    const key = 'fict-storage-window-null';
+    localStorage.removeItem(key);
+
+    const state = createRoot(() => useStorage(key, 1, { window: null })).value;
+
+    state.set(2);
+
+    expect(state.value()).toBe(2);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it('syncs between hooks in same window', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;

@@ -27,6 +27,18 @@ describe('useSessionStorage', () => {
     expect(state.value()).toBe('member');
   });
 
+  it('does not touch real sessionStorage when window is null', () => {
+    const key = 'fict-session-window-null';
+    sessionStorage.removeItem(key);
+
+    const { value: state } = createRoot(() => useSessionStorage(key, 'guest', { window: null }));
+
+    state.set('member');
+
+    expect(state.value()).toBe('member');
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
   it('forwards serializer errors to onError callback', () => {
     const onError = vi.fn();
     const storage = {

@@ -15,7 +15,7 @@ export function useSessionStorage<T>(
   initial: T,
   options: UseStorageOptions<T> = {}
 ): UseStorageReturn<T> {
-  const windowRef = options.window ?? defaultWindow;
+  const windowRef = options.window === undefined ? defaultWindow : options.window;
   return createStorageHook(windowRef?.sessionStorage, key, initial, {
     ...options,
     window: windowRef
