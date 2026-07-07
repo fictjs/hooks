@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { type UseRequestReturn } from '../src/index';
+import { type UseRequestReturn } from '@fictjs/hooks';
 import {
   useAsyncState,
   useCounter,
@@ -10,7 +10,7 @@ import {
   useStorage,
   useToggle,
   useVirtualList
-} from '../src/index';
+} from '@fictjs/hooks';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

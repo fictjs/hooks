@@ -10,7 +10,7 @@ Attach event listeners with automatic cleanup and optional start/stop controls.
 function useEventListener<E extends Event>(
   target: EventTarget | EventTarget[] | RefLike<EventTarget> | (() => EventTarget | null),
   event: string | string[] | (() => string | string[]),
-  handler: (event: E) => void | (() => (event: E) => void),
+  handler: (event: E) => void,
   options?: AddEventListenerOptions & { immediate?: boolean }
 ): {
   start: () => void;

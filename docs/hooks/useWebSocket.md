@@ -24,12 +24,12 @@ function useWebSocket<
     deserialize?: (event: MessageEvent) => TIncoming;
     onOpen?: (event: Event) => void;
     onMessage?: (data: TIncoming, event: MessageEvent) => void;
-    onError?: (event: Event) => void;
+    onError?: (error: unknown) => void;
     onClose?: (event: CloseEvent) => void;
   }
 ): {
   data: () => TIncoming | null;
-  error: () => Event | null;
+  error: () => unknown;
   status: () => 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED';
   isSupported: () => boolean;
   reconnectCount: () => number;

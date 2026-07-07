@@ -12,7 +12,9 @@ function useStorage<T>(
   initial: T,
   options?: {
     storage?: Storage | null;
-    window?: Window;
+    window?: Window | null;
+    listenToStorageChanges?: boolean;
+    writeDefaults?: boolean;
     serializer?: {
       read: (raw: string) => T;
       write: (value: T) => string;
@@ -25,3 +27,9 @@ function useStorage<T>(
   remove: () => void;
 };
 ```
+
+## Notes
+
+- `window: null` disables default browser storage lookup and same-window sync.
+- `listenToStorageChanges: false` disables cross-document and same-window storage listeners.
+- `writeDefaults: false` prevents writing the initial value when the key is missing.

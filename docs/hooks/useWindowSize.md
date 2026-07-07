@@ -8,7 +8,7 @@ Track current window width and height.
 
 ```ts
 function useWindowSize(options?: {
-  window?: Window;
+  window?: Window | null;
   initialWidth?: number;
   initialHeight?: number;
 }): {

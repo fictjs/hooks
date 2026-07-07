@@ -14,7 +14,7 @@ Official hooks package for Fict.
 - SSR-safe browser hooks with injectable globals (`window`, `document`, `navigator`) for non-browser/test environments
 - Root-only public entry (`@fictjs/hooks`) with ESM tree shaking support
 - Published Fict package metadata (`dist/index.fict.meta.json`) for cross-package hook return reactivity
-- Strong type coverage and CI quality gates (`lint`, `typecheck`, `test:types`, `test`, `build`)
+- Strong type and coverage gates (`lint`, `typecheck`, `test:types`, `test:coverage`, `build`, `verify:metadata`, `test:attw`)
 
 ## Install
 
@@ -111,9 +111,10 @@ Before publish, these checks must pass:
 1. `pnpm lint`
 2. `pnpm typecheck`
 3. `pnpm test:types`
-4. `pnpm test`
+4. `pnpm test:coverage`
 5. `pnpm build`
 6. `pnpm verify:metadata`
+7. `pnpm test:attw`
 
 `prepublishOnly` already enforces this pipeline.
 

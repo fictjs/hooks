@@ -34,7 +34,7 @@ jobs:
           pnpm lint
           pnpm typecheck
           pnpm test:types
-          pnpm test
+          pnpm test:coverage
           pnpm build
           pnpm verify:metadata
           pnpm test:attw

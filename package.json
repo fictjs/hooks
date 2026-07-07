@@ -58,7 +58,7 @@
     "verify:metadata": "node scripts/verify-package-metadata.mjs",
     "pack:dry": "pnpm run build && pnpm run verify:metadata",
     "typecheck": "tsc --noEmit",
-    "test:types": "tsc -p test-dts/tsconfig.json --noEmit",
+    "test:types": "pnpm run build && tsc -p test-dts/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -69,7 +69,7 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "commit": "git-cz",
-    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test && pnpm run build && pnpm run verify:metadata && pnpm run test:attw"
+    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test:coverage && pnpm run build && pnpm run verify:metadata && pnpm run test:attw"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
