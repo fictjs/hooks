@@ -45,6 +45,11 @@ function buildVirtualItems<T>(
   return result;
 }
 
+function normalizeNonNegative(value: number | undefined, fallback = 0): number {
+  const next = value ?? fallback;
+  return Number.isFinite(next) ? Math.max(0, next) : fallback;
+}
+
 /**
  * Fixed-height virtual list state helper.
  *
@@ -54,15 +59,19 @@ export function useVirtualList<T>(
   source: T[] | MaybeAccessor<T[]>,
   options: UseVirtualListOptions
 ): UseVirtualListReturn<T> {
-  const overscan = options.overscan ?? 2;
   const itemHeight = options.itemHeight;
+  if (!Number.isFinite(itemHeight) || itemHeight <= 0) {
+    throw new RangeError('useVirtualList: itemHeight must be a positive finite number');
+  }
 
-  const scrollTopSignal = createSignal(Math.max(0, options.initialScrollTop ?? 0));
+  const overscan = Math.floor(normalizeNonNegative(options.overscan, 2));
+
+  const scrollTopSignal = createSignal(normalizeNonNegative(options.initialScrollTop));
   const scrollTop = function scrollTop(next?: number) {
     if (arguments.length === 0) {
       return scrollTopSignal();
     }
-    scrollTopSignal(Math.max(0, next ?? 0));
+    scrollTopSignal(normalizeNonNegative(next));
   } as typeof scrollTopSignal;
 
   const totalHeight = createMemo(() => toValue(source as MaybeAccessor<T[]>).length * itemHeight);
@@ -74,7 +83,9 @@ export function useVirtualList<T>(
 
   const end = createMemo(() => {
     const items = toValue(source as MaybeAccessor<T[]>);
-    const containerHeight = toValue(options.containerHeight as MaybeAccessor<number>);
+    const containerHeight = normalizeNonNegative(
+      toValue(options.containerHeight as MaybeAccessor<number>)
+    );
     const visibleCount =
       Math.ceil((containerHeight + (scrollTop() % itemHeight)) / itemHeight) + overscan * 2;
     return Math.min(items.length, start() + visibleCount);
@@ -89,7 +100,7 @@ export function useVirtualList<T>(
   });
 
   const setScrollTop = (value: number) => {
-    scrollTop(Math.max(0, value));
+    scrollTop(value);
   };
 
   const scrollTo = (index: number) => {

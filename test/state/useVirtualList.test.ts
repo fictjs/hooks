@@ -73,6 +73,123 @@ describe('useVirtualList', () => {
     expect(list[list.length - 1]?.index).toBe(5);
   });
 
+  it('rejects invalid itemHeight values', () => {
+    for (const itemHeight of [0, -1, Number.POSITIVE_INFINITY, Number.NaN]) {
+      expect(() =>
+        createRoot(() =>
+          useVirtualList([1], {
+            itemHeight,
+            containerHeight: 100
+          })
+        )
+      ).toThrow(RangeError);
+    }
+  });
+
+  it('clamps negative overscan to zero', () => {
+    const items = Array.from({ length: 100 }, (_, i) => i + 1);
+
+    const { value: state } = createRoot(() =>
+      useVirtualList(items, {
+        itemHeight: 20,
+        containerHeight: 100,
+        overscan: -3
+      })
+    );
+
+    state.setScrollTop(200);
+
+    const list = state.list();
+    expect(state.start()).toBe(10);
+    expect(state.end()).toBe(15);
+    expect(list).toHaveLength(5);
+    expect(list[0]?.index).toBe(10);
+  });
+
+  it('normalizes non-finite overscan to the default', () => {
+    for (const overscan of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const { value: state } = createRoot(() =>
+        useVirtualList([1, 2, 3], {
+          itemHeight: 20,
+          containerHeight: 20,
+          overscan
+        })
+      );
+
+      expect(Number.isNaN(state.start())).toBe(false);
+      expect(Number.isNaN(state.end())).toBe(false);
+      expect(state.start()).toBe(0);
+      expect(state.end()).toBe(3);
+      expect(state.list()).toHaveLength(3);
+    }
+  });
+
+  it('normalizes non-finite initial scroll positions', () => {
+    for (const initialScrollTop of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY
+    ]) {
+      const { value: state } = createRoot(() =>
+        useVirtualList([1, 2, 3], {
+          itemHeight: 20,
+          containerHeight: 20,
+          initialScrollTop
+        })
+      );
+
+      expect(state.scrollTop()).toBe(0);
+      expect(state.start()).toBe(0);
+      expect(state.end()).toBe(3);
+    }
+  });
+
+  it('normalizes non-finite scrollTop writes', () => {
+    const { value: state } = createRoot(() =>
+      useVirtualList([1, 2, 3], {
+        itemHeight: 20,
+        containerHeight: 20
+      })
+    );
+
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      state.setScrollTop(60);
+      state.setScrollTop(value);
+
+      expect(state.scrollTop()).toBe(0);
+      expect(state.start()).toBe(0);
+      expect(state.end()).toBe(3);
+
+      state.setScrollTop(60);
+      (state.scrollTop as (next: number) => void)(value);
+
+      expect(state.scrollTop()).toBe(0);
+      expect(state.start()).toBe(0);
+      expect(state.end()).toBe(3);
+    }
+  });
+
+  it('normalizes non-finite and negative container heights', () => {
+    for (const containerHeight of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -1
+    ]) {
+      const { value: state } = createRoot(() =>
+        useVirtualList([1, 2, 3, 4, 5], {
+          itemHeight: 20,
+          containerHeight
+        })
+      );
+
+      expect(Number.isNaN(state.end())).toBe(false);
+      expect(state.start()).toBe(0);
+      expect(state.end()).toBe(4);
+      expect(state.list()).toHaveLength(4);
+    }
+  });
+
   it('supports scrollTo and onScroll', () => {
     const items = Array.from({ length: 50 }, (_, i) => i + 1);
 
