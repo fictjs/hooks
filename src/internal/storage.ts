@@ -151,16 +151,15 @@ export function createStorageHook<T>(
     const prev = state();
     const value = resolveNextValue(next, prev);
 
-    if (!storage) {
-      writeState(value);
-      return;
-    }
-
-    try {
-      if (value === undefined) {
+    if (value === undefined) {
+      if (!storage) {
+        writeState(initial);
+        return;
+      }
+      try {
         paused = true;
         storage.removeItem(key);
-        writeState(value);
+        writeState(initial);
         if (emitSync) {
           windowRef.dispatchEvent(
             new CustomEvent(syncEvent, {
@@ -173,13 +172,25 @@ export function createStorageHook<T>(
           );
         }
         return;
+      } catch (error) {
+        safeCall(options.onError, error);
+        return;
+      } finally {
+        paused = false;
       }
+    }
 
+    if (!storage) {
+      writeState(value);
+      return;
+    }
+
+    try {
       const serialized = serializeValue(serializer, value);
       if (serialized === undefined) {
         paused = true;
         storage.removeItem(key);
-        writeState(value);
+        writeState(initial);
         if (emitSync) {
           windowRef.dispatchEvent(
             new CustomEvent(syncEvent, {

@@ -53,7 +53,7 @@ describe('useStorage', () => {
     expect(storage.getItem('count')).toBeNull();
   });
 
-  it('removes storage entries instead of writing undefined', () => {
+  it('treats undefined writes as remove', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;
 
@@ -66,8 +66,33 @@ describe('useStorage', () => {
 
     state.set(undefined);
 
-    expect(state.value()).toBeUndefined();
+    expect(state.value()).toBe('ready');
     expect(storage.getItem('maybe')).toBeNull();
+  });
+
+  it('syncs undefined writes as remove in the same window', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+
+    const first = createRoot(() =>
+      useStorage<string | undefined>('maybe-shared', 'ready', {
+        storage,
+        window: windowRef
+      })
+    ).value;
+    const second = createRoot(() =>
+      useStorage<string | undefined>('maybe-shared', 'ready', {
+        storage,
+        window: windowRef
+      })
+    ).value;
+
+    first.set('changed');
+    first.set(undefined);
+
+    expect(first.value()).toBe('ready');
+    expect(second.value()).toBe('ready');
+    expect(storage.getItem('maybe-shared')).toBeNull();
   });
 
   it('does not write an undefined default value', () => {

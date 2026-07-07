@@ -34,3 +34,4 @@ function useLocalStorage<T>(
 
 - `window: null` uses an in-memory signal and does not touch real `localStorage`.
 - Direct writes through `value(next)` are persisted the same way as `set(next)`.
+- Writing `undefined` removes the storage entry and resets the value to `initial`.

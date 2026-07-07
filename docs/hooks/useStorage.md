@@ -37,3 +37,4 @@ function useStorage<T>(
 - `listenToStorageChanges: false` disables cross-document and same-window storage listeners.
 - `writeDefaults: false` prevents writing the initial value when the key is missing.
 - Direct writes through `value(next)` are persisted the same way as `set(next)`.
+- Writing `undefined` removes the storage entry and resets the value to `initial`.
