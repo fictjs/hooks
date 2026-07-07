@@ -78,6 +78,37 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('cleans merged abort signal listeners after settled fallback requests', async () => {
+    const originalAnyDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', {
+      configurable: true,
+      value: undefined
+    });
+
+    const controller = new AbortController();
+    const addListener = vi.spyOn(controller.signal, 'addEventListener');
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const mockFetch = vi.fn(async () => new Response('ok'));
+
+    try {
+      const { value: state } = createRoot(() =>
+        useFetch('https://example.com', {
+          fetch: mockFetch as never,
+          immediate: false
+        })
+      );
+
+      await state.execute({ signal: controller.signal });
+
+      expect(addListener).toHaveBeenCalledWith('abort', expect.any(Function), { once: true });
+      expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+    } finally {
+      if (originalAnyDescriptor) {
+        Object.defineProperty(AbortSignal, 'any', originalAnyDescriptor);
+      }
+    }
+  });
+
   it('does not mark aborted after aborting an already settled request', async () => {
     const mockFetch = vi.fn(async () => new Response('ok'));
 

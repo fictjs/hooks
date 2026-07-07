@@ -29,23 +29,39 @@ async function defaultParse<T>(response: Response): Promise<T> {
   return (await response.text()) as T;
 }
 
-function mergeAbortSignals(
-  ...signals: Array<AbortSignal | null | undefined>
-): AbortSignal | undefined {
+interface MergedAbortSignal {
+  signal: AbortSignal | undefined;
+  cleanup: () => void;
+}
+
+function mergeAbortSignals(...signals: Array<AbortSignal | null | undefined>): MergedAbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => signal != null);
+  const empty = {
+    signal: undefined,
+    cleanup() {}
+  };
 
   if (activeSignals.length === 0) {
-    return undefined;
+    return empty;
   }
   if (activeSignals.length === 1) {
-    return activeSignals[0];
+    return {
+      signal: activeSignals[0],
+      cleanup() {}
+    };
   }
 
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
-    return AbortSignal.any(activeSignals);
+    return {
+      signal: AbortSignal.any(activeSignals),
+      cleanup() {}
+    };
   }
   if (typeof AbortController === 'undefined') {
-    return activeSignals[0];
+    return {
+      signal: activeSignals[0],
+      cleanup() {}
+    };
   }
 
   const controller = new AbortController();
@@ -66,12 +82,18 @@ function mergeAbortSignals(
   for (const signal of activeSignals) {
     if (signal.aborted) {
       abort();
-      return controller.signal;
+      return {
+        signal: controller.signal,
+        cleanup
+      };
     }
     signal.addEventListener('abort', abort, { once: true });
   }
 
-  return controller.signal;
+  return {
+    signal: controller.signal,
+    cleanup
+  };
 }
 
 /**
@@ -115,17 +137,19 @@ export function useFetch<T = unknown>(
     const currentController =
       typeof AbortController !== 'undefined' ? new AbortController() : undefined;
     controller = currentController;
+    let cleanupSignal = () => {};
 
     try {
-      const signal = mergeAbortSignals(
+      const mergedSignal = mergeAbortSignals(
         options.init?.signal,
         init?.signal,
         currentController?.signal
       );
+      cleanupSignal = mergedSignal.cleanup;
       const response = await fetcher(toValue(input as MaybeAccessor<RequestInfo | URL>), {
         ...options.init,
         ...init,
-        signal
+        signal: mergedSignal.signal
       });
 
       if (id !== requestId) {
@@ -155,6 +179,7 @@ export function useFetch<T = unknown>(
       options.onError?.(err);
       return data();
     } finally {
+      cleanupSignal();
       if (controller === currentController) {
         controller = undefined;
       }
