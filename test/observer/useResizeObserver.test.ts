@@ -81,4 +81,15 @@ describe('useResizeObserver', () => {
 
     expect(state.isSupported()).toBe(false);
   });
+
+  it('does not use global ResizeObserver when window is null', () => {
+    globalThis.ResizeObserver = MockResizeObserver as never;
+
+    const { value: state } = createRoot(() =>
+      useResizeObserver(document.createElement('div'), undefined, { window: null })
+    );
+
+    expect(state.isSupported()).toBe(false);
+    expect(MockResizeObserver.instances).toHaveLength(0);
+  });
 });

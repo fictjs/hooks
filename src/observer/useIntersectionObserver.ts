@@ -34,8 +34,11 @@ export function useIntersectionObserver(
 ): UseIntersectionObserverReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
   const observerCtor =
-    (windowRef as (Window & { IntersectionObserver?: typeof IntersectionObserver }) | null)
-      ?.IntersectionObserver ?? globalThis.IntersectionObserver;
+    options.window === undefined
+      ? ((windowRef as (Window & { IntersectionObserver?: typeof IntersectionObserver }) | null)
+          ?.IntersectionObserver ?? globalThis.IntersectionObserver)
+      : (windowRef as (Window & { IntersectionObserver?: typeof IntersectionObserver }) | null)
+          ?.IntersectionObserver;
   const entries = createSignal<IntersectionObserverEntry[]>([]);
   const isSupported = createSignal(!!observerCtor);
   const active = createSignal(true);

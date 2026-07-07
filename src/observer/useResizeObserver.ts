@@ -28,8 +28,10 @@ export function useResizeObserver(
 ): UseResizeObserverReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
   const observerCtor =
-    (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)?.ResizeObserver ??
-    globalThis.ResizeObserver;
+    options.window === undefined
+      ? ((windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)
+          ?.ResizeObserver ?? globalThis.ResizeObserver)
+      : (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)?.ResizeObserver;
   const entries = createSignal<ResizeObserverEntry[]>([]);
   const isSupported = createSignal(!!observerCtor);
   const active = createSignal(true);

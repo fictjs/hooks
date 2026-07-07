@@ -86,4 +86,15 @@ describe('useIntersectionObserver', () => {
 
     expect(state.isSupported()).toBe(false);
   });
+
+  it('does not use global IntersectionObserver when window is null', () => {
+    globalThis.IntersectionObserver = MockIntersectionObserver as never;
+
+    const { value: state } = createRoot(() =>
+      useIntersectionObserver(document.createElement('div'), undefined, { window: null })
+    );
+
+    expect(state.isSupported()).toBe(false);
+    expect(MockIntersectionObserver.instances).toHaveLength(0);
+  });
 });

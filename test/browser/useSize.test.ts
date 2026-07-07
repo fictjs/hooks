@@ -212,6 +212,19 @@ describe('useSize', () => {
     expect(state.height()).toBe(40);
   });
 
+  it('does not use global ResizeObserver when window is null', () => {
+    globalThis.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 10, height: 20 });
+
+    const { value: state } = createRoot(() => useSize(element, { window: null }));
+
+    expect(state.isSupported()).toBe(false);
+    expect(state.width()).toBe(10);
+    expect(MockResizeObserver.instances).toHaveLength(0);
+  });
+
   it('disconnects observer on dispose', () => {
     globalThis.ResizeObserver = MockResizeObserver as never;
 

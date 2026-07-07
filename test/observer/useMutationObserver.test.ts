@@ -86,4 +86,15 @@ describe('useMutationObserver', () => {
 
     expect(state.isSupported()).toBe(false);
   });
+
+  it('does not use global MutationObserver when window is null', () => {
+    globalThis.MutationObserver = MockMutationObserver as never;
+
+    const { value: state } = createRoot(() =>
+      useMutationObserver(document.createElement('div'), undefined, { window: null })
+    );
+
+    expect(state.isSupported()).toBe(false);
+    expect(MockMutationObserver.instances).toHaveLength(0);
+  });
 });
