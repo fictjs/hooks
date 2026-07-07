@@ -23,7 +23,8 @@ export function useRafFn(
   options: UseRafFnOptions = {}
 ): UseRafFnReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  const active = createSignal(options.immediate ?? true);
+  const canRequestFrame = () => typeof windowRef?.requestAnimationFrame === 'function';
+  const active = createSignal((options.immediate ?? true) && canRequestFrame());
 
   let rafId = 0;
   let lastTimestamp: number | undefined;
@@ -43,8 +44,10 @@ export function useRafFn(
       throw error;
     }
 
-    if (windowRef?.requestAnimationFrame) {
-      rafId = windowRef.requestAnimationFrame(loop);
+    if (canRequestFrame()) {
+      rafId = windowRef!.requestAnimationFrame(loop);
+    } else {
+      active(false);
     }
   };
 
@@ -52,10 +55,12 @@ export function useRafFn(
     if (active()) {
       return;
     }
-    active(true);
-    if (windowRef?.requestAnimationFrame) {
-      rafId = windowRef.requestAnimationFrame(loop);
+    if (!canRequestFrame()) {
+      active(false);
+      return;
     }
+    active(true);
+    rafId = windowRef!.requestAnimationFrame(loop);
   };
 
   const stop = () => {
@@ -68,8 +73,8 @@ export function useRafFn(
     }
   };
 
-  if (active() && windowRef?.requestAnimationFrame) {
-    rafId = windowRef.requestAnimationFrame(loop);
+  if (active()) {
+    rafId = windowRef!.requestAnimationFrame(loop);
   }
 
   tryOnDestroy(stop);

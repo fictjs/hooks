@@ -92,6 +92,19 @@ describe('useRafFn', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
+  it('stays inactive when requestAnimationFrame is unavailable', () => {
+    const callback = vi.fn();
+
+    const { value: state } = createRoot(() => useRafFn(callback, { window: null }));
+
+    expect(state.active()).toBe(false);
+
+    state.start();
+
+    expect(state.active()).toBe(false);
+    expect(callback).not.toHaveBeenCalled();
+  });
+
   it('can restart after callback throws', () => {
     const { windowRef, tick } = createMockWindow();
     const callback = vi
