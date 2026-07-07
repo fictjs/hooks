@@ -1,13 +1,13 @@
 import { createSignal } from '@fictjs/runtime/advanced';
 import { tryOnDestroy } from '../internal/lifecycle';
 
-interface CacheEntry<T> {
+export interface UseRequestCacheEntry<T> {
   data: T;
   timestamp: number;
   expiresAt: number;
 }
 
-const requestCache = new Map<string, CacheEntry<unknown>>();
+const requestCache = new Map<string, UseRequestCacheEntry<unknown>>();
 const REQUEST_CANCELED = Symbol('REQUEST_CANCELED');
 const DEFAULT_CACHE_TIME = 5 * 60 * 1000;
 const DEFAULT_CACHE_SIZE = 100;
@@ -22,6 +22,7 @@ export interface UseRequestOptions<TData, TParams extends unknown[]> {
   staleTime?: number;
   cacheTime?: number;
   cacheSize?: number;
+  cacheProvider?: Map<string, UseRequestCacheEntry<TData>>;
   onSuccess?: (data: TData, params: TParams) => void;
   onError?: (error: unknown, params: TParams) => void;
   onFinally?: (params: TParams, data?: TData, error?: unknown) => void;
@@ -43,25 +44,33 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function pruneExpiredCache(now = Date.now()): void {
-  for (const [key, entry] of requestCache) {
+export function clearRequestCache(cacheKey?: string): void {
+  if (cacheKey === undefined) {
+    requestCache.clear();
+    return;
+  }
+  requestCache.delete(cacheKey);
+}
+
+function pruneExpiredCache<T>(cache: Map<string, UseRequestCacheEntry<T>>, now = Date.now()): void {
+  for (const [key, entry] of cache) {
     if (entry.expiresAt <= now) {
-      requestCache.delete(key);
+      cache.delete(key);
     }
   }
 }
 
-function pruneCacheSize(maxSize: number): void {
+function pruneCacheSize<T>(cache: Map<string, UseRequestCacheEntry<T>>, maxSize: number): void {
   if (maxSize < 0) {
     return;
   }
 
-  while (requestCache.size > maxSize) {
-    const oldestKey = requestCache.keys().next().value as string | undefined;
+  while (cache.size > maxSize) {
+    const oldestKey = cache.keys().next().value as string | undefined;
     if (oldestKey == null) {
       return;
     }
-    requestCache.delete(oldestKey);
+    cache.delete(oldestKey);
   }
 }
 
@@ -78,6 +87,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   const error = createSignal<unknown>(null);
   const loading = createSignal(false);
   const params = createSignal<TParams | undefined>(options.defaultParams);
+  const cache = (options.cacheProvider ?? requestCache) as Map<string, UseRequestCacheEntry<TData>>;
 
   let callId = 0;
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -87,16 +97,16 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       return;
     }
 
-    pruneExpiredCache();
+    pruneExpiredCache(cache);
 
-    const entry = requestCache.get(options.cacheKey) as CacheEntry<TData> | undefined;
+    const entry = cache.get(options.cacheKey);
     if (!entry) {
       return;
     }
 
     const staleTime = options.staleTime ?? 0;
     if (staleTime > 0 && Date.now() - entry.timestamp > staleTime) {
-      requestCache.delete(options.cacheKey);
+      cache.delete(options.cacheKey);
       return;
     }
 
@@ -111,18 +121,18 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     const cacheTime = options.cacheTime ?? DEFAULT_CACHE_TIME;
     const cacheSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
     if (cacheTime <= 0 || cacheSize <= 0) {
-      requestCache.delete(options.cacheKey);
+      cache.delete(options.cacheKey);
       return;
     }
 
     const now = Date.now();
-    pruneExpiredCache(now);
-    requestCache.set(options.cacheKey, {
+    pruneExpiredCache(cache, now);
+    cache.set(options.cacheKey, {
       data: value,
       timestamp: now,
       expiresAt: Number.isFinite(cacheTime) ? now + cacheTime : Infinity
     });
-    pruneCacheSize(cacheSize);
+    pruneCacheSize(cache, cacheSize);
   };
 
   const stopPolling = () => {

@@ -1,9 +1,10 @@
 import { createRoot } from '@fictjs/runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useRequest } from '../../src/async/useRequest';
+import { clearRequestCache, useRequest } from '../../src/async/useRequest';
 
 describe('useRequest', () => {
   afterEach(() => {
+    clearRequestCache();
     vi.useRealTimers();
   });
 
@@ -111,6 +112,61 @@ describe('useRequest', () => {
     ).value;
 
     expect(second.data()).toBe(42);
+  });
+
+  it('clears cached data by cacheKey', async () => {
+    const service = vi.fn(async () => 42);
+
+    const first = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'clear-cache-demo'
+      })
+    ).value;
+
+    await first.runAsync();
+    clearRequestCache('clear-cache-demo');
+
+    const second = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'clear-cache-demo'
+      })
+    ).value;
+
+    expect(second.data()).toBeUndefined();
+  });
+
+  it('supports per-instance cache providers', async () => {
+    const service = vi.fn(async () => 42);
+    const cacheProvider = new Map();
+
+    const first = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'provider-cache-demo',
+        cacheProvider
+      })
+    ).value;
+
+    await first.runAsync();
+
+    const defaultCacheState = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'provider-cache-demo'
+      })
+    ).value;
+    const providerCacheState = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'provider-cache-demo',
+        cacheProvider
+      })
+    ).value;
+
+    expect(defaultCacheState.data()).toBeUndefined();
+    expect(providerCacheState.data()).toBe(42);
   });
 
   it('runs success/error/finally callbacks with latest params', async () => {

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { type UseRequestReturn } from '@fictjs/hooks';
+import { type UseRequestCacheEntry, type UseRequestReturn } from '@fictjs/hooks';
 import {
+  clearRequestCache,
   useAsyncState,
   useCounter,
   useFetch,
@@ -42,6 +43,14 @@ type RequestType = typeof request;
 const _requestShape: UseRequestReturn<{ name: string; age: number }, [string, number]> = request;
 type RequestData = ReturnType<RequestType['data']>;
 const _requestData: Assert<Equal<RequestData, { name: string; age: number } | undefined>> = true;
+
+const requestCacheProvider = new Map<string, UseRequestCacheEntry<{ name: string }>>();
+useRequest(async (name: string) => ({ name }), {
+  manual: true,
+  cacheKey: 'typed-cache-provider',
+  cacheProvider: requestCacheProvider
+});
+clearRequestCache('typed-cache-provider');
 
 const fetched = useFetch<{ ok: boolean }>('https://example.com', { immediate: false });
 type FetchData = ReturnType<typeof fetched.data>;

@@ -19,6 +19,7 @@ function useRequest<TData, TParams extends unknown[] = []>(
     staleTime?: number;
     cacheTime?: number;
     cacheSize?: number;
+    cacheProvider?: Map<string, UseRequestCacheEntry<TData>>;
     onSuccess?: (data: TData, params: TParams) => void;
     onError?: (error: unknown, params: TParams) => void;
     onFinally?: (params: TParams, data?: TData, error?: unknown) => void;
@@ -34,6 +35,14 @@ function useRequest<TData, TParams extends unknown[] = []>(
   refresh: () => Promise<TData | undefined>;
   mutate: (value: TData | ((prev: TData | undefined) => TData)) => void;
 };
+
+interface UseRequestCacheEntry<TData> {
+  data: TData;
+  timestamp: number;
+  expiresAt: number;
+}
+
+function clearRequestCache(cacheKey?: string): void;
 ```
 
 ## Notes
@@ -42,5 +51,7 @@ function useRequest<TData, TParams extends unknown[] = []>(
 - `staleTime` controls when cached data is considered too old to apply.
 - `cacheTime` bounds how long a cache entry stays in the global cache; the default is five minutes.
 - `cacheSize` bounds the global request cache; the default keeps the newest 100 entries.
+- The default cache is process-global. Use `cacheProvider` to inject a per-request or
+  per-test cache, or `clearRequestCache(cacheKey?)` to clear the default cache.
 - Stale or canceled requests do not update state and do not trigger `onSuccess`, `onError`, or
   `onFinally`; callbacks are latest-request only.
