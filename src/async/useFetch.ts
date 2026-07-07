@@ -67,13 +67,15 @@ export function useFetch<T = unknown>(
     isLoading(true);
     aborted(false);
 
-    controller = typeof AbortController !== 'undefined' ? new AbortController() : undefined;
+    const currentController =
+      typeof AbortController !== 'undefined' ? new AbortController() : undefined;
+    controller = currentController;
 
     try {
       const response = await fetcher(toValue(input as MaybeAccessor<RequestInfo | URL>), {
         ...options.init,
         ...init,
-        signal: controller?.signal
+        signal: currentController?.signal
       });
 
       if (id !== requestId) {
@@ -103,6 +105,9 @@ export function useFetch<T = unknown>(
       options.onError?.(err);
       return data();
     } finally {
+      if (controller === currentController) {
+        controller = undefined;
+      }
       if (id === requestId) {
         isLoading(false);
       }

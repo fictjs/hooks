@@ -52,6 +52,25 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('does not mark aborted after aborting an already settled request', async () => {
+    const mockFetch = vi.fn(async () => new Response('ok'));
+
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false
+      })
+    );
+
+    await state.execute();
+    expect(state.aborted()).toBe(false);
+
+    state.abort();
+
+    expect(state.aborted()).toBe(false);
+    expect(state.isLoading()).toBe(false);
+  });
+
   it('aborts active request on dispose', () => {
     let signal: AbortSignal | undefined;
     const mockFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
