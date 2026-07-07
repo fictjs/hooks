@@ -15,11 +15,11 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
       '@fictjs/runtime':
-        specifier: ^0.25.0
-        version: 0.25.0
+        specifier: ^0.26.0
+        version: 0.26.0
       '@fictjs/vite-plugin':
-        specifier: ^0.25.0
-        version: 0.25.0(vite@7.3.1(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.8.2))
+        specifier: ^0.26.0
+        version: 0.26.0(vite@7.3.1(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.8.2))
       '@types/node':
         specifier: ^25.2.2
         version: 25.2.2
@@ -526,16 +526,16 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@fictjs/compiler@0.25.0':
-    resolution: {integrity: sha512-8mAlyMczWJ8kODJLX46XVrLF5mlXHL+zi8/IRUHLsRI5XjevLGcC7tsYzIm3Op4TahdpXA+IuxMr4wkxhNXorQ==}
+  '@fictjs/compiler@0.26.0':
+    resolution: {integrity: sha512-l1J9MR/EfVhyu3hjUDs1lSXwz69JchmWY7F7G0xxkGvXqJaTnmD+Hwv8EDbq1jkcSVao9jO8zpM8E52vp5u2cg==}
     peerDependencies:
       '@babel/core': '>=7.0.0'
 
-  '@fictjs/runtime@0.25.0':
-    resolution: {integrity: sha512-ZN0JFH0oV1+Du+wQP0hrF4oiO+/HRpqLu6a4/oAxnZm9YShI54UXW0azeg/bkChSMrDMQRQvSHzjBX5GwubFbQ==}
+  '@fictjs/runtime@0.26.0':
+    resolution: {integrity: sha512-5TKW+W0aTUr0Oibxo1xlpN4E35eWFUUsV3mZF89RVc3bTHX9mqyiigxpzIrRRxhbALWe4onBdtMUME7maGhemw==}
 
-  '@fictjs/vite-plugin@0.25.0':
-    resolution: {integrity: sha512-w61/r7NwZhwPUGDW3G+ewYExlpiroBclA8iruCyE/WJrWUJWng8y0lzNXnOJPaTLJdLw9J3Mt4LaLF2SIMxXJw==}
+  '@fictjs/vite-plugin@0.26.0':
+    resolution: {integrity: sha512-8asdMdjMT3S30X+HIsBvNYs/mVHQNE0Nx6TiEa5zuGAygvPvgpUaJjo7B2aGrn6F25SBSL1Z+2HWanw6ieivhQ==}
     peerDependencies:
       vite: '>=7.0.0'
 
@@ -2917,7 +2917,7 @@ snapshots:
 
   '@exodus/bytes@1.11.0': {}
 
-  '@fictjs/compiler@0.25.0(@babel/core@7.29.7)':
+  '@fictjs/compiler@0.26.0(@babel/core@7.29.7)':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/helper-plugin-utils': 7.29.7
@@ -2926,9 +2926,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@fictjs/runtime@0.25.0': {}
+  '@fictjs/runtime@0.26.0': {}
 
-  '@fictjs/vite-plugin@0.25.0(vite@7.3.1(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.8.2))':
+  '@fictjs/vite-plugin@0.26.0(vite@7.3.1(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.8.2))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/generator': 7.29.7
@@ -2938,7 +2938,7 @@ snapshots:
       '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
       '@babel/traverse': 7.29.7
       '@babel/types': 7.29.7
-      '@fictjs/compiler': 0.25.0(@babel/core@7.29.7)
+      '@fictjs/compiler': 0.26.0(@babel/core@7.29.7)
       vite: 7.3.1(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.8.2)
     transitivePeerDependencies:
       - supports-color
