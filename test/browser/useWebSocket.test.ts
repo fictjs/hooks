@@ -125,6 +125,48 @@ describe('useWebSocket', () => {
     expect(socket.send).toHaveBeenCalledWith('{"ok":true}');
   });
 
+  it('reports constructor errors through onError', () => {
+    const onError = vi.fn();
+    const connectError = new Error('connect failed');
+    class ThrowingWebSocket {
+      constructor() {
+        throw connectError;
+      }
+    }
+
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ThrowingWebSocket as never,
+        onError,
+        immediate: false
+      })
+    );
+
+    expect(state.open()).toBe(false);
+    expect(state.error()).toBe(connectError);
+    expect(onError).toHaveBeenCalledWith(connectError);
+  });
+
+  it('reports send errors through onError', () => {
+    const onError = vi.fn();
+    const sendError = new Error('send failed');
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        onError
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.send.mockImplementationOnce(() => {
+      throw sendError;
+    });
+
+    expect(state.send('payload')).toBe(false);
+    expect(state.error()).toBe(sendError);
+    expect(onError).toHaveBeenCalledWith(sendError);
+  });
+
   it('auto reconnects on unexpected close', () => {
     vi.useFakeTimers();
 

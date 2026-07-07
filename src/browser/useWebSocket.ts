@@ -40,13 +40,13 @@ export interface UseWebSocketOptions<TIncoming = unknown, TOutgoing = Serializab
   deserialize?: (event: MessageEvent) => TIncoming;
   onOpen?: (event: Event) => void;
   onMessage?: (data: TIncoming, event: MessageEvent) => void;
-  onError?: (event: Event) => void;
+  onError?: (error: unknown) => void;
   onClose?: (event: CloseEvent) => void;
 }
 
 export interface UseWebSocketReturn<TIncoming = unknown, TOutgoing = SerializablePayload> {
   data: () => TIncoming | null;
-  error: () => Event | null;
+  error: () => unknown;
   status: () => WebSocketStatus;
   isSupported: () => boolean;
   reconnectCount: () => number;
@@ -100,7 +100,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   const reconnectOptions = normalizeReconnectOptions(options.autoReconnect);
 
   const data = createSignal<TIncoming | null>(options.initialData ?? null);
-  const error = createSignal<Event | null>(null);
+  const error = createSignal<unknown>(null);
   const status = createSignal<WebSocketStatus>('CLOSED');
   const isSupported = createSignal(!!webSocketCtor);
   const reconnectCount = createSignal(0);
@@ -117,6 +117,11 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempts = 0;
   let cleanupSocket = () => {};
+
+  const reportError = (nextError: unknown) => {
+    error(nextError);
+    options.onError?.(nextError);
+  };
 
   const stopReconnectTimer = () => {
     if (reconnectTimer == null) {
@@ -181,7 +186,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       try {
         staleSocket.close();
       } catch (nextError) {
-        error(nextError as Event);
+        reportError(nextError);
       }
     }
     if (socket) {
@@ -198,7 +203,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     try {
       currentSocket = new webSocketCtor(resolvedUrl, options.protocols);
     } catch (nextError) {
-      error(nextError as Event);
+      reportError(nextError);
       status('CLOSED');
       scheduleReconnect();
       return false;
@@ -231,8 +236,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         data(nextData);
         options.onMessage?.(nextData, messageEvent);
       } catch (nextError) {
-        error(nextError as Event);
-        options.onError?.(nextError as Event);
+        reportError(nextError);
       }
     };
 
@@ -240,8 +244,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       if (socket !== currentSocket) {
         return;
       }
-      error(event);
-      options.onError?.(event);
+      reportError(event);
     };
 
     const onClose = (event: Event) => {
@@ -296,7 +299,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         socketUrlKey = null;
         cleanupSocket();
       }
-      error(nextError as Event);
+      reportError(nextError);
       status('CLOSED');
     }
   };
@@ -327,7 +330,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       currentSocket.send(serialize(payload));
       return true;
     } catch (nextError) {
-      error(nextError as Event);
+      reportError(nextError);
       return false;
     }
   };
