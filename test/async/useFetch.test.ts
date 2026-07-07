@@ -52,6 +52,32 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('respects external abort signals', async () => {
+    const controller = new AbortController();
+    const mockFetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      await new Promise<void>((resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+      return new Response('');
+    });
+
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false
+      })
+    );
+
+    const promise = state.execute({ signal: controller.signal });
+    controller.abort();
+    await promise;
+
+    expect(state.aborted()).toBe(true);
+    expect(state.isLoading()).toBe(false);
+  });
+
   it('does not mark aborted after aborting an already settled request', async () => {
     const mockFetch = vi.fn(async () => new Response('ok'));
 

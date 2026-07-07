@@ -27,3 +27,8 @@ function useFetch<T = unknown>(
   abort: () => void;
 };
 ```
+
+## Notes
+
+- `options.init.signal` and `execute(init).signal` are merged with the hook's internal
+  abort controller, so external aborts and `abort()` both cancel the active request.

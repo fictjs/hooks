@@ -29,6 +29,51 @@ async function defaultParse<T>(response: Response): Promise<T> {
   return (await response.text()) as T;
 }
 
+function mergeAbortSignals(
+  ...signals: Array<AbortSignal | null | undefined>
+): AbortSignal | undefined {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => signal != null);
+
+  if (activeSignals.length === 0) {
+    return undefined;
+  }
+  if (activeSignals.length === 1) {
+    return activeSignals[0];
+  }
+
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+    return AbortSignal.any(activeSignals);
+  }
+  if (typeof AbortController === 'undefined') {
+    return activeSignals[0];
+  }
+
+  const controller = new AbortController();
+  let cleanup = () => {};
+  const abort = () => {
+    cleanup();
+    const abortedSignal = activeSignals.find((signal) => signal.aborted);
+    controller.abort(abortedSignal?.reason);
+  };
+
+  cleanup = () => {
+    for (const signal of activeSignals) {
+      signal.removeEventListener('abort', abort);
+    }
+    cleanup = () => {};
+  };
+
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      abort();
+      return controller.signal;
+    }
+    signal.addEventListener('abort', abort, { once: true });
+  }
+
+  return controller.signal;
+}
+
 /**
  * Fetch helper with loading/error/abort state.
  *
@@ -72,10 +117,15 @@ export function useFetch<T = unknown>(
     controller = currentController;
 
     try {
+      const signal = mergeAbortSignals(
+        options.init?.signal,
+        init?.signal,
+        currentController?.signal
+      );
       const response = await fetcher(toValue(input as MaybeAccessor<RequestInfo | URL>), {
         ...options.init,
         ...init,
-        signal: currentController?.signal
+        signal
       });
 
       if (id !== requestId) {
