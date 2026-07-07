@@ -42,3 +42,5 @@ function useRequest<TData, TParams extends unknown[] = []>(
 - `staleTime` controls when cached data is considered too old to apply.
 - `cacheTime` bounds how long a cache entry stays in the global cache; the default is five minutes.
 - `cacheSize` bounds the global request cache; the default keeps the newest 100 entries.
+- Stale or canceled requests do not update state and do not trigger `onSuccess`, `onError`, or
+  `onFinally`; callbacks are latest-request only.

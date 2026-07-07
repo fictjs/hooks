@@ -206,8 +206,8 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     } finally {
       if (id === callId) {
         loading(false);
+        options.onFinally?.(currentParams, finalData, finalError);
       }
-      options.onFinally?.(currentParams, finalData, finalError);
     }
   };
 

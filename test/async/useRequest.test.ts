@@ -142,7 +142,7 @@ describe('useRequest', () => {
     expect((state.error() as Error).message).toBe('boom');
   });
 
-  it('passes request-scoped data to onFinally in concurrent runs', async () => {
+  it('runs onFinally only for the latest concurrent request', async () => {
     let resolveFirst: ((value: number) => void) | undefined;
     const service = vi.fn((value: number) => {
       if (value === 1) {
@@ -169,7 +169,7 @@ describe('useRequest', () => {
     await first;
 
     expect(done).toHaveBeenCalledWith([2], 2, null);
-    expect(done).toHaveBeenCalledWith([1], 1, null);
+    expect(done).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes with latest params', async () => {
@@ -196,10 +196,12 @@ describe('useRequest', () => {
           resolveLater = resolve;
         })
     );
+    const done = vi.fn();
 
     const { value: state } = createRoot(() =>
       useRequest(service, {
-        manual: true
+        manual: true,
+        onFinally: done
       })
     );
 
@@ -210,6 +212,7 @@ describe('useRequest', () => {
 
     expect(state.data()).toBeUndefined();
     expect(state.loading()).toBe(false);
+    expect(done).not.toHaveBeenCalled();
   });
 
   it('does not retry after cancel during retry interval', async () => {
