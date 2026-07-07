@@ -284,6 +284,25 @@ describe('useWebSocket', () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
+  it('reconnects when accessor url changes between non-empty values', async () => {
+    const source = createSignal('ws://first.fict.test');
+    const { value: state } = createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const first = MockWebSocket.instances[0]!;
+    first.open();
+
+    source('ws://second.fict.test');
+    await Promise.resolve();
+
+    expect(first.close).toHaveBeenCalledTimes(1);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(MockWebSocket.instances[1]?.url).toBe('ws://second.fict.test');
+    expect(state.status()).toBe('CONNECTING');
+  });
+
   it('closes socket on dispose', () => {
     const { dispose } = createRoot(() =>
       useWebSocket('ws://fict.test', {

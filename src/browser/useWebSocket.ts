@@ -115,6 +115,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     options.deserialize ?? ((event: MessageEvent): TIncoming => event.data as TIncoming);
 
   let socket: WebSocketLike | null = null;
+  let socketUrlKey: string | null = null;
   let manuallyClosed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempts = 0;
@@ -169,13 +170,27 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       status('CLOSED');
       return false;
     }
+    const nextUrlKey = String(resolvedUrl);
 
     if (socket && (socket.readyState === socket.CONNECTING || socket.readyState === socket.OPEN)) {
-      return true;
+      if (socketUrlKey === nextUrlKey) {
+        return true;
+      }
+
+      const staleSocket = socket;
+      socket = null;
+      socketUrlKey = null;
+      cleanupSocket();
+      try {
+        staleSocket.close();
+      } catch (nextError) {
+        error(nextError as Event);
+      }
     }
     if (socket) {
       cleanupSocket();
       socket = null;
+      socketUrlKey = null;
     }
 
     stopReconnectTimer();
@@ -193,6 +208,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
 
     socket = currentSocket;
+    socketUrlKey = nextUrlKey;
     status(toStatus(currentSocket.readyState, currentSocket));
 
     if (options.binaryType) {
@@ -237,6 +253,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       }
 
       socket = null;
+      socketUrlKey = null;
       cleanupSocket();
       status('CLOSED');
       options.onClose?.(event as CloseEvent);
@@ -279,6 +296,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     } catch (nextError) {
       if (socket === currentSocket) {
         socket = null;
+        socketUrlKey = null;
         cleanupSocket();
       }
       error(nextError as Event);
@@ -292,6 +310,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     if (socket) {
       const currentSocket = socket;
       socket = null;
+      socketUrlKey = null;
       cleanupSocket();
       manuallyClosed = true;
       currentSocket.close();

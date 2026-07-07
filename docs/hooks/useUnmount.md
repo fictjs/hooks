@@ -13,14 +13,18 @@ function useUnmount(callback: () => void | (() => void)): void;
 ## Notes
 
 - Inside a root, callback runs during dispose.
-- Outside a root, callback executes immediately.
+- Outside a root, no cleanup is registered and the callback is not executed.
 
 ## Example
 
-```ts
+```tsx
 import { useUnmount } from '@fictjs/hooks';
 
-useUnmount(() => {
-  console.log('root disposed');
-});
+export function Component() {
+  useUnmount(() => {
+    console.log('root disposed');
+  });
+
+  return <div />;
+}
 ```
