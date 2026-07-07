@@ -22,7 +22,10 @@ function useStorage<T>(
     onError?: (error: unknown) => void;
   }
 ): {
-  value: () => T;
+  value: {
+    (): T;
+    (next: T | ((prev: T) => T)): void;
+  };
   set: (next: T | ((prev: T) => T)) => void;
   remove: () => void;
 };
@@ -33,3 +36,4 @@ function useStorage<T>(
 - `window: null` disables default browser storage lookup and same-window sync.
 - `listenToStorageChanges: false` disables cross-document and same-window storage listeners.
 - `writeDefaults: false` prevents writing the initial value when the key is missing.
+- Direct writes through `value(next)` are persisted the same way as `set(next)`.

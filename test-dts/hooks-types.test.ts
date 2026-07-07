@@ -27,10 +27,13 @@ const _toggleValue: Assert<Equal<ToggleValue, boolean>> = true;
 const storage = useStorage('demo-storage', { count: 1 });
 type StorageValue = ReturnType<typeof storage.value>;
 const _storageValue: Assert<Equal<StorageValue, { count: number }>> = true;
+storage.value({ count: 2 });
+storage.value((prev) => ({ count: prev.count + 1 }));
 
 const localStorageState = useLocalStorage('theme', 'light');
 type LocalStorageValue = ReturnType<typeof localStorageState.value>;
 const _localStorageValue: Assert<Equal<LocalStorageValue, string>> = true;
+localStorageState.value('dark');
 
 const request = useRequest(async (name: string, age: number) => ({ name, age }), {
   manual: true

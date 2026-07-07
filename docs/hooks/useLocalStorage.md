@@ -21,7 +21,10 @@ function useLocalStorage<T>(
     onError?: (error: unknown) => void;
   }
 ): {
-  value: () => T;
+  value: {
+    (): T;
+    (next: T | ((prev: T) => T)): void;
+  };
   set: (next: T | ((prev: T) => T)) => void;
   remove: () => void;
 };

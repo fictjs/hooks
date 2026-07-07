@@ -15,6 +15,11 @@ export interface UseStorageOptions<T> {
   onError?: (error: unknown) => void;
 }
 
+export interface WritableStorageAccessor<T> {
+  (next: T | ((prev: T) => T)): void;
+  (): T;
+}
+
 const syncEvent = 'fict-storage-sync';
 
 interface StorageSyncDetail {
@@ -82,7 +87,7 @@ function inferSerializer<T>(initial: T): Serializer<T> {
 }
 
 export interface UseStorageReturn<T> {
-  value: () => T;
+  value: WritableStorageAccessor<T>;
   set: (next: T | ((prev: T) => T)) => void;
   remove: () => void;
 }
@@ -293,7 +298,7 @@ export function createStorageHook<T>(
       return state();
     }
     set(next as T | ((prev: T) => T));
-  } as typeof state;
+  } as WritableStorageAccessor<T>;
 
   return {
     value,
