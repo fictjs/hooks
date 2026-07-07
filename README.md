@@ -61,7 +61,6 @@ In plain TypeScript/JavaScript usage (without Fict compile transforms), read rea
 `pnpm build` emits:
 
 - `dist/index.fict.meta.json`
-- `dist/fict.manifest.json`
 - ESM/CJS runtime files
 - `.d.ts` and `.d.cts` type declarations
 
