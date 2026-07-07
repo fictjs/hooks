@@ -96,10 +96,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   const windowRef = options.window === undefined ? defaultWindow : options.window;
   const windowSocketCtor = (windowRef as (Window & { WebSocket?: WebSocketConstructor }) | null)
     ?.WebSocket;
-  const webSocketCtor =
-    options.webSocket === undefined
-      ? (windowSocketCtor ?? (globalThis.WebSocket as WebSocketConstructor | undefined))
-      : options.webSocket;
+  const webSocketCtor = options.webSocket === undefined ? windowSocketCtor : options.webSocket;
   const reconnectOptions = normalizeReconnectOptions(options.autoReconnect);
 
   const data = createSignal<TIncoming | null>(options.initialData ?? null);

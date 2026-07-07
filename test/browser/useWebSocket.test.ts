@@ -63,6 +63,7 @@ class MockWebSocket extends EventTarget {
 describe('useWebSocket', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     MockWebSocket.instances = [];
   });
 
@@ -247,6 +248,22 @@ describe('useWebSocket', () => {
 
     expect(state.isSupported()).toBe(false);
     expect(state.open()).toBe(false);
+  });
+
+  it('does not use global WebSocket when window is explicitly null', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        window: null,
+        immediate: false
+      })
+    );
+
+    expect(MockWebSocket.instances).toHaveLength(0);
+    expect(state.isSupported()).toBe(false);
+    expect(state.open()).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(0);
   });
 
   it('tracks an accessor url and opens when it becomes available', async () => {
