@@ -21,15 +21,18 @@ class MockMutationObserver {
 }
 
 describe('useMutationObserver', () => {
-  const original = globalThis.MutationObserver;
+  const windowRef = window as Window & { MutationObserver?: typeof MutationObserver };
+  const originalWindow = windowRef.MutationObserver;
+  const originalGlobal = globalThis.MutationObserver;
 
   afterEach(() => {
-    globalThis.MutationObserver = original;
+    windowRef.MutationObserver = originalWindow;
+    globalThis.MutationObserver = originalGlobal;
     MockMutationObserver.instances = [];
   });
 
   it('observes targets and updates records', () => {
-    globalThis.MutationObserver = MockMutationObserver as never;
+    windowRef.MutationObserver = MockMutationObserver as never;
 
     const element = document.createElement('div');
     const callback = vi.fn();
@@ -50,7 +53,7 @@ describe('useMutationObserver', () => {
   });
 
   it('observes ref-like target after it is assigned', async () => {
-    globalThis.MutationObserver = MockMutationObserver as never;
+    windowRef.MutationObserver = MockMutationObserver as never;
 
     const element = document.createElement('div');
     const ref = { current: null as Element | null };
@@ -67,7 +70,7 @@ describe('useMutationObserver', () => {
   });
 
   it('stops observing with controls', () => {
-    globalThis.MutationObserver = MockMutationObserver as never;
+    windowRef.MutationObserver = MockMutationObserver as never;
 
     const element = document.createElement('div');
     const { value: state } = createRoot(() => useMutationObserver(element));

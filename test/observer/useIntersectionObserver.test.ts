@@ -22,15 +22,18 @@ class MockIntersectionObserver {
 }
 
 describe('useIntersectionObserver', () => {
-  const original = globalThis.IntersectionObserver;
+  const windowRef = window as Window & { IntersectionObserver?: typeof IntersectionObserver };
+  const originalWindow = windowRef.IntersectionObserver;
+  const originalGlobal = globalThis.IntersectionObserver;
 
   afterEach(() => {
-    globalThis.IntersectionObserver = original;
+    windowRef.IntersectionObserver = originalWindow;
+    globalThis.IntersectionObserver = originalGlobal;
     MockIntersectionObserver.instances = [];
   });
 
   it('observes targets and updates entries', () => {
-    globalThis.IntersectionObserver = MockIntersectionObserver as never;
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
 
     const element = document.createElement('div');
     const callback = vi.fn();
@@ -48,7 +51,7 @@ describe('useIntersectionObserver', () => {
   });
 
   it('observes ref-like target after it is assigned', async () => {
-    globalThis.IntersectionObserver = MockIntersectionObserver as never;
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
 
     const element = document.createElement('div');
     const ref = { current: null as Element | null };
@@ -62,7 +65,7 @@ describe('useIntersectionObserver', () => {
   });
 
   it('supports stop/start controls', async () => {
-    globalThis.IntersectionObserver = MockIntersectionObserver as never;
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
 
     const element = document.createElement('div');
     const { value: state } = createRoot(() => useIntersectionObserver(element));

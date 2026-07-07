@@ -75,11 +75,8 @@ function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions |
  */
 export function useSize(target: MaybeElement | null, options: UseSizeOptions = {}): UseSizeReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  const observerCtor =
-    options.window === undefined
-      ? ((windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)
-          ?.ResizeObserver ?? globalThis.ResizeObserver)
-      : (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)?.ResizeObserver;
+  const observerCtor = (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)
+    ?.ResizeObserver;
 
   const width = createSignal(options.initialWidth ?? 0);
   const height = createSignal(options.initialHeight ?? 0);

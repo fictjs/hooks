@@ -26,12 +26,9 @@ export function useMutationObserver(
   options: UseMutationObserverOptions = {}
 ): UseMutationObserverReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  const observerCtor =
-    options.window === undefined
-      ? ((windowRef as (Window & { MutationObserver?: typeof MutationObserver }) | null)
-          ?.MutationObserver ?? globalThis.MutationObserver)
-      : (windowRef as (Window & { MutationObserver?: typeof MutationObserver }) | null)
-          ?.MutationObserver;
+  const observerCtor = (
+    windowRef as (Window & { MutationObserver?: typeof MutationObserver }) | null
+  )?.MutationObserver;
   const records = createSignal<MutationRecord[]>([]);
   const isSupported = createSignal(!!observerCtor);
   const active = createSignal(true);

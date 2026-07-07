@@ -48,16 +48,19 @@ function mockRect(target: Element, rect: Partial<DOMRect>) {
 }
 
 describe('useSize', () => {
-  const originalResizeObserver = globalThis.ResizeObserver;
+  const windowRef = window as Window & { ResizeObserver?: typeof ResizeObserver };
+  const originalWindowResizeObserver = windowRef.ResizeObserver;
+  const originalGlobalResizeObserver = globalThis.ResizeObserver;
 
   afterEach(() => {
-    globalThis.ResizeObserver = originalResizeObserver;
+    windowRef.ResizeObserver = originalWindowResizeObserver;
+    globalThis.ResizeObserver = originalGlobalResizeObserver;
     MockResizeObserver.instances = [];
     vi.restoreAllMocks();
   });
 
   it('observes target and updates size from ResizeObserver', () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     mockRect(element, { width: 100, height: 60, top: 10, left: 20 });
@@ -98,7 +101,7 @@ describe('useSize', () => {
   });
 
   it('uses the requested ResizeObserver box for size updates', () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     mockRect(element, { width: 100, height: 60, top: 10, left: 20 });
@@ -136,7 +139,7 @@ describe('useSize', () => {
   });
 
   it('rebinds observer when target changes', async () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const a = document.createElement('div');
     const b = document.createElement('div');
@@ -159,7 +162,7 @@ describe('useSize', () => {
   });
 
   it('observes ref-like target after it is assigned', async () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     mockRect(element, { width: 42, height: 24 });
@@ -176,7 +179,7 @@ describe('useSize', () => {
   });
 
   it('supports stop and start controls', async () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     mockRect(element, { width: 100, height: 60 });
@@ -226,7 +229,7 @@ describe('useSize', () => {
   });
 
   it('disconnects observer on dispose', () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     mockRect(element, { width: 100, height: 100 });

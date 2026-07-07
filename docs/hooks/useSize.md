@@ -38,4 +38,6 @@ function useSize(
 ## Notes
 
 - Uses `ResizeObserver` when available and falls back to `window.resize` updates.
+- `ResizeObserver` is read from the provided/default `window`; Node/SSR globals are not used
+  implicitly.
 - Works with plain elements, ref-like targets, and accessor targets.

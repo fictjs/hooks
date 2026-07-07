@@ -22,15 +22,18 @@ class MockResizeObserver {
 }
 
 describe('useResizeObserver', () => {
-  const original = globalThis.ResizeObserver;
+  const windowRef = window as Window & { ResizeObserver?: typeof ResizeObserver };
+  const originalWindow = windowRef.ResizeObserver;
+  const originalGlobal = globalThis.ResizeObserver;
 
   afterEach(() => {
-    globalThis.ResizeObserver = original;
+    windowRef.ResizeObserver = originalWindow;
+    globalThis.ResizeObserver = originalGlobal;
     MockResizeObserver.instances = [];
   });
 
   it('observes targets and updates entries', () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     const callback = vi.fn();
@@ -48,7 +51,7 @@ describe('useResizeObserver', () => {
   });
 
   it('observes ref-like target after it is assigned', async () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     const ref = { current: null as Element | null };
@@ -62,7 +65,7 @@ describe('useResizeObserver', () => {
   });
 
   it('stops observing with controls', () => {
-    globalThis.ResizeObserver = MockResizeObserver as never;
+    windowRef.ResizeObserver = MockResizeObserver as never;
 
     const element = document.createElement('div');
     const { value: state } = createRoot(() => useResizeObserver(element));

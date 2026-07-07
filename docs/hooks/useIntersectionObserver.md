@@ -24,3 +24,8 @@ function useIntersectionObserver(
   stop: () => void;
 };
 ```
+
+## Notes
+
+- Observer constructors are read from the provided/default `window`; Node/SSR globals are not used
+  implicitly.
