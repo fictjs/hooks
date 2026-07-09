@@ -51,7 +51,9 @@ function clearRequestCache(cacheKey?: string): void;
 - `staleTime` controls when cached data is considered too old to apply.
 - `cacheTime` bounds how long a cache entry stays in the global cache; the default is five minutes.
 - `cacheSize` bounds the global request cache; the default keeps the newest 100 entries.
-- The default cache is process-global. Use `cacheProvider` to inject a per-request or
-  per-test cache, or `clearRequestCache(cacheKey?)` to clear the default cache.
+- In browsers, the default cache is shared across hook instances. During SSR/Node execution,
+  the default cache is isolated per hook to prevent data from crossing requests. Pass a
+  request-scoped `cacheProvider` when server-side hooks need to share cached values.
+- Use `clearRequestCache(cacheKey?)` to clear the browser default cache.
 - Stale or canceled requests do not update state and do not trigger `onSuccess`, `onError`, or
   `onFinally`; callbacks are latest-request only.

@@ -1,4 +1,5 @@
 import { createSignal } from '@fictjs/runtime/advanced';
+import { isClient } from '../internal/env';
 import { tryOnDestroy } from '../internal/lifecycle';
 
 export interface UseRequestCacheEntry<T> {
@@ -87,7 +88,10 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   const error = createSignal<unknown>(null);
   const loading = createSignal(false);
   const params = createSignal<TParams | undefined>(options.defaultParams);
-  const cache = (options.cacheProvider ?? requestCache) as Map<string, UseRequestCacheEntry<TData>>;
+  const cache = (options.cacheProvider ?? (isClient ? requestCache : new Map())) as Map<
+    string,
+    UseRequestCacheEntry<TData>
+  >;
 
   let callId = 0;
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
