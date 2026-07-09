@@ -13,6 +13,7 @@ export interface UseMutationObserverReturn {
   active: () => boolean;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
 }
 
 /**
@@ -35,11 +36,13 @@ export function useMutationObserver(
 
   let cleanup = () => {};
   let cancelDeferredSetup = () => {};
+  let setupReady = false;
 
   const setup = (): boolean => {
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
+      setupReady = true;
       return true;
     }
 
@@ -72,8 +75,10 @@ export function useMutationObserver(
 
     cleanup = () => {
       observer.disconnect();
+      setupReady = false;
       cleanup = () => {};
     };
+    setupReady = true;
 
     return true;
   };
@@ -86,14 +91,16 @@ export function useMutationObserver(
         return;
       }
       cleanup();
+      setupReady = false;
       setup();
     });
   };
 
-  createEffect(() => {
+  const refresh = () => {
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
     cleanup();
+    setupReady = false;
 
     if (!active()) {
       return;
@@ -102,6 +109,10 @@ export function useMutationObserver(
     if (!setup()) {
       scheduleDeferredSetup();
     }
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredSetup();
@@ -115,13 +126,19 @@ export function useMutationObserver(
     isSupported,
     active,
     start() {
-      active(true);
+      if (!active()) {
+        active(true);
+      } else if (!setupReady) {
+        refresh();
+      }
     },
     stop() {
       active(false);
       cancelDeferredSetup();
       cancelDeferredSetup = () => {};
       cleanup();
-    }
+      setupReady = false;
+    },
+    refresh
   };
 }

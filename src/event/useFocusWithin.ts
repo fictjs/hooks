@@ -9,6 +9,7 @@ export interface UseFocusWithinOptions {
 
 export interface UseFocusWithinReturn {
   focused: () => boolean;
+  refresh: () => void;
 }
 
 /**
@@ -24,11 +25,11 @@ export function useFocusWithin(
   const focused = createSignal(initialValue);
   let previousTarget: Element | undefined;
 
-  useEventListener(target, 'focusin', () => {
+  const focusInListener = useEventListener(target, 'focusin', () => {
     focused(true);
   });
 
-  useEventListener(target, 'focusout', (event) => {
+  const focusOutListener = useEventListener(target, 'focusout', (event) => {
     const targetElement = resolveMaybeTarget(target);
     if (!targetElement) {
       focused(false);
@@ -50,5 +51,11 @@ export function useFocusWithin(
     }
   });
 
-  return { focused };
+  return {
+    focused,
+    refresh() {
+      focusInListener.refresh();
+      focusOutListener.refresh();
+    }
+  };
 }

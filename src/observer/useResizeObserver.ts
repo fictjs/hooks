@@ -14,6 +14,7 @@ export interface UseResizeObserverReturn {
   active: () => boolean;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
 }
 
 /**
@@ -35,11 +36,13 @@ export function useResizeObserver(
 
   let cleanup = () => {};
   let cancelDeferredSetup = () => {};
+  let setupReady = false;
 
   const setup = (): boolean => {
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
+      setupReady = true;
       return true;
     }
 
@@ -62,8 +65,10 @@ export function useResizeObserver(
 
     cleanup = () => {
       observer.disconnect();
+      setupReady = false;
       cleanup = () => {};
     };
+    setupReady = true;
 
     return true;
   };
@@ -76,14 +81,16 @@ export function useResizeObserver(
         return;
       }
       cleanup();
+      setupReady = false;
       setup();
     });
   };
 
-  createEffect(() => {
+  const refresh = () => {
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
     cleanup();
+    setupReady = false;
 
     if (!active()) {
       return;
@@ -92,6 +99,10 @@ export function useResizeObserver(
     if (!setup()) {
       scheduleDeferredSetup();
     }
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredSetup();
@@ -105,13 +116,19 @@ export function useResizeObserver(
     isSupported,
     active,
     start() {
-      active(true);
+      if (!active()) {
+        active(true);
+      } else if (!setupReady) {
+        refresh();
+      }
     },
     stop() {
       active(false);
       cancelDeferredSetup();
       cancelDeferredSetup = () => {};
       cleanup();
-    }
+      setupReady = false;
+    },
+    refresh
   };
 }

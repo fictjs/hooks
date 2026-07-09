@@ -26,6 +26,19 @@ describe('useHover', () => {
     expect(state.hovered()).toBe(true);
   });
 
+  it('refreshes a ref-like target assigned after initial setup', async () => {
+    const target = document.createElement('div');
+    const ref = { current: null as Element | null };
+    const { value: state } = createRoot(() => useHover(ref));
+
+    await Promise.resolve();
+    ref.current = target;
+    state.refresh();
+    target.dispatchEvent(new Event('pointerenter'));
+
+    expect(state.hovered()).toBe(true);
+  });
+
   it('resets when accessor target changes', async () => {
     const first = document.createElement('div');
     const second = document.createElement('div');

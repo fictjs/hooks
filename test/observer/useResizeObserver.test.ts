@@ -64,6 +64,36 @@ describe('useResizeObserver', () => {
     expect(instance.observe).toHaveBeenCalledWith(element, undefined);
   });
 
+  it('retries an unresolved ref when start is called while active', async () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+    const { value: state } = createRoot(() => useResizeObserver(ref));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    ref.current = element;
+    state.start();
+
+    expect(MockResizeObserver.instances).toHaveLength(1);
+    expect(MockResizeObserver.instances[0]!.observe).toHaveBeenCalledWith(element, undefined);
+  });
+
+  it('refreshes observation after a non-reactive ref changes', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const { value: state } = createRoot(() => useResizeObserver(ref));
+
+    ref.current = second;
+    state.refresh();
+
+    expect(MockResizeObserver.instances).toHaveLength(2);
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(second, undefined);
+  });
+
   it('stops observing with controls', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
 

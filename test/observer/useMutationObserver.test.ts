@@ -69,6 +69,42 @@ describe('useMutationObserver', () => {
     );
   });
 
+  it('retries an unresolved ref when start is called while active', async () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+    const { value: state } = createRoot(() => useMutationObserver(ref));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    ref.current = element;
+    state.start();
+
+    expect(MockMutationObserver.instances).toHaveLength(1);
+    expect(MockMutationObserver.instances[0]!.observe).toHaveBeenCalledWith(
+      element,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+  });
+
+  it('refreshes observation after a non-reactive ref changes', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const { value: state } = createRoot(() => useMutationObserver(ref));
+
+    ref.current = second;
+    state.refresh();
+
+    expect(MockMutationObserver.instances).toHaveLength(2);
+    expect(MockMutationObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockMutationObserver.instances[1]!.observe).toHaveBeenCalledWith(
+      second,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+  });
+
   it('stops observing with controls', () => {
     windowRef.MutationObserver = MockMutationObserver as never;
 

@@ -7,6 +7,7 @@ import { toArray, toValue, type MaybeAccessor } from '../internal/value';
 export interface UseEventListenerControls {
   start: () => void;
   stop: () => void;
+  refresh: () => void;
   active: () => boolean;
 }
 
@@ -24,6 +25,7 @@ export function useEventListener<E extends Event = Event>(
   const active = createSignal(options.immediate ?? true);
   let stopCurrent = () => {};
   let cancelDeferredBind = () => {};
+  let bound = false;
 
   const bind = (): (() => void) | undefined => {
     const targets = resolveTargetList(target);
@@ -48,8 +50,10 @@ export function useEventListener<E extends Event = Event>(
   };
 
   const applyStop = (stop: () => void) => {
+    bound = true;
     stopCurrent = () => {
       stop();
+      bound = false;
       stopCurrent = () => {};
     };
   };
@@ -75,11 +79,10 @@ export function useEventListener<E extends Event = Event>(
     });
   };
 
-  createEffect(() => {
+  const refresh = () => {
     cancelDeferredBind();
     cancelDeferredBind = () => {};
     stopCurrent();
-    stopCurrent = () => {};
 
     if (!active()) {
       return;
@@ -88,6 +91,10 @@ export function useEventListener<E extends Event = Event>(
     if (!bindCurrent()) {
       scheduleDeferredBind();
     }
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredBind();
@@ -100,11 +107,9 @@ export function useEventListener<E extends Event = Event>(
     start() {
       if (!active()) {
         active(true);
-        stopCurrent();
-        stopCurrent = () => {};
-        if (!bindCurrent()) {
-          scheduleDeferredBind();
-        }
+      }
+      if (!bound) {
+        refresh();
       }
     },
     stop() {
@@ -116,6 +121,7 @@ export function useEventListener<E extends Event = Event>(
       cancelDeferredBind = () => {};
       stopCurrent();
     },
+    refresh,
     active
   };
 }

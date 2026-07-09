@@ -67,4 +67,19 @@ describe('useFocusWithin', () => {
 
     expect(state.focused()).toBe(true);
   });
+
+  it('refreshes a ref-like target assigned after initial setup', async () => {
+    const target = document.createElement('div');
+    const child = document.createElement('input');
+    const ref = { current: null as Element | null };
+    target.appendChild(child);
+    const { value: state } = createRoot(() => useFocusWithin(ref));
+
+    await Promise.resolve();
+    ref.current = target;
+    state.refresh();
+    child.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+
+    expect(state.focused()).toBe(true);
+  });
 });

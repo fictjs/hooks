@@ -64,6 +64,36 @@ describe('useIntersectionObserver', () => {
     expect(instance.observe).toHaveBeenCalledWith(element);
   });
 
+  it('retries an unresolved ref when start is called while active', async () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+    const { value: state } = createRoot(() => useIntersectionObserver(ref));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    ref.current = element;
+    state.start();
+
+    expect(MockIntersectionObserver.instances).toHaveLength(1);
+    expect(MockIntersectionObserver.instances[0]!.observe).toHaveBeenCalledWith(element);
+  });
+
+  it('refreshes observation after a non-reactive ref changes', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const { value: state } = createRoot(() => useIntersectionObserver(ref));
+
+    ref.current = second;
+    state.refresh();
+
+    expect(MockIntersectionObserver.instances).toHaveLength(2);
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(second);
+  });
+
   it('supports stop/start controls', async () => {
     windowRef.IntersectionObserver = MockIntersectionObserver as never;
 

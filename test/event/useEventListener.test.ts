@@ -110,4 +110,35 @@ describe('useEventListener', () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
+
+  it('retries an unresolved ref when start is called while active', async () => {
+    const target = new EventTarget();
+    const ref = { current: null as EventTarget | null };
+    const handler = vi.fn();
+    const { value: controls } = createRoot(() => useEventListener(ref, 'late', handler));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    ref.current = target;
+    controls.start();
+    target.dispatchEvent(new Event('late'));
+
+    expect(controls.active()).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes listeners after a non-reactive ref changes', () => {
+    const targetA = new EventTarget();
+    const targetB = new EventTarget();
+    const ref = { current: targetA as EventTarget | null };
+    const handler = vi.fn();
+    const { value: controls } = createRoot(() => useEventListener(ref, 'refresh', handler));
+
+    ref.current = targetB;
+    controls.refresh();
+    targetA.dispatchEvent(new Event('refresh'));
+    targetB.dispatchEvent(new Event('refresh'));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
 });

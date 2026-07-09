@@ -19,6 +19,7 @@ export interface UseIntersectionObserverReturn {
   isSupported: () => boolean;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
   active: () => boolean;
 }
 
@@ -42,11 +43,13 @@ export function useIntersectionObserver(
 
   let cleanup = () => {};
   let cancelDeferredSetup = () => {};
+  let setupReady = false;
 
   const setup = (): boolean => {
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
+      setupReady = true;
       return true;
     }
 
@@ -75,8 +78,10 @@ export function useIntersectionObserver(
 
     cleanup = () => {
       observer.disconnect();
+      setupReady = false;
       cleanup = () => {};
     };
+    setupReady = true;
 
     return true;
   };
@@ -89,14 +94,16 @@ export function useIntersectionObserver(
         return;
       }
       cleanup();
+      setupReady = false;
       setup();
     });
   };
 
-  createEffect(() => {
+  const refresh = () => {
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
     cleanup();
+    setupReady = false;
 
     if (!active()) {
       return;
@@ -105,6 +112,10 @@ export function useIntersectionObserver(
     if (!setup()) {
       scheduleDeferredSetup();
     }
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredSetup();
@@ -117,14 +128,20 @@ export function useIntersectionObserver(
     entries,
     isSupported,
     start() {
-      active(true);
+      if (!active()) {
+        active(true);
+      } else if (!setupReady) {
+        refresh();
+      }
     },
     stop() {
       active(false);
       cancelDeferredSetup();
       cancelDeferredSetup = () => {};
       cleanup();
+      setupReady = false;
     },
+    refresh,
     active
   };
 }
