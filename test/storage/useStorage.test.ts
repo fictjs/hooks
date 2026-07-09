@@ -174,6 +174,21 @@ describe('useStorage', () => {
     iframe.remove();
   });
 
+  it('broadcasts writes when storage already contains the serialized value', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+    const first = createRoot(() => useStorage('same-raw', 0, { storage, window: windowRef })).value;
+    const second = createRoot(() =>
+      useStorage('same-raw', 0, { storage, window: windowRef })
+    ).value;
+
+    storage.setItem('same-raw', '2');
+    first.set(2);
+
+    expect(first.value()).toBe(2);
+    expect(second.value()).toBe(2);
+  });
+
   it('persists and syncs direct value signal writes', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;

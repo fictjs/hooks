@@ -221,7 +221,9 @@ export function createStorageHook<T>(
 
       const current = storage.getItem(key);
       if (current === serialized) {
+        paused = true;
         writeState(value);
+        dispatchSync(serialized);
         return;
       }
 
