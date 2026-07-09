@@ -33,63 +33,6 @@ function walkFiles(directory) {
 
 const reactiveKinds = new Set(['signal', 'memo', 'store', 'effect']);
 
-function parseFictReturn(annotation, file) {
-  const trimmed = annotation.trim();
-  if (trimmed === '{}' || trimmed === '{ }') {
-    return null;
-  }
-
-  const directMatch = trimmed.match(/^['"]?(signal|memo|store|effect)['"]?$/);
-  if (directMatch) {
-    return { directAccessor: directMatch[1] };
-  }
-
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-    if (!/['"]?(signal|memo|store|effect)['"]?/.test(trimmed)) {
-      return null;
-    }
-    fail(`unsupported @fictReturn annotation in ${toRootRelative(file)}: ${trimmed}`);
-  }
-
-  const objectProps = {};
-  const body = trimmed.slice(1, -1);
-  const propPattern =
-    /(?:['"]?([A-Za-z_$][\w$]*)['"]?)\s*:\s*['"]?(signal|memo|store|effect)['"]?/g;
-  let match;
-  while ((match = propPattern.exec(body))) {
-    objectProps[match[1]] = match[2];
-  }
-
-  if (Object.keys(objectProps).length === 0) {
-    return null;
-  }
-
-  return { objectProps };
-}
-
-function extractReactiveHookMetadata() {
-  const sourceDir = path.join(root, 'src');
-  const hooks = new Map();
-
-  for (const file of walkFiles(sourceDir)) {
-    if (!file.endsWith('.ts')) continue;
-    const source = readFileSync(file, 'utf8');
-    const exportMatch = source.match(/export function (use[A-Z][A-Za-z0-9_]*)\b/);
-    if (!exportMatch) continue;
-
-    const annotationMatch = source.match(/@fictReturn\s+([^\n*]+)/);
-    if (!annotationMatch) continue;
-
-    const annotation = annotationMatch[1]?.trim() ?? '';
-    const hookMetadata = parseFictReturn(annotation, file);
-    if (hookMetadata) {
-      hooks.set(exportMatch[1], hookMetadata);
-    }
-  }
-
-  return hooks;
-}
-
 function assertHookMetadataMatches(hookName, expected, actual) {
   if (expected.directAccessor) {
     if (actual?.directAccessor !== expected.directAccessor) {
@@ -254,12 +197,16 @@ const cjsEntry = require(path.join(root, 'dist/index.cjs'));
 smokeDistEntry(cjsEntry, 'cjs');
 
 const metadata = readJson('dist/index.fict.meta.json');
-if (metadata.version !== 1) {
-  fail(`expected metadata version 1, got ${metadata.version}`);
+const metadataContract = readJson('contracts/fict-metadata.json');
+if (metadata.version !== metadataContract.version) {
+  fail(`expected metadata version ${metadataContract.version}, got ${metadata.version}`);
+}
+if (JSON.stringify(metadata.exports ?? {}) !== JSON.stringify(metadataContract.exports ?? {})) {
+  fail('metadata exports do not match contracts/fict-metadata.json');
 }
 
 const metadataHooks = new Set(Object.keys(metadata.hooks ?? {}));
-const expectedHookMetadata = extractReactiveHookMetadata();
+const expectedHookMetadata = new Map(Object.entries(metadataContract.hooks ?? {}));
 const expectedHooks = new Set(expectedHookMetadata.keys());
 const missingHooks = [...expectedHooks].filter((hook) => !metadataHooks.has(hook));
 if (missingHooks.length > 0) {
