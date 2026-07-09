@@ -487,4 +487,41 @@ describe('useRequest', () => {
     expect(firstCached.data()).toBeUndefined();
     expect(secondCached.data()).toBe(2);
   });
+
+  it('refreshes cache recency when an existing entry is updated', async () => {
+    const service = vi.fn(async (value: number) => value);
+    const cacheProvider = new Map();
+    const first = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'recency-first',
+        cacheSize: 2,
+        cacheProvider
+      })
+    ).value;
+    const second = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'recency-second',
+        cacheSize: 2,
+        cacheProvider
+      })
+    ).value;
+    const third = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'recency-third',
+        cacheSize: 2,
+        cacheProvider
+      })
+    ).value;
+
+    await first.runAsync(1);
+    await second.runAsync(2);
+    await first.runAsync(10);
+    await third.runAsync(3);
+
+    expect([...cacheProvider.keys()]).toEqual(['recency-first', 'recency-third']);
+    expect(cacheProvider.get('recency-first')?.data).toBe(10);
+  });
 });

@@ -131,6 +131,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
     const now = Date.now();
     pruneExpiredCache(cache, now);
+    cache.delete(options.cacheKey);
     cache.set(options.cacheKey, {
       data: value,
       timestamp: now,
