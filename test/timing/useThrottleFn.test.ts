@@ -89,4 +89,29 @@ describe('useThrottleFn', () => {
     expect(callback).toHaveBeenCalledTimes(3);
     expect(callback).toHaveBeenNthCalledWith(3, 'c');
   });
+
+  it('recovers when a trailing callback throws', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn((value: string) => {
+      if (value === 'throws') {
+        throw new Error('boom');
+      }
+    });
+
+    const { value: controls } = createRoot(() => useThrottleFn(callback, 100));
+
+    controls.run('leading');
+    controls.run('throws');
+
+    expect(() => vi.advanceTimersByTime(100)).toThrow('boom');
+    expect(controls.pending()).toBe(false);
+
+    controls.run('after-error');
+    expect(controls.pending()).toBe(true);
+    vi.advanceTimersByTime(100);
+
+    expect(callback).toHaveBeenCalledTimes(3);
+    expect(callback).toHaveBeenNthCalledWith(3, 'after-error');
+    expect(controls.pending()).toBe(false);
+  });
 });

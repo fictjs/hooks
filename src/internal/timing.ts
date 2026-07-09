@@ -141,8 +141,8 @@ export function createThrottledFn<T extends Procedure>(
       const args = lastArgs;
       lastArgs = undefined;
       pending(false);
-      invoke(args);
       timer = setTimeout(tick, wait);
+      invoke(args);
       return;
     }
 
