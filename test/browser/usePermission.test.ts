@@ -104,6 +104,39 @@ describe('usePermission', () => {
     expect(state.state()).toBe('granted');
   });
 
+  it('invalidates a manual query when the permission source changes', async () => {
+    let resolveQuery: ((status: PermissionStatus) => void) | undefined;
+    const staleStatus = new MockPermissionStatus('camera', 'denied');
+    const addEventListener = vi.spyOn(staleStatus, 'addEventListener');
+    const navigatorRef = {
+      permissions: {
+        query: vi.fn(
+          () =>
+            new Promise<PermissionStatus>((resolve) => {
+              resolveQuery = resolve;
+            })
+        )
+      }
+    } as unknown as Navigator;
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: navigatorRef as never,
+        immediate: false
+      })
+    );
+
+    const pending = state.query();
+    permission('microphone');
+    await Promise.resolve();
+    resolveQuery!(staleStatus);
+
+    expect(await pending).toBeNull();
+    expect(state.state()).toBe('prompt');
+    expect(addEventListener).not.toHaveBeenCalled();
+  });
+
   it('cleans up change listener on dispose', async () => {
     const status = new MockPermissionStatus('camera', 'granted');
     const navigatorRef = {

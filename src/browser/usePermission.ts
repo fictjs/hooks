@@ -94,6 +94,7 @@ export function usePermission(
   };
 
   createEffect(() => {
+    queryId += 1;
     cleanup();
     activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
     if (options.immediate ?? true) {
