@@ -320,6 +320,52 @@ describe('useRequest', () => {
     expect(service).toHaveBeenCalledTimes(2);
   });
 
+  it('does not restart polling when onSuccess disposes the root', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => 'ok');
+    let dispose = () => {};
+
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onSuccess() {
+          dispose();
+        }
+      })
+    );
+    dispose = root.dispose;
+
+    await root.value.runAsync();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(service).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart polling when onError cancels the request', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => {
+      throw new Error('failed');
+    });
+    let cancel = () => {};
+
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onError() {
+          cancel();
+        }
+      })
+    );
+    cancel = state.cancel;
+
+    await state.runAsync();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(service).toHaveBeenCalledTimes(1);
+  });
+
   it('evicts stale cache entries', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 9);
