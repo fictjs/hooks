@@ -161,6 +161,29 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     );
   };
 
+  const closeSocketForReplacement = (currentSocket: WebSocketLike): boolean => {
+    const previousManuallyClosed = manuallyClosed;
+    manuallyClosed = true;
+
+    try {
+      currentSocket.close();
+    } catch (nextError) {
+      manuallyClosed = previousManuallyClosed;
+      if (socket === currentSocket) {
+        status(toStatus(currentSocket.readyState, currentSocket));
+      }
+      reportError(nextError);
+      return false;
+    }
+
+    if (socket === currentSocket) {
+      socket = null;
+      socketUrlKey = null;
+      cleanupSocket();
+    }
+    return true;
+  };
+
   const open = (): boolean => {
     const resolvedUrl = toValue(url);
     if (!webSocketCtor) {
@@ -179,14 +202,8 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         return true;
       }
 
-      const staleSocket = socket;
-      socket = null;
-      socketUrlKey = null;
-      cleanupSocket();
-      try {
-        staleSocket.close();
-      } catch (nextError) {
-        reportError(nextError);
+      if (!closeSocketForReplacement(socket)) {
+        return false;
       }
     }
     if (socket) {
@@ -280,6 +297,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const close = (code?: number, reason?: string) => {
+    const previousManuallyClosed = manuallyClosed;
+    const previousReconnectAttempts = reconnectAttempts;
+    const previousReconnectCount = reconnectCount();
     stopReconnectTimer();
     resetReconnectAttempts();
     manuallyClosed = true;
@@ -294,13 +314,11 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     try {
       currentSocket.close(code, reason);
     } catch (nextError) {
-      if (socket === currentSocket) {
-        socket = null;
-        socketUrlKey = null;
-        cleanupSocket();
-      }
+      manuallyClosed = previousManuallyClosed;
+      reconnectAttempts = previousReconnectAttempts;
+      reconnectCount(previousReconnectCount);
+      status(toStatus(currentSocket.readyState, currentSocket));
       reportError(nextError);
-      status('CLOSED');
     }
   };
 
@@ -309,11 +327,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
     if (socket) {
       const currentSocket = socket;
-      socket = null;
-      socketUrlKey = null;
-      cleanupSocket();
-      manuallyClosed = true;
-      currentSocket.close();
+      if (!closeSocketForReplacement(currentSocket)) {
+        return false;
+      }
     }
 
     manuallyClosed = false;

@@ -233,21 +233,27 @@ describe('useWebSocket', () => {
     expect(state.status()).toBe('CLOSED');
   });
 
-  it('recovers state when close throws', () => {
+  it('keeps ownership of the socket when close throws', () => {
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {
         webSocket: MockWebSocket as unknown as typeof WebSocket
       })
     );
     const socket = MockWebSocket.instances[0]!;
+    socket.open();
     socket.close.mockImplementationOnce(() => {
       throw new Error('close failed');
     });
 
     state.close();
 
-    expect(state.status()).toBe('CLOSED');
+    expect(state.status()).toBe('OPEN');
     expect((state.error() as unknown as Error).message).toBe('close failed');
+    expect(state.send('still-open')).toBe(true);
+
+    state.close();
+    expect(state.status()).toBe('CLOSED');
+    expect(socket.close).toHaveBeenCalledTimes(2);
   });
 
   it('supports explicit reconnect', () => {
@@ -260,6 +266,27 @@ describe('useWebSocket', () => {
     const first = MockWebSocket.instances[0]!;
     expect(state.reconnect()).toBe(true);
     expect(first.close).toHaveBeenCalledTimes(1);
+    expect(MockWebSocket.instances).toHaveLength(2);
+  });
+
+  it('returns false and keeps the current socket when reconnect close throws', () => {
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    expect(state.reconnect()).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(state.status()).toBe('OPEN');
+    expect(state.send('still-open')).toBe(true);
+
+    expect(state.reconnect()).toBe(true);
     expect(MockWebSocket.instances).toHaveLength(2);
   });
 
@@ -360,6 +387,27 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(2);
     expect(MockWebSocket.instances[1]?.url).toBe('ws://second.fict.test');
     expect(state.status()).toBe('CONNECTING');
+  });
+
+  it('keeps the current socket when changing urls cannot close it', async () => {
+    const source = createSignal('ws://first.fict.test');
+    const { value: state } = createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const first = MockWebSocket.instances[0]!;
+    first.open();
+    first.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    source('ws://second.fict.test');
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(state.status()).toBe('OPEN');
+    expect(state.send('still-open')).toBe(true);
   });
 
   it('closes socket on dispose', () => {
