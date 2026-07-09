@@ -41,10 +41,6 @@ export interface UseRequestReturn<TData, TParams extends unknown[]> {
   mutate: (value: TData | ((prev: TData | undefined) => TData)) => void;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export function clearRequestCache(cacheKey?: string): void {
   if (cacheKey === undefined) {
     requestCache.clear();
@@ -95,6 +91,30 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
   let callId = 0;
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
+  const retryDelayCancelers = new Set<() => void>();
+
+  const waitForRetry = (ms: number): Promise<void> => {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        retryDelayCancelers.delete(finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, ms);
+      retryDelayCancelers.add(finish);
+    });
+  };
+
+  const stopRetryDelays = () => {
+    for (const cancelDelay of [...retryDelayCancelers]) {
+      cancelDelay();
+    }
+  };
 
   const applyCache = () => {
     if (!options.cacheKey) {
@@ -181,12 +201,13 @@ export function useRequest<TData, TParams extends unknown[] = []>(
         }
 
         attempt += 1;
-        await delay(retryInterval);
+        await waitForRetry(retryInterval);
       }
     }
   };
 
   const runAsync = async (...currentParams: TParams): Promise<TData | undefined> => {
+    stopRetryDelays();
     const id = ++callId;
     let finalData: TData | undefined;
     let finalError: unknown = null;
@@ -245,6 +266,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     callId += 1;
     loading(false);
     stopPolling();
+    stopRetryDelays();
   };
 
   const refresh = async () => {

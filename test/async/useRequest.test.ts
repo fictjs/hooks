@@ -322,6 +322,32 @@ describe('useRequest', () => {
     expect(state.loading()).toBe(false);
   });
 
+  it('settles immediately when cancel interrupts a retry delay', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => {
+      throw new Error('retry failure');
+    });
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        retryCount: 1,
+        retryInterval: 60_000
+      })
+    );
+
+    const pending = state.runAsync();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(vi.getTimerCount()).toBe(1);
+
+    state.cancel();
+    await pending;
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(state.loading()).toBe(false);
+  });
+
   it('polls repeatedly and stops polling on dispose', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');
