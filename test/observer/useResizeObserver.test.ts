@@ -4,8 +4,13 @@ import { useResizeObserver } from '../../src/observer/useResizeObserver';
 
 class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
+  static errorTarget: Element | undefined;
 
-  readonly observe = vi.fn();
+  readonly observe = vi.fn((target: Element) => {
+    if (target === MockResizeObserver.errorTarget) {
+      throw new Error('observe failed');
+    }
+  });
   readonly unobserve = vi.fn();
   readonly disconnect = vi.fn();
 
@@ -30,6 +35,7 @@ describe('useResizeObserver', () => {
     windowRef.ResizeObserver = originalWindow;
     globalThis.ResizeObserver = originalGlobal;
     MockResizeObserver.instances = [];
+    MockResizeObserver.errorTarget = undefined;
   });
 
   it('observes targets and updates entries', () => {
@@ -92,6 +98,20 @@ describe('useResizeObserver', () => {
     expect(MockResizeObserver.instances).toHaveLength(2);
     expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
     expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(second, undefined);
+  });
+
+  it('disconnects when observing a later target throws', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    MockResizeObserver.errorTarget = second;
+
+    expect(() => createRoot(() => useResizeObserver([first, second]))).toThrow('observe failed');
+
+    const instance = MockResizeObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenNthCalledWith(1, first, undefined);
+    expect(instance.observe).toHaveBeenNthCalledWith(2, second, undefined);
+    expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('stops observing with controls', () => {

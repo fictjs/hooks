@@ -72,8 +72,13 @@ export function useIntersectionObserver(
     );
 
     isSupported(true);
-    for (const element of targets) {
-      observer.observe(element);
+    try {
+      for (const element of targets) {
+        observer.observe(element);
+      }
+    } catch (error) {
+      observer.disconnect();
+      throw error;
     }
 
     cleanup = () => {

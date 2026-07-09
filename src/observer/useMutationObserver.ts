@@ -69,8 +69,13 @@ export function useMutationObserver(
     };
 
     isSupported(true);
-    for (const element of targets) {
-      observer.observe(element, observeOptions);
+    try {
+      for (const element of targets) {
+        observer.observe(element, observeOptions);
+      }
+    } catch (error) {
+      observer.disconnect();
+      throw error;
     }
 
     cleanup = () => {

@@ -4,8 +4,13 @@ import { useMutationObserver } from '../../src/observer/useMutationObserver';
 
 class MockMutationObserver {
   static instances: MockMutationObserver[] = [];
+  static errorTarget: Element | undefined;
 
-  readonly observe = vi.fn();
+  readonly observe = vi.fn((target: Element) => {
+    if (target === MockMutationObserver.errorTarget) {
+      throw new Error('observe failed');
+    }
+  });
   readonly disconnect = vi.fn();
 
   private callback: MutationCallback;
@@ -29,6 +34,7 @@ describe('useMutationObserver', () => {
     windowRef.MutationObserver = originalWindow;
     globalThis.MutationObserver = originalGlobal;
     MockMutationObserver.instances = [];
+    MockMutationObserver.errorTarget = undefined;
   });
 
   it('observes targets and updates records', () => {
@@ -103,6 +109,28 @@ describe('useMutationObserver', () => {
       second,
       expect.objectContaining({ subtree: true, childList: true })
     );
+  });
+
+  it('disconnects when observing a later target throws', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    MockMutationObserver.errorTarget = second;
+
+    expect(() => createRoot(() => useMutationObserver([first, second]))).toThrow('observe failed');
+
+    const instance = MockMutationObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenNthCalledWith(
+      1,
+      first,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+    expect(instance.observe).toHaveBeenNthCalledWith(
+      2,
+      second,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+    expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('stops observing with controls', () => {

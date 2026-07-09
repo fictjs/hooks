@@ -59,8 +59,13 @@ export function useResizeObserver(
     );
 
     isSupported(true);
-    for (const element of targets) {
-      observer.observe(element, options.box ? { box: options.box } : undefined);
+    try {
+      for (const element of targets) {
+        observer.observe(element, options.box ? { box: options.box } : undefined);
+      }
+    } catch (error) {
+      observer.disconnect();
+      throw error;
     }
 
     cleanup = () => {

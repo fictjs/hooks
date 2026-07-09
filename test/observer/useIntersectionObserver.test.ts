@@ -4,8 +4,13 @@ import { useIntersectionObserver } from '../../src/observer/useIntersectionObser
 
 class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = [];
+  static errorTarget: Element | undefined;
 
-  readonly observe = vi.fn();
+  readonly observe = vi.fn((target: Element) => {
+    if (target === MockIntersectionObserver.errorTarget) {
+      throw new Error('observe failed');
+    }
+  });
   readonly unobserve = vi.fn();
   readonly disconnect = vi.fn();
 
@@ -30,6 +35,7 @@ describe('useIntersectionObserver', () => {
     windowRef.IntersectionObserver = originalWindow;
     globalThis.IntersectionObserver = originalGlobal;
     MockIntersectionObserver.instances = [];
+    MockIntersectionObserver.errorTarget = undefined;
   });
 
   it('observes targets and updates entries', () => {
@@ -92,6 +98,22 @@ describe('useIntersectionObserver', () => {
     expect(MockIntersectionObserver.instances).toHaveLength(2);
     expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
     expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(second);
+  });
+
+  it('disconnects when observing a later target throws', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    MockIntersectionObserver.errorTarget = second;
+
+    expect(() => createRoot(() => useIntersectionObserver([first, second]))).toThrow(
+      'observe failed'
+    );
+
+    const instance = MockIntersectionObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenNthCalledWith(1, first);
+    expect(instance.observe).toHaveBeenNthCalledWith(2, second);
+    expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('supports stop/start controls', async () => {
