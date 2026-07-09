@@ -72,6 +72,19 @@ const asyncState = useAsyncState(async (count: number) => count * 2, 0);
 type AsyncStateValue = ReturnType<typeof asyncState.state>;
 const _asyncStateValue: Assert<Equal<AsyncStateValue, number>> = true;
 
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate: true,
+  immediateArgs: [2]
+});
+useAsyncState(async () => 1, 0, { immediate: true });
+// @ts-expect-error immediate execution of a required-argument executor needs immediateArgs
+useAsyncState(async (count: number) => count * 2, 0, { immediate: true });
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate: true,
+  // @ts-expect-error immediateArgs preserves executor argument types
+  immediateArgs: ['2']
+});
+
 const virtual = useVirtualList(['a', 'b'], { itemHeight: 20, containerHeight: 100 });
 type VirtualTotalHeight = ReturnType<typeof virtual.totalHeight>;
 const _virtualTotalHeight: Assert<Equal<VirtualTotalHeight, number>> = true;

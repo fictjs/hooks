@@ -1,10 +1,27 @@
 import { createSignal } from '@fictjs/runtime/advanced';
 
-export interface UseAsyncStateOptions {
-  immediate?: boolean;
+interface UseAsyncStateBaseOptions {
   resetOnExecute?: boolean;
   onError?: (error: unknown) => void;
 }
+
+type UseAsyncStateImmediateOptions<Args extends unknown[]> = [] extends Args
+  ? {
+      immediate?: boolean;
+      immediateArgs?: Args;
+    }
+  :
+      | {
+          immediate?: false;
+          immediateArgs?: never;
+        }
+      | {
+          immediate: true;
+          immediateArgs: Args;
+        };
+
+export type UseAsyncStateOptions<Args extends unknown[] = []> = UseAsyncStateBaseOptions &
+  UseAsyncStateImmediateOptions<Args>;
 
 export interface UseAsyncStateReturn<T, Args extends unknown[]> {
   state: () => T;
@@ -21,7 +38,7 @@ export interface UseAsyncStateReturn<T, Args extends unknown[]> {
 export function useAsyncState<T, Args extends unknown[] = []>(
   executor: (...args: Args) => Promise<T>,
   initialState: T,
-  options: UseAsyncStateOptions = {}
+  options: UseAsyncStateOptions<NoInfer<Args>> = {} as UseAsyncStateOptions<NoInfer<Args>>
 ): UseAsyncStateReturn<T, Args> {
   const state = createSignal(initialState);
   const isLoading = createSignal(false);
@@ -59,7 +76,8 @@ export function useAsyncState<T, Args extends unknown[] = []>(
   };
 
   if (options.immediate) {
-    void execute(...([] as unknown as Args)).catch(() => {
+    const immediateArgs = options.immediateArgs ?? ([] as unknown as Args);
+    void execute(...immediateArgs).catch(() => {
       // ignore by default; error signal + onError handle it
     });
   }

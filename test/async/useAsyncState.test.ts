@@ -105,4 +105,21 @@ describe('useAsyncState', () => {
     expect(state.state()).toBe(7);
     expect(state.isLoading()).toBe(false);
   });
+
+  it('supports immediate execution with typed arguments', async () => {
+    const executor = vi.fn(async (value: number, suffix: string) => `${value}:${suffix}`);
+    const { value: state } = createRoot(() =>
+      useAsyncState(executor, '', {
+        immediate: true,
+        immediateArgs: [7, 'ready']
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(executor).toHaveBeenCalledWith(7, 'ready');
+    expect(state.state()).toBe('7:ready');
+    expect(state.isLoading()).toBe(false);
+  });
 });
