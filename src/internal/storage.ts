@@ -40,6 +40,10 @@ interface StorageSyncDetail {
   storage: Storage;
 }
 
+type WindowWithCustomEvent = Window & {
+  CustomEvent?: typeof CustomEvent;
+};
+
 const jsonSerializer: Serializer<unknown> = {
   read: (raw) => JSON.parse(raw),
   write: (value) => JSON.stringify(value)
@@ -126,7 +130,25 @@ export function createStorageHook<T>(
 ): UseStorageReturn<T> {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
   const serializer = options.serializer ?? inferSerializer(initial);
-  const emitSync = windowRef != null;
+  const CustomEventCtor =
+    (windowRef as WindowWithCustomEvent | null)?.CustomEvent ??
+    (typeof globalThis.CustomEvent === 'function' ? globalThis.CustomEvent : undefined);
+
+  const dispatchSync = (value: string | null) => {
+    if (!windowRef || !storage || !CustomEventCtor) {
+      return;
+    }
+
+    windowRef.dispatchEvent(
+      new CustomEventCtor(syncEvent, {
+        detail: {
+          key,
+          value,
+          storage
+        }
+      })
+    );
+  };
 
   const readStorage = (): T => {
     if (!storage) {
@@ -172,17 +194,7 @@ export function createStorageHook<T>(
         paused = true;
         storage.removeItem(key);
         writeState(initial);
-        if (emitSync) {
-          windowRef.dispatchEvent(
-            new CustomEvent(syncEvent, {
-              detail: {
-                key,
-                value: null,
-                storage
-              }
-            })
-          );
-        }
+        dispatchSync(null);
         return;
       } catch (error) {
         safeCall(options.onError, error);
@@ -203,17 +215,7 @@ export function createStorageHook<T>(
         paused = true;
         storage.removeItem(key);
         writeState(initial);
-        if (emitSync) {
-          windowRef.dispatchEvent(
-            new CustomEvent(syncEvent, {
-              detail: {
-                key,
-                value: null,
-                storage
-              }
-            })
-          );
-        }
+        dispatchSync(null);
         return;
       }
 
@@ -226,17 +228,7 @@ export function createStorageHook<T>(
       paused = true;
       storage.setItem(key, serialized);
       writeState(value);
-      if (emitSync) {
-        windowRef.dispatchEvent(
-          new CustomEvent(syncEvent, {
-            detail: {
-              key,
-              value: serialized,
-              storage
-            }
-          })
-        );
-      }
+      dispatchSync(serialized);
     } catch (error) {
       safeCall(options.onError, error);
     } finally {
@@ -254,17 +246,7 @@ export function createStorageHook<T>(
       paused = true;
       storage.removeItem(key);
       writeState(initial);
-      if (emitSync) {
-        windowRef.dispatchEvent(
-          new CustomEvent(syncEvent, {
-            detail: {
-              key,
-              value: null,
-              storage
-            }
-          })
-        );
-      }
+      dispatchSync(null);
     } catch (error) {
       safeCall(options.onError, error);
     } finally {

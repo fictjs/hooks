@@ -154,6 +154,26 @@ describe('useStorage', () => {
     expect(first.value()).toBe(15);
   });
 
+  it('dispatches sync events from the injected window realm', () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const realmWindow = iframe.contentWindow as Window & typeof globalThis;
+    const storage = new MemoryStorage();
+    const dispatchSpy = vi.spyOn(realmWindow, 'dispatchEvent');
+    const root = createRoot(() => ({
+      first: useStorage('realm-shared', 0, { storage, window: realmWindow }),
+      second: useStorage('realm-shared', 0, { storage, window: realmWindow })
+    }));
+
+    root.value.first.set(10);
+
+    expect(root.value.second.value()).toBe(10);
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.any(realmWindow.CustomEvent));
+
+    root.dispose();
+    iframe.remove();
+  });
+
   it('persists and syncs direct value signal writes', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;
