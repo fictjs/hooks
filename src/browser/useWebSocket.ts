@@ -197,7 +197,12 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
     isSupported(true);
     if (!resolvedUrl) {
-      status('CLOSED');
+      stopReconnectTimer();
+      if (socket) {
+        close();
+      } else {
+        status('CLOSED');
+      }
       return false;
     }
     const nextUrlKey = String(resolvedUrl);

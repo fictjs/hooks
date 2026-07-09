@@ -370,6 +370,26 @@ describe('useWebSocket', () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
+  it('closes a manually opened socket when open is called with an empty url', () => {
+    const source = createSignal<string | null>('ws://fict.test');
+    const { value: state } = createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false
+      })
+    );
+
+    expect(state.open()).toBe(true);
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    source(null);
+
+    expect(state.open()).toBe(false);
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    expect(state.status()).toBe('CLOSED');
+    expect(state.send('after-empty-url')).toBe(false);
+  });
+
   it('reconnects when accessor url changes between non-empty values', async () => {
     const source = createSignal('ws://first.fict.test');
     const { value: state } = createRoot(() =>
