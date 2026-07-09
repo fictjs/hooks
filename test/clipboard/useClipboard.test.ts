@@ -61,4 +61,59 @@ describe('useClipboard', () => {
     const ok = await state.copy('x');
     expect(ok).toBe(false);
   });
+
+  it('keeps the latest state when writes settle out of order', async () => {
+    let resolveFirst!: () => void;
+    let resolveSecond!: () => void;
+    const firstWrite = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondWrite = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const writeText = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockReturnValueOnce(firstWrite)
+      .mockReturnValueOnce(secondWrite);
+
+    const { value: state } = createRoot(() =>
+      useClipboard({ navigator: { clipboard: { writeText } }, window, document })
+    );
+
+    const firstCopy = state.copy('first');
+    const secondCopy = state.copy('second');
+
+    resolveSecond();
+    await expect(secondCopy).resolves.toBe(true);
+    expect(state.text()).toBe('second');
+    expect(state.copied()).toBe(true);
+
+    resolveFirst();
+    await expect(firstCopy).resolves.toBe(true);
+    expect(state.text()).toBe('second');
+    expect(state.copied()).toBe(true);
+  });
+
+  it('does not commit a pending write after dispose', async () => {
+    vi.useFakeTimers();
+    let resolveWrite!: () => void;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        })
+    );
+
+    const root = createRoot(() =>
+      useClipboard({ navigator: { clipboard: { writeText } }, window, document })
+    );
+    const pendingCopy = root.value.copy('pending');
+
+    root.dispose();
+    resolveWrite();
+
+    await expect(pendingCopy).resolves.toBe(true);
+    expect(root.value.copied()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

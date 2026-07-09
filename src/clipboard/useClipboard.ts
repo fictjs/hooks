@@ -61,6 +61,8 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
   const copiedDuring = options.copiedDuring ?? 1500;
   let timer: number | undefined;
+  let generation = 0;
+  let disposed = false;
 
   const resetCopiedLater = () => {
     if (!windowRef) {
@@ -77,34 +79,50 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
   };
 
   const copy = async (value: string): Promise<boolean> => {
+    if (disposed) {
+      return false;
+    }
+
+    const currentGeneration = ++generation;
+    const canCommit = () => !disposed && currentGeneration === generation;
     text(value);
 
     if (navigatorRef?.clipboard?.writeText) {
       try {
         await navigatorRef.clipboard.writeText(value);
-        copied(true);
-        resetCopiedLater();
+        if (canCommit()) {
+          copied(true);
+          resetCopiedLater();
+        }
         return true;
       } catch {
-        copied(false);
+        if (canCommit()) {
+          copied(false);
+        }
         return false;
       }
     }
 
     if (documentRef) {
       const ok = fallbackCopy(value, documentRef);
-      copied(ok);
-      if (ok) {
-        resetCopiedLater();
+      if (canCommit()) {
+        copied(ok);
+        if (ok) {
+          resetCopiedLater();
+        }
       }
       return ok;
     }
 
-    copied(false);
+    if (canCommit()) {
+      copied(false);
+    }
     return false;
   };
 
   tryOnDestroy(() => {
+    disposed = true;
+    generation += 1;
     if (timer) {
       clearTimeout(timer);
       timer = undefined;
