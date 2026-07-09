@@ -47,6 +47,8 @@ function clearRequestCache(cacheKey?: string): void;
 
 ## Notes
 
+- Services with required parameters must either provide `defaultParams` for automatic execution or
+  set `manual: true`; the TypeScript API rejects an unsafe parameterless automatic call.
 - `cacheKey` enables shared in-memory cache across hook instances.
 - `staleTime` controls when cached data is considered too old to apply.
 - `cacheTime` bounds how long a cache entry stays in the global cache; the default is five minutes.
