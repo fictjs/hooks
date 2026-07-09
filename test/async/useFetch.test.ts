@@ -78,6 +78,56 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('treats an external custom abort reason as an abort', async () => {
+    const controller = new AbortController();
+    const reason = new Error('stop');
+    const onError = vi.fn();
+    const mockFetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      });
+      return new Response('');
+    });
+
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false,
+        onError
+      })
+    );
+
+    const pending = state.execute({ signal: controller.signal });
+    controller.abort(reason);
+    await pending;
+
+    expect(state.aborted()).toBe(true);
+    expect(state.error()).toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('recognizes AbortError objects from another realm', async () => {
+    const foreignAbortError = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const onError = vi.fn();
+    const mockFetch = vi.fn(async () => {
+      throw foreignAbortError;
+    });
+
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false,
+        onError
+      })
+    );
+
+    await state.execute();
+
+    expect(state.aborted()).toBe(true);
+    expect(state.error()).toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('cleans merged abort signal listeners after settled fallback requests', async () => {
     const originalAnyDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
     Object.defineProperty(AbortSignal, 'any', {

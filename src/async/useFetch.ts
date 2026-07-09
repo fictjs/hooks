@@ -34,6 +34,15 @@ interface MergedAbortSignal {
   cleanup: () => void;
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 function mergeAbortSignals(...signals: Array<AbortSignal | null | undefined>): MergedAbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => signal != null);
   const empty = {
@@ -144,6 +153,7 @@ export function useFetch<T = unknown>(
       typeof AbortController !== 'undefined' ? new AbortController() : undefined;
     controller = currentController;
     let cleanupSignal = () => {};
+    let requestSignal: AbortSignal | undefined;
 
     try {
       const mergedSignal = mergeAbortSignals(
@@ -152,6 +162,7 @@ export function useFetch<T = unknown>(
         currentController?.signal
       );
       cleanupSignal = mergedSignal.cleanup;
+      requestSignal = mergedSignal.signal;
       const response = await fetcher(toValue(input as MaybeAccessor<RequestInfo | URL>), {
         ...options.init,
         ...init,
@@ -188,7 +199,7 @@ export function useFetch<T = unknown>(
         return data();
       }
 
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (requestSignal?.aborted || isAbortError(err)) {
         aborted(true);
         return data();
       }
