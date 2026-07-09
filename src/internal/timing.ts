@@ -66,6 +66,7 @@ export function createDebouncedFn<T extends Procedure>(
       if (trailing) {
         invoke();
       } else {
+        state.lastArgs = undefined;
         pending(false);
         clearTimers();
       }

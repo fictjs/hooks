@@ -1,4 +1,6 @@
 import { createRoot } from '@fictjs/runtime';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useDebounceFn } from '../../src/timing/useDebounceFn';
 
@@ -153,5 +155,15 @@ describe('useDebounceFn', () => {
     vi.advanceTimersByTime(100);
 
     expect(callback).toHaveBeenCalledTimes(0);
+  });
+
+  it('releases suppressed arguments when trailing is disabled', () => {
+    const fixture = resolve('test/fixtures/debounce-argument-release.mjs');
+
+    expect(() =>
+      execFileSync(process.execPath, ['--expose-gc', fixture], {
+        stdio: 'pipe'
+      })
+    ).not.toThrow();
   });
 });
