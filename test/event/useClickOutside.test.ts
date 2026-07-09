@@ -1,8 +1,12 @@
 import { createRoot } from '@fictjs/runtime';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useClickOutside } from '../../src/event/useClickOutside';
 
 describe('useClickOutside', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('triggers when clicking outside target', () => {
     const target = document.createElement('div');
     const outside = document.createElement('button');
@@ -116,5 +120,38 @@ describe('useClickOutside', () => {
     outside.dispatchEvent(new Event('click', { bubbles: true }));
 
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses constructors from the injected DOM realm', () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const realmWindow = iframe.contentWindow as Window & typeof globalThis;
+    const realmDocument = iframe.contentDocument!;
+    realmDocument.body.innerHTML = '<div id="target"></div><button id="outside"></button>';
+    const target = realmDocument.querySelector('#target')!;
+    const outside = realmDocument.querySelector('#outside')!;
+    const handler = vi.fn();
+
+    vi.stubGlobal('Node', undefined);
+    vi.stubGlobal('MouseEvent', undefined);
+    vi.stubGlobal('Event', undefined);
+
+    const { value: controls, dispose } = createRoot(() =>
+      useClickOutside(target, handler, {
+        window: realmWindow,
+        document: realmDocument
+      })
+    );
+
+    outside.dispatchEvent(new realmWindow.Event('pointerdown', { bubbles: true }));
+    outside.dispatchEvent(new realmWindow.Event('click', { bubbles: true }));
+    outside.dispatchEvent(new realmWindow.MouseEvent('click', { bubbles: true, detail: 0 }));
+    controls.trigger();
+
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(handler.mock.calls[2]![0]).toBeInstanceOf(realmWindow.Event);
+
+    dispose();
+    iframe.remove();
   });
 });

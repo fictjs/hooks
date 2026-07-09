@@ -23,21 +23,32 @@ export interface UseClickOutsideControls {
   trigger: (event?: Event) => void;
 }
 
+type WindowWithDomConstructors = Window & {
+  Event: typeof Event;
+  MouseEvent: typeof MouseEvent;
+  Node: typeof Node;
+};
+
 function getEventPath(event: Event): EventTarget[] {
   return typeof event.composedPath === 'function' ? event.composedPath() : [];
 }
 
-function isKeyboardClick(event: Event): boolean {
-  return event instanceof MouseEvent && event.detail === 0;
+function isKeyboardClick(event: Event, MouseEventCtor?: typeof MouseEvent): boolean {
+  return !!MouseEventCtor && event instanceof MouseEventCtor && event.detail === 0;
 }
 
-function isNodeInside(elements: Element[], node: Node, event: Event): boolean {
+function isNodeInside(
+  elements: Element[],
+  node: Node,
+  event: Event,
+  NodeCtor: typeof Node
+): boolean {
   const path = getEventPath(event);
   return elements.some(
     (element) =>
       element.contains(node) ||
       path.includes(element) ||
-      path.some((entry) => entry instanceof Node && element.contains(entry))
+      path.some((entry) => entry instanceof NodeCtor && element.contains(entry))
   );
 }
 
@@ -54,14 +65,18 @@ export function useClickOutside(
   const windowRef = options.window === undefined ? defaultWindow : options.window;
   const documentRef = options.document === undefined ? defaultDocument : options.document;
   const ignoreTargets = options.ignore ? toArray(options.ignore) : [];
+  const realmWindow = (windowRef ?? documentRef?.defaultView) as WindowWithDomConstructors | null;
+  const NodeCtor = realmWindow?.Node;
+  const MouseEventCtor = realmWindow?.MouseEvent;
 
   let pointerDownOutside = false;
 
   const isOutside = (event: Event) => {
-    const node = event.target as Node | null;
-    if (!node || !documentRef) {
+    const eventTarget = event.target;
+    if (!eventTarget || !documentRef || !NodeCtor || !(eventTarget instanceof NodeCtor)) {
       return false;
     }
+    const node = eventTarget as Node;
 
     const targetElements = resolveTargetList(target);
     if (targetElements.length === 0) {
@@ -76,7 +91,10 @@ export function useClickOutside(
       return Array.isArray(resolved) ? resolved : [resolved];
     });
 
-    if (isNodeInside(targetElements, node, event) || isNodeInside(ignoreElements, node, event)) {
+    if (
+      isNodeInside(targetElements, node, event, NodeCtor) ||
+      isNodeInside(ignoreElements, node, event, NodeCtor)
+    ) {
       return false;
     }
 
@@ -88,7 +106,7 @@ export function useClickOutside(
   };
 
   const onClick = (event: Event) => {
-    if ((pointerDownOutside || isKeyboardClick(event)) && isOutside(event)) {
+    if ((pointerDownOutside || isKeyboardClick(event, MouseEventCtor)) && isOutside(event)) {
       handler(event);
     }
     pointerDownOutside = false;
@@ -115,7 +133,8 @@ export function useClickOutside(
     },
     active,
     trigger(event) {
-      handler(event ?? new Event('click'));
+      const EventCtor = realmWindow?.Event ?? globalThis.Event;
+      handler(event ?? new EventCtor('click'));
     }
   };
 }
