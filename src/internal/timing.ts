@@ -1,7 +1,7 @@
 import { createSignal } from '@fictjs/runtime/advanced';
 import { tryOnDestroy } from './lifecycle';
 
-export type Procedure = (...args: unknown[]) => void;
+export type Procedure = (...args: never[]) => void;
 
 export interface ControlledFn<T extends Procedure> {
   run: (...args: Parameters<T>) => void;

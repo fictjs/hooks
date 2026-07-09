@@ -5,10 +5,12 @@ import {
   clearRequestCache,
   useAsyncState,
   useCounter,
+  useDebounceFn,
   useFetch,
   useLocalStorage,
   useRequest,
   useStorage,
+  useThrottleFn,
   useToggle,
   useVirtualList
 } from '@fictjs/hooks';
@@ -24,6 +26,16 @@ const _counterValue: Assert<Equal<CounterValue, number>> = true;
 const toggle = useToggle(false);
 type ToggleValue = ReturnType<typeof toggle.value>;
 const _toggleValue: Assert<Equal<ToggleValue, boolean>> = true;
+
+const debounced = useDebounceFn((value: string, count: number) => `${value}:${count}`, 100);
+debounced.run('value', 1);
+// @ts-expect-error preserves the wrapped callback's argument types
+debounced.run(1, 'value');
+
+const throttled = useThrottleFn((value: number) => value * 2, 100);
+throttled.run(1);
+// @ts-expect-error preserves the wrapped callback's argument types
+throttled.run('1');
 
 const storage = useStorage('demo-storage', { count: 1 });
 type StorageValue = ReturnType<typeof storage.value>;

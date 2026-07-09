@@ -7,8 +7,8 @@ Debounce a function call with `run/cancel/flush/pending` controls.
 ## API
 
 ```ts
-function useDebounceFn<T extends (...args: unknown[]) => void>(
-  fn: T,
+function useDebounceFn<Args extends unknown[]>(
+  fn: (...args: Args) => void,
   wait: number,
   options?: {
     leading?: boolean;
@@ -16,7 +16,7 @@ function useDebounceFn<T extends (...args: unknown[]) => void>(
     maxWait?: number;
   }
 ): {
-  run: (...args: Parameters<T>) => void;
+  run: (...args: Args) => void;
   cancel: () => void;
   flush: () => void;
   pending: () => boolean;

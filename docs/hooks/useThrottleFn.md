@@ -7,15 +7,15 @@ Throttle a function call with `run/cancel/flush/pending` controls.
 ## API
 
 ```ts
-function useThrottleFn<T extends (...args: unknown[]) => void>(
-  fn: T,
+function useThrottleFn<Args extends unknown[]>(
+  fn: (...args: Args) => void,
   wait: number,
   options?: {
     leading?: boolean;
     trailing?: boolean;
   }
 ): {
-  run: (...args: Parameters<T>) => void;
+  run: (...args: Args) => void;
   cancel: () => void;
   flush: () => void;
   pending: () => boolean;
