@@ -1,6 +1,7 @@
 import { defaultWindow } from '../internal/env';
 import {
   createStorageHook,
+  resolveStorageSafely,
   type UseStorageOptions,
   type UseStorageReturn
 } from '../internal/storage';
@@ -16,7 +17,8 @@ export function useSessionStorage<T>(
   options: UseStorageOptions<T> = {}
 ): UseStorageReturn<T> {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  return createStorageHook(windowRef?.sessionStorage, key, initial, {
+  const storage = resolveStorageSafely(() => windowRef?.sessionStorage, options.onError);
+  return createStorageHook(storage, key, initial, {
     ...options,
     window: windowRef
   });

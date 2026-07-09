@@ -74,4 +74,24 @@ describe('useSessionStorage', () => {
     const lastOnErrorCall = onError.mock.calls[onError.mock.calls.length - 1];
     expect((lastOnErrorCall?.[0] as Error).message).toBe('cannot write session');
   });
+
+  it('falls back to memory when the sessionStorage getter is blocked', () => {
+    const onError = vi.fn();
+    const windowRef = new EventTarget() as Window;
+    Object.defineProperty(windowRef, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('blocked', 'SecurityError');
+      }
+    });
+
+    const { value: state } = createRoot(() =>
+      useSessionStorage('blocked-session-storage', 'initial', { window: windowRef, onError })
+    );
+    state.set('next');
+
+    expect(state.value()).toBe('next');
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({ name: 'SecurityError' });
+  });
 });

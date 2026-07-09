@@ -20,6 +20,18 @@ export interface WritableStorageAccessor<T> {
   (): T;
 }
 
+export function resolveStorageSafely(
+  resolve: () => Storage | null | undefined,
+  onError?: (error: unknown) => void
+): Storage | undefined {
+  try {
+    return resolve() ?? undefined;
+  } catch (error) {
+    onError?.(error);
+    return undefined;
+  }
+}
+
 const syncEvent = 'fict-storage-sync';
 
 interface StorageSyncDetail {

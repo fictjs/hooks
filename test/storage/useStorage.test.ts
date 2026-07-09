@@ -121,6 +121,25 @@ describe('useStorage', () => {
     expect(localStorage.getItem(key)).toBeNull();
   });
 
+  it('falls back to memory when the default storage getter is blocked', () => {
+    const onError = vi.fn();
+    const windowRef = new EventTarget() as Window;
+    Object.defineProperty(windowRef, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('blocked', 'SecurityError');
+      }
+    });
+
+    const state = createRoot(() =>
+      useStorage('blocked-default-storage', 1, { window: windowRef, onError })
+    ).value;
+    state.set(2);
+
+    expect(state.value()).toBe(2);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
   it('syncs between hooks in same window', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;

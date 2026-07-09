@@ -89,4 +89,24 @@ describe('useLocalStorage', () => {
     const lastOnErrorCall = onError.mock.calls[onError.mock.calls.length - 1];
     expect((lastOnErrorCall?.[0] as Error).message).toBe('cannot write');
   });
+
+  it('falls back to memory when the localStorage getter is blocked', () => {
+    const onError = vi.fn();
+    const windowRef = new EventTarget() as Window;
+    Object.defineProperty(windowRef, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('blocked', 'SecurityError');
+      }
+    });
+
+    const { value: state } = createRoot(() =>
+      useLocalStorage('blocked-local-storage', 1, { window: windowRef, onError })
+    );
+    state.set(2);
+
+    expect(state.value()).toBe(2);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({ name: 'SecurityError' });
+  });
 });

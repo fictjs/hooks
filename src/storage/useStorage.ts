@@ -1,6 +1,7 @@
 import { defaultWindow } from '../internal/env';
 import {
   createStorageHook,
+  resolveStorageSafely,
   type Serializer,
   type UseStorageOptions,
   type UseStorageReturn
@@ -21,7 +22,10 @@ export function useStorage<T>(
   options: UseStorageHookOptions<T> = {}
 ): UseStorageReturn<T> {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  const storage = options.storage === undefined ? windowRef?.localStorage : options.storage;
+  const storage =
+    options.storage === undefined
+      ? resolveStorageSafely(() => windowRef?.localStorage, options.onError)
+      : options.storage;
 
   return createStorageHook(storage ?? undefined, key, initial, {
     window: windowRef,
