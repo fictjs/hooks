@@ -122,6 +122,24 @@ describe('useClickOutside', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('allows outside click handlers to prevent the default action', () => {
+    const target = document.createElement('div');
+    const outside = document.createElement('a');
+    document.body.appendChild(target);
+    document.body.appendChild(outside);
+    const handler = vi.fn((event: Event) => event.preventDefault());
+
+    createRoot(() => useClickOutside(target, handler));
+
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    const dispatched = outside.dispatchEvent(click);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(click.defaultPrevented).toBe(true);
+    expect(dispatched).toBe(false);
+  });
+
   it('uses constructors from the injected DOM realm', () => {
     const iframe = document.createElement('iframe');
     document.body.appendChild(iframe);

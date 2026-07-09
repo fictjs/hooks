@@ -117,8 +117,7 @@ export function useClickOutside(
     passive: true
   });
   const clickControls = useEventListener(windowRef, 'click', onClick, {
-    capture: options.capture ?? true,
-    passive: true
+    capture: options.capture ?? true
   });
   const active = createMemo(() => downControls.active() && clickControls.active());
 
