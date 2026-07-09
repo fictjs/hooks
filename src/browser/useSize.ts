@@ -121,6 +121,21 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     passive: true,
     immediate: false
   });
+  const scrollListener = useEventListener(
+    windowRef,
+    'scroll',
+    () => {
+      const nextTarget = resolveMaybeTarget(target);
+      if (nextTarget) {
+        applyPosition(nextTarget);
+      }
+    },
+    {
+      capture: true,
+      passive: true,
+      immediate: false
+    }
+  );
 
   const stopObserver = () => {
     if (!observer) {
@@ -134,6 +149,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     applyRect(nextTarget);
     if (windowRef) {
       resizeListener.start();
+      scrollListener.start();
     }
 
     const Observer = observerCtor;
@@ -173,6 +189,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       const nextTarget = target ? resolveMaybeTarget(target) : undefined;
       if (!nextTarget) {
         resizeListener.stop();
+        scrollListener.stop();
         return;
       }
 
@@ -189,6 +206,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     const nextTarget = target ? resolveMaybeTarget(target) : undefined;
     if (!active() || !nextTarget) {
       resizeListener.stop();
+      scrollListener.stop();
       if (active() && target) {
         scheduleDeferredTarget();
       }
@@ -196,6 +214,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
         cancelDeferredTarget();
         cancelDeferredTarget = () => {};
         resizeListener.stop();
+        scrollListener.stop();
         stopObserver();
       });
       return;
@@ -228,6 +247,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       cancelDeferredTarget();
       cancelDeferredTarget = () => {};
       resizeListener.stop();
+      scrollListener.stop();
       stopObserver();
     }
   };

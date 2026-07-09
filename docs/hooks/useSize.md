@@ -38,6 +38,8 @@ function useSize(
 ## Notes
 
 - Uses `ResizeObserver` when available and falls back to `window.resize` updates.
+- Position values are refreshed from captured window scroll events, including element scrolls
+  observed during the capture phase.
 - Width and height use the border box by default, matching the synchronous
   `getBoundingClientRect()` measurement. Pass `box` to request another observer box.
 - `ResizeObserver` is read from the provided/default `window`; Node/SSR globals are not used

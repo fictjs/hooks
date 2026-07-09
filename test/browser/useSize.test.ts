@@ -220,6 +220,23 @@ describe('useSize', () => {
     expect(state.height()).toBe(40);
   });
 
+  it('updates position when scrolling changes the target rect', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60, top: 100, left: 20 });
+    const { value: state } = createRoot(() => useSize(element));
+
+    expect(state.top()).toBe(100);
+    expect(state.y()).toBe(100);
+
+    mockRect(element, { width: 100, height: 60, top: -25, left: 20 });
+    window.dispatchEvent(new Event('scroll'));
+
+    expect(state.top()).toBe(-25);
+    expect(state.y()).toBe(-25);
+  });
+
   it('does not use global ResizeObserver when window is null', () => {
     globalThis.ResizeObserver = MockResizeObserver as never;
 
