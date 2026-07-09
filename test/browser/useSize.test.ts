@@ -68,7 +68,7 @@ describe('useSize', () => {
     const { value: state } = createRoot(() => useSize(element));
     const instance = MockResizeObserver.instances[0]!;
 
-    expect(instance.observe).toHaveBeenCalledWith(element, undefined);
+    expect(instance.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
     expect(state.width()).toBe(100);
     expect(state.height()).toBe(60);
     expect(state.top()).toBe(10);
@@ -90,7 +90,9 @@ describe('useSize', () => {
           toJSON() {
             return {};
           }
-        } as DOMRectReadOnly
+        } as DOMRectReadOnly,
+        contentBoxSize: [{ inlineSize: 100, blockSize: 52 }],
+        borderBoxSize: [{ inlineSize: 120, blockSize: 72 }]
       } as unknown as ResizeObserverEntry
     ]);
 
@@ -150,13 +152,13 @@ describe('useSize', () => {
     const { value: state } = createRoot(() => useSize(() => target()));
     const first = MockResizeObserver.instances[0]!;
 
-    expect(first.observe).toHaveBeenCalledWith(a, undefined);
+    expect(first.observe).toHaveBeenCalledWith(a, { box: 'border-box' });
     target(b);
     await Promise.resolve();
 
     const second = MockResizeObserver.instances[1]!;
     expect(first.disconnect).toHaveBeenCalledTimes(1);
-    expect(second.observe).toHaveBeenCalledWith(b, undefined);
+    expect(second.observe).toHaveBeenCalledWith(b, { box: 'border-box' });
     expect(state.width()).toBe(80);
     expect(state.height()).toBe(30);
   });
@@ -173,7 +175,7 @@ describe('useSize', () => {
     await Promise.resolve();
 
     const instance = MockResizeObserver.instances[0]!;
-    expect(instance.observe).toHaveBeenCalledWith(element, undefined);
+    expect(instance.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
     expect(state.width()).toBe(42);
     expect(state.height()).toBe(24);
 
@@ -198,7 +200,7 @@ describe('useSize', () => {
     await Promise.resolve();
     const second = MockResizeObserver.instances[1]!;
     expect(state.active()).toBe(true);
-    expect(second.observe).toHaveBeenCalledWith(element, undefined);
+    expect(second.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
   });
 
   it('falls back when ResizeObserver is unavailable', () => {

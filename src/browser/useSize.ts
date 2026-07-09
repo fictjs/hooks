@@ -42,7 +42,7 @@ function readRect(target: Element) {
   };
 }
 
-function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions | undefined) {
+function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions) {
   const sizeSource =
     box === 'border-box'
       ? entry.borderBoxSize
@@ -58,7 +58,7 @@ function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions |
     };
   }
 
-  if (!box || box === 'content-box') {
+  if (box === 'content-box') {
     return {
       width: entry.contentRect.width,
       height: entry.contentRect.height
@@ -75,6 +75,7 @@ function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions |
  */
 export function useSize(target: MaybeElement | null, options: UseSizeOptions = {}): UseSizeReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
+  const box = options.box ?? 'border-box';
   const observerCtor = (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)
     ?.ResizeObserver;
 
@@ -145,7 +146,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     observer = new Observer((entries: ResizeObserverEntry[]) => {
       const entry = entries[0];
       if (entry) {
-        const boxSize = readBoxSize(entry, options.box);
+        const boxSize = readBoxSize(entry, box);
         if (boxSize) {
           width(boxSize.width);
           height(boxSize.height);
@@ -158,7 +159,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       applyRect(nextTarget);
     });
 
-    observer.observe(nextTarget, options.box ? { box: options.box } : undefined);
+    observer.observe(nextTarget, { box });
   };
 
   const scheduleDeferredTarget = () => {
