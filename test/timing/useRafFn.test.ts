@@ -76,6 +76,24 @@ describe('useRafFn', () => {
     expect(callback).toHaveBeenCalledTimes(2);
   });
 
+  it('does not create duplicate loops when restarted inside a callback', () => {
+    const { windowRef, tick } = createMockWindow();
+    const callback = vi.fn(() => {
+      if (callback.mock.calls.length === 1) {
+        state.stop();
+        state.start();
+      }
+    });
+
+    const { value: state } = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    tick(1);
+    tick(2);
+    tick(3);
+
+    expect(callback).toHaveBeenCalledTimes(3);
+  });
+
   it('can start lazily', () => {
     const { windowRef, tick } = createMockWindow();
     const callback = vi.fn();
