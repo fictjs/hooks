@@ -196,7 +196,23 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     params(currentParams);
 
     try {
-      const result = await runWithRetry(currentParams, id);
+      let result: TData;
+      try {
+        result = await runWithRetry(currentParams, id);
+      } catch (err) {
+        if (id !== callId || err === REQUEST_CANCELED) {
+          return data();
+        }
+
+        finalError = err;
+        error(err);
+        options.onError?.(err, currentParams);
+        if (id === callId) {
+          schedulePolling(currentParams);
+        }
+        return data();
+      }
+
       finalData = result;
       if (id !== callId) {
         return data();
@@ -204,23 +220,14 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
       data(result);
       saveCache(result);
-      options.onSuccess?.(result, currentParams);
-      if (id === callId) {
-        schedulePolling(currentParams);
+      try {
+        options.onSuccess?.(result, currentParams);
+      } finally {
+        if (id === callId) {
+          schedulePolling(currentParams);
+        }
       }
       return result;
-    } catch (err) {
-      if (id !== callId || err === REQUEST_CANCELED) {
-        return data();
-      }
-
-      finalError = err;
-      error(err);
-      options.onError?.(err, currentParams);
-      if (id === callId) {
-        schedulePolling(currentParams);
-      }
-      return data();
     } finally {
       if (id === callId) {
         loading(false);

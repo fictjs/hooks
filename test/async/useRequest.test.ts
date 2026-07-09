@@ -198,6 +198,32 @@ describe('useRequest', () => {
     expect((state.error() as Error).message).toBe('boom');
   });
 
+  it('does not treat onSuccess exceptions as service failures', async () => {
+    const callbackError = new Error('callback failed');
+    const failure = vi.fn();
+    const done = vi.fn();
+    const service = vi.fn(async () => 10);
+
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        onSuccess() {
+          throw callbackError;
+        },
+        onError: failure,
+        onFinally: done
+      })
+    );
+
+    await expect(state.runAsync()).rejects.toBe(callbackError);
+
+    expect(state.data()).toBe(10);
+    expect(state.error()).toBeNull();
+    expect(state.loading()).toBe(false);
+    expect(failure).not.toHaveBeenCalled();
+    expect(done).toHaveBeenCalledWith([], 10, null);
+  });
+
   it('runs onFinally only for the latest concurrent request', async () => {
     let resolveFirst: ((value: number) => void) | undefined;
     const service = vi.fn((value: number) => {
