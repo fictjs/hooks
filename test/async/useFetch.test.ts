@@ -128,6 +128,76 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('does not let an older parse overwrite a newer request', async () => {
+    const parseResolvers = new Map<string, (value: string) => void>();
+    let responseId = 0;
+    const mockFetch = vi.fn(async () => new Response(String(++responseId)));
+    const parse = async (response: Response) => {
+      const id = await response.text();
+      return new Promise<string>((resolve) => {
+        parseResolvers.set(id, resolve);
+      });
+    };
+
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false,
+        parse
+      })
+    );
+
+    const first = state.execute();
+    while (!parseResolvers.has('1')) {
+      await Promise.resolve();
+    }
+    const second = state.execute();
+    while (!parseResolvers.has('2')) {
+      await Promise.resolve();
+    }
+
+    parseResolvers.get('2')!('new');
+    await second;
+    parseResolvers.get('1')!('stale');
+    await first;
+
+    expect(state.data()).toBe('new');
+  });
+
+  it('does not commit parse results after manual abort', async () => {
+    let resolveParse: ((value: string) => void) | undefined;
+    let parseStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      parseStarted = resolve;
+    });
+    const mockFetch = vi.fn(async () => new Response('response'));
+    const parse = vi.fn(async () => {
+      parseStarted?.();
+      return new Promise<string>((resolve) => {
+        resolveParse = resolve;
+      });
+    });
+
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false,
+        initialData: 'initial',
+        parse
+      })
+    );
+
+    const pending = state.execute();
+    await started;
+    state.abort();
+    resolveParse!('late');
+    await pending;
+
+    expect(state.data()).toBe('initial');
+    expect(state.aborted()).toBe(true);
+    expect(state.isLoading()).toBe(false);
+  });
+
   it('aborts active request on dispose', () => {
     let signal: AbortSignal | undefined;
     const mockFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {

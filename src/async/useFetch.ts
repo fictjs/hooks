@@ -115,21 +115,27 @@ export function useFetch<T = unknown>(
   const parse = options.parse ?? defaultParse<T>;
 
   let requestId = 0;
+  let activeRequestId: number | null = null;
   let controller: AbortController | undefined;
 
   const abort = () => {
-    if (controller) {
-      controller.abort();
-      controller = undefined;
-      aborted(true);
-      isLoading(false);
+    if (activeRequestId == null) {
+      return;
     }
+
+    requestId += 1;
+    activeRequestId = null;
+    const currentController = controller;
+    controller = undefined;
+    currentController?.abort();
+    aborted(true);
+    isLoading(false);
   };
 
   const execute = async (init?: RequestInit): Promise<T | null> => {
-    const id = ++requestId;
-
     abort();
+    const id = ++requestId;
+    activeRequestId = id;
     error(null);
     isLoading(true);
     aborted(false);
@@ -156,6 +162,11 @@ export function useFetch<T = unknown>(
         return data();
       }
 
+      if (mergedSignal.signal?.aborted) {
+        aborted(true);
+        return data();
+      }
+
       status(response.status);
 
       if (!response.ok) {
@@ -163,6 +174,13 @@ export function useFetch<T = unknown>(
       }
 
       const parsed = await parse(response);
+      if (id !== requestId) {
+        return data();
+      }
+      if (mergedSignal.signal?.aborted) {
+        aborted(true);
+        return data();
+      }
       data(parsed);
       return parsed;
     } catch (err) {
@@ -182,6 +200,9 @@ export function useFetch<T = unknown>(
       cleanupSignal();
       if (controller === currentController) {
         controller = undefined;
+      }
+      if (activeRequestId === id) {
+        activeRequestId = null;
       }
       if (id === requestId) {
         isLoading(false);
