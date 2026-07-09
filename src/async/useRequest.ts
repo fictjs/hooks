@@ -13,9 +13,7 @@ const REQUEST_CANCELED = Symbol('REQUEST_CANCELED');
 const DEFAULT_CACHE_TIME = 5 * 60 * 1000;
 const DEFAULT_CACHE_SIZE = 100;
 
-export interface UseRequestOptions<TData, TParams extends unknown[]> {
-  manual?: boolean;
-  defaultParams?: TParams;
+interface UseRequestBaseOptions<TData, TParams extends unknown[]> {
   retryCount?: number;
   retryInterval?: number;
   pollingInterval?: number;
@@ -29,6 +27,27 @@ export interface UseRequestOptions<TData, TParams extends unknown[]> {
   onFinally?: (params: TParams, data?: TData, error?: unknown) => void;
 }
 
+type UseRequestExecutionOptions<TParams extends unknown[]> = [] extends TParams
+  ? {
+      manual?: boolean;
+      defaultParams?: TParams;
+    }
+  :
+      | {
+          manual: true;
+          defaultParams?: TParams;
+        }
+      | {
+          manual?: false;
+          defaultParams: TParams;
+        };
+
+export type UseRequestOptions<TData, TParams extends unknown[]> = UseRequestBaseOptions<
+  TData,
+  TParams
+> &
+  UseRequestExecutionOptions<TParams>;
+
 export interface UseRequestReturn<TData, TParams extends unknown[]> {
   data: () => TData | undefined;
   error: () => unknown;
@@ -40,6 +59,10 @@ export interface UseRequestReturn<TData, TParams extends unknown[]> {
   refresh: () => Promise<TData | undefined>;
   mutate: (value: TData | ((prev: TData | undefined) => TData)) => void;
 }
+
+type UseRequestOptionsTuple<TData, TParams extends unknown[]> = [] extends TParams
+  ? [options?: UseRequestOptions<TData, TParams>]
+  : [options: UseRequestOptions<TData, TParams>];
 
 export function clearRequestCache(cacheKey?: string): void {
   if (cacheKey === undefined) {
@@ -78,8 +101,9 @@ function pruneCacheSize<T>(cache: Map<string, UseRequestCacheEntry<T>>, maxSize:
  */
 export function useRequest<TData, TParams extends unknown[] = []>(
   service: (...params: TParams) => Promise<TData>,
-  options: UseRequestOptions<TData, TParams> = {}
+  ...optionsTuple: UseRequestOptionsTuple<TData, NoInfer<TParams>>
 ): UseRequestReturn<TData, TParams> {
+  const options = (optionsTuple[0] ?? {}) as UseRequestOptions<TData, TParams>;
   const data = createSignal<TData | undefined>(undefined);
   const error = createSignal<unknown>(null);
   const loading = createSignal(false);

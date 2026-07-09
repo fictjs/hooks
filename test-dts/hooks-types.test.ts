@@ -64,6 +64,18 @@ useRequest(async (name: string) => ({ name }), {
 });
 clearRequestCache('typed-cache-provider');
 
+useRequest(async (name: string) => name, {
+  defaultParams: ['fict']
+});
+useRequest(async () => 'ready');
+useRequest(async (name?: string) => name ?? 'ready');
+// @ts-expect-error required service parameters need manual mode or defaultParams
+useRequest(async (name: string) => name);
+// @ts-expect-error explicitly automatic requests with required parameters need defaultParams
+useRequest(async (name: string) => name, { manual: false });
+// @ts-expect-error implicit automatic requests with required parameters need defaultParams
+useRequest(async (name: string) => name, {});
+
 const fetched = useFetch<{ ok: boolean }>('https://example.com', { immediate: false });
 type FetchData = ReturnType<typeof fetched.data>;
 const _fetchData: Assert<Equal<FetchData, { ok: boolean } | null>> = true;
