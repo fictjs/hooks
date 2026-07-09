@@ -116,6 +116,23 @@ describe('useFullscreen', () => {
     expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
   });
 
+  it('does not exit another element fullscreen on dispose', async () => {
+    const { documentMock, main, other } = createFullscreenMock();
+    const { dispose } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    await other.requestFullscreen();
+    dispose();
+
+    expect(documentMock.fullscreenElement).toBe(other);
+    expect(documentMock.exitFullscreen).not.toHaveBeenCalled();
+  });
+
   it('returns unsupported state without document', async () => {
     const { value: state } = createRoot(() =>
       useFullscreen({

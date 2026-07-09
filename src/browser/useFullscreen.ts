@@ -196,7 +196,13 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
 
   if (options.autoExit) {
     tryOnDestroy(() => {
-      void exit();
+      if (!documentRef) {
+        return;
+      }
+      const target = resolveTargetElement(options, documentRef);
+      if (target && getFullscreenElement(documentRef) === target) {
+        void exit();
+      }
     });
   }
 
