@@ -421,4 +421,33 @@ describe('useWebSocket', () => {
     dispose();
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
+
+  it('does not reconnect or call user callbacks after dispose when close throws', () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    const onError = vi.fn();
+    const { value: state, dispose } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        onClose,
+        onError
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    dispose();
+    socket.serverClose();
+    vi.runAllTimers();
+
+    expect(state.status()).toBe('CLOSED');
+    expect(state.send('after-dispose')).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
 });

@@ -117,6 +117,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempts = 0;
   let cleanupSocket = () => {};
+  let destroyed = false;
 
   const reportError = (nextError: unknown) => {
     error(nextError);
@@ -137,7 +138,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const scheduleReconnect = () => {
-    if (!reconnectOptions) {
+    if (destroyed || !reconnectOptions) {
       return;
     }
 
@@ -185,6 +186,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const open = (): boolean => {
+    if (destroyed) {
+      return false;
+    }
+
     const resolvedUrl = toValue(url);
     if (!webSocketCtor) {
       isSupported(false);
@@ -235,7 +240,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
 
     const onOpen = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
       status('OPEN');
@@ -244,7 +249,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     };
 
     const onMessage = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
       const messageEvent = event as MessageEvent;
@@ -258,14 +263,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     };
 
     const onError = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
       reportError(event);
     };
 
     const onClose = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
 
@@ -297,6 +302,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const close = (code?: number, reason?: string) => {
+    if (destroyed) {
+      return;
+    }
+
     const previousManuallyClosed = manuallyClosed;
     const previousReconnectAttempts = reconnectAttempts;
     const previousReconnectCount = reconnectCount();
@@ -323,6 +332,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const reconnect = () => {
+    if (destroyed) {
+      return false;
+    }
+
     stopReconnectTimer();
 
     if (socket) {
@@ -337,6 +350,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const send = (payload: TOutgoing): boolean => {
+    if (destroyed) {
+      return false;
+    }
+
     const currentSocket = socket;
     if (!currentSocket || currentSocket.readyState !== currentSocket.OPEN) {
       return false;
@@ -367,8 +384,22 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   });
 
   tryOnDestroy(() => {
+    destroyed = true;
     stopReconnectTimer();
-    close();
+    manuallyClosed = true;
+    resetReconnectAttempts();
+
+    const currentSocket = socket;
+    socket = null;
+    socketUrlKey = null;
+    cleanupSocket();
+    status('CLOSED');
+
+    try {
+      currentSocket?.close();
+    } catch {
+      // Disposal is terminal: do not restore ownership or invoke user callbacks.
+    }
   });
 
   return {
