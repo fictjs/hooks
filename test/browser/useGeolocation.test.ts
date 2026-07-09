@@ -11,6 +11,10 @@ class MockGeolocation {
     ): number => {
       this.lastSuccess = success;
       this.lastError = error;
+      this.successCallbacks.push(success);
+      if (error) {
+        this.errorCallbacks.push(error);
+      }
       this.lastOptions = options;
       const nextId = ++this.idSeed;
       this.activeIds.add(nextId);
@@ -26,6 +30,8 @@ class MockGeolocation {
   private activeIds = new Set<number>();
   private lastSuccess?: PositionCallback;
   private lastError?: PositionErrorCallback;
+  successCallbacks: PositionCallback[] = [];
+  errorCallbacks: PositionErrorCallback[] = [];
   lastOptions?: PositionOptions;
 
   emitSuccess(partial?: Partial<GeolocationCoordinates>, timestamp = Date.now()) {
@@ -111,6 +117,67 @@ describe('useGeolocation', () => {
     expect(geolocation.watchPosition).toHaveBeenCalledTimes(2);
   });
 
+  it('ignores queued callbacks from paused and replaced watchers', () => {
+    const geolocation = new MockGeolocation();
+    const navigatorRef = { geolocation } as unknown as Navigator;
+
+    const { value: state } = createRoot(() =>
+      useGeolocation({
+        navigator: navigatorRef as never
+      })
+    );
+    const firstSuccess = geolocation.successCallbacks[0]!;
+    const firstError = geolocation.errorCallbacks[0]!;
+
+    state.pause();
+    geolocation.emitSuccess({ latitude: 1 }, 100);
+    firstSuccess({
+      coords: {
+        accuracy: 1,
+        latitude: 2,
+        longitude: 3,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+        toJSON: () => ({})
+      },
+      timestamp: 200,
+      toJSON: () => ({})
+    });
+    firstError({
+      code: 1,
+      message: 'stale',
+      PERMISSION_DENIED: 1,
+      POSITION_UNAVAILABLE: 2,
+      TIMEOUT: 3
+    });
+
+    expect(state.locatedAt()).toBeNull();
+    expect(state.error()).toBeNull();
+
+    state.resume();
+    geolocation.emitSuccess({ latitude: 30 }, 300);
+    expect(state.coords().latitude).toBe(30);
+
+    firstSuccess({
+      coords: {
+        accuracy: 1,
+        latitude: 4,
+        longitude: 5,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+        toJSON: () => ({})
+      },
+      timestamp: 400,
+      toJSON: () => ({})
+    });
+    expect(state.coords().latitude).toBe(30);
+    expect(state.locatedAt()).toBe(300);
+  });
+
   it('captures geolocation errors', () => {
     const geolocation = new MockGeolocation();
     const navigatorRef = { geolocation } as unknown as Navigator;
@@ -153,6 +220,25 @@ describe('useGeolocation', () => {
 
     dispose();
     expect(geolocation.clearWatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores queued watcher callbacks after dispose', () => {
+    const geolocation = new MockGeolocation();
+    const navigatorRef = { geolocation } as unknown as Navigator;
+
+    const { value: state, dispose } = createRoot(() =>
+      useGeolocation({
+        navigator: navigatorRef as never
+      })
+    );
+
+    dispose();
+    geolocation.emitSuccess({ latitude: 99 }, 999);
+    geolocation.emitError(2, 'late');
+
+    expect(state.coords().latitude).toBe(Number.POSITIVE_INFINITY);
+    expect(state.locatedAt()).toBeNull();
+    expect(state.error()).toBeNull();
   });
 
   it('returns unsupported state when geolocation api is missing', () => {

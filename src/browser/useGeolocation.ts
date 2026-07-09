@@ -69,6 +69,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
   const active = createSignal(false);
 
   let watchId: number | null = null;
+  let generation = 0;
 
   const resume = () => {
     if (!geolocationRef || active()) {
@@ -78,8 +79,12 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
       return;
     }
 
+    const currentGeneration = ++generation;
     watchId = geolocationRef.watchPosition(
       (position) => {
+        if (currentGeneration !== generation) {
+          return;
+        }
         coords({
           accuracy: position.coords.accuracy,
           latitude: position.coords.latitude,
@@ -93,6 +98,9 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
         error(null);
       },
       (nextError) => {
+        if (currentGeneration !== generation) {
+          return;
+        }
         error(nextError);
       },
       {
@@ -106,6 +114,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
   };
 
   const pause = () => {
+    generation += 1;
     if (!geolocationRef || watchId == null) {
       active(false);
       return;
