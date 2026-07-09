@@ -194,6 +194,8 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       onCleanup(() => {
         cancelDeferredTarget();
         cancelDeferredTarget = () => {};
+        resizeListener.stop();
+        stopObserver();
       });
       return;
     }

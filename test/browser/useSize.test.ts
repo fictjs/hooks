@@ -168,7 +168,7 @@ describe('useSize', () => {
     mockRect(element, { width: 42, height: 24 });
     const ref = { current: null as Element | null };
 
-    const { value: state } = createRoot(() => useSize(ref));
+    const { value: state, dispose } = createRoot(() => useSize(ref));
     ref.current = element;
     await Promise.resolve();
 
@@ -176,6 +176,9 @@ describe('useSize', () => {
     expect(instance.observe).toHaveBeenCalledWith(element, undefined);
     expect(state.width()).toBe(42);
     expect(state.height()).toBe(24);
+
+    dispose();
+    expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('supports stop and start controls', async () => {
