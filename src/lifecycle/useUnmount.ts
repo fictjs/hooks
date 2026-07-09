@@ -1,7 +1,6 @@
-import type { Cleanup } from '@fictjs/runtime';
 import { tryOnDestroy } from '../internal/lifecycle';
 
-export type UnmountCallback = () => void | Cleanup;
+export type UnmountCallback = () => void | (() => void);
 
 /**
  * Register cleanup logic for root disposal.

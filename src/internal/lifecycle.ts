@@ -1,6 +1,6 @@
-import { onCleanup, type Cleanup } from '@fictjs/runtime';
+import { onCleanup } from '@fictjs/runtime';
 
-export type LifecycleCleanup = () => void | Cleanup;
+export type LifecycleCleanup = () => void | (() => void);
 
 export function tryOnDestroy(callback: LifecycleCleanup): void {
   onCleanup(() => {

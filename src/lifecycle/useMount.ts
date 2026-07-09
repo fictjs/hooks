@@ -1,6 +1,6 @@
-import { onMount, type Cleanup } from '@fictjs/runtime';
+import { onMount } from '@fictjs/runtime';
 
-export type MountCallback = () => void | Cleanup;
+export type MountCallback = () => void | (() => void);
 
 /**
  * Register a callback that runs after the current root mounts.
