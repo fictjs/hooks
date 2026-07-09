@@ -69,8 +69,8 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       copied(false);
       return;
     }
-    if (timer) {
-      clearTimeout(timer);
+    if (timer !== undefined) {
+      windowRef.clearTimeout(timer);
     }
     timer = windowRef.setTimeout(() => {
       copied(false);
@@ -123,8 +123,8 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
   tryOnDestroy(() => {
     disposed = true;
     generation += 1;
-    if (timer) {
-      clearTimeout(timer);
+    if (timer !== undefined && windowRef) {
+      windowRef.clearTimeout(timer);
       timer = undefined;
     }
   });

@@ -116,4 +116,30 @@ describe('useClipboard', () => {
     expect(root.value.copied()).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('creates and clears copied timers in the injected window realm', async () => {
+    const setTimeoutRef = vi.fn(() => 42);
+    const clearTimeoutRef = vi.fn();
+    const windowRef = {
+      setTimeout: setTimeoutRef,
+      clearTimeout: clearTimeoutRef
+    } as unknown as Window;
+    const writeText = vi.fn(async () => {});
+
+    const root = createRoot(() =>
+      useClipboard({ navigator: { clipboard: { writeText } }, window: windowRef, document })
+    );
+
+    await root.value.copy('first');
+    await root.value.copy('second');
+
+    expect(setTimeoutRef).toHaveBeenCalledTimes(2);
+    expect(clearTimeoutRef).toHaveBeenCalledTimes(1);
+    expect(clearTimeoutRef).toHaveBeenLastCalledWith(42);
+
+    root.dispose();
+
+    expect(clearTimeoutRef).toHaveBeenCalledTimes(2);
+    expect(clearTimeoutRef).toHaveBeenLastCalledWith(42);
+  });
 });
