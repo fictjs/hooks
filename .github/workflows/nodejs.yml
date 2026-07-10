@@ -31,6 +31,7 @@ jobs:
       - name: Verify
         run: |
           pnpm lint
+          pnpm run format:check
           pnpm typecheck
           pnpm test:types
           pnpm test:types:ts53

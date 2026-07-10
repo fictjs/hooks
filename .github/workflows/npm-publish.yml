@@ -38,6 +38,7 @@ jobs:
             exit 1
           fi
       - run: pnpm lint
+      - run: pnpm run format:check
       - run: pnpm typecheck
       - run: pnpm test:types
       - run: pnpm test:types:ts53
