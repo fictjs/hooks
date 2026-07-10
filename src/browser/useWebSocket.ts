@@ -309,6 +309,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       socketUrlKey = null;
       cleanupSocket();
       status('CLOSED');
+      if (destroyed || socket !== null) {
+        return;
+      }
       try {
         options.onClose?.(event as CloseEvent);
       } catch (nextError) {

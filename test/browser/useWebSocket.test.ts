@@ -548,6 +548,46 @@ describe('useWebSocket', () => {
     expect(state.status()).toBe('CLOSED');
   });
 
+  it('does not call onClose after the status signal update disposes the owner', () => {
+    const onClose = vi.fn();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 'CLOSED') {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false,
+          onClose
+        })
+      );
+      dispose = root.dispose;
+      root.value.open();
+
+      MockWebSocket.instances[0]!.serverClose();
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(root.value.status()).toBe('CLOSED');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('keeps ownership of the socket when close throws', () => {
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {
