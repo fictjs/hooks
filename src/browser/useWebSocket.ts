@@ -225,16 +225,22 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const closeSocketForReplacement = (currentSocket: WebSocketLike): boolean => {
+    const replacementOperation = operationEpoch;
     const previousManuallyClosed = manuallyClosed;
     manuallyClosed = true;
 
     try {
       currentSocket.close();
     } catch (nextError) {
-      manuallyClosed = previousManuallyClosed;
-      if (socket === currentSocket) {
-        status(toStatus(currentSocket.readyState, currentSocket));
+      if (
+        destroyed ||
+        replacementOperation !== operationEpoch ||
+        socket !== currentSocket
+      ) {
+        return hasOwnedSocket();
       }
+      manuallyClosed = previousManuallyClosed;
+      status(toStatus(currentSocket.readyState, currentSocket));
       reportError(nextError);
       return false;
     }

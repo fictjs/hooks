@@ -1248,6 +1248,34 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(2);
   });
 
+  it('accepts replacement ownership when an old reconnect close throws', () => {
+    const closeError = new Error('old close failed after replacement');
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false
+      })
+    );
+    root.value.open();
+    const oldSocket = MockWebSocket.instances[0]!;
+    oldSocket.open();
+    oldSocket.close.mockImplementationOnce(() => {
+      oldSocket.readyState = MockWebSocket.CLOSED;
+      root.value.open();
+      throw closeError;
+    });
+
+    expect(root.value.reconnect()).toBe(true);
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(root.value.status()).toBe('CONNECTING');
+    expect(root.value.error()).toBeNull();
+    MockWebSocket.instances[1]!.open();
+    expect(root.value.status()).toBe('OPEN');
+    root.dispose();
+    expect(MockWebSocket.instances[1]!.close).toHaveBeenCalledOnce();
+  });
+
   it('cleans stale socket listeners when opening during closing', () => {
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {
