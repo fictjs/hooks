@@ -2,6 +2,7 @@ import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { deferTargetResolution, resolveMaybeTarget, type MaybeElement } from '../internal/target';
 
 export interface UseSizeOptions {
@@ -108,6 +109,8 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
 
   let observer: ResizeObserver | null = null;
   let cancelDeferredTarget = () => {};
+  let observerGeneration = 0;
+  let disposed = false;
 
   const applyRect = (nextTarget: Element) => {
     const rect = readRect(nextTarget);
@@ -159,8 +162,10 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     if (!observer) {
       return;
     }
-    observer.disconnect();
+    const currentObserver = observer;
     observer = null;
+    observerGeneration += 1;
+    currentObserver.disconnect();
   };
 
   const startObserving = (nextTarget: Element) => {
@@ -177,7 +182,11 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     }
 
     isSupported(true);
+    const generation = ++observerGeneration;
     observer = new Observer((entries: ResizeObserverEntry[]) => {
+      if (disposed || !active() || generation !== observerGeneration) {
+        return;
+      }
       const entry = entries[0];
       if (entry) {
         const boxSize = readBoxSize(entry, box, nextTarget, windowRef);
@@ -248,6 +257,11 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       scrollListener.stop();
       stopObserver();
     });
+  });
+
+  tryOnDestroy(() => {
+    disposed = true;
+    observerGeneration += 1;
   });
 
   return {

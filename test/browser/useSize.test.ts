@@ -187,6 +187,51 @@ describe('useSize', () => {
     expect(state.height()).toBe(30);
   });
 
+  it('ignores callbacks from refreshed and disposed observers', async () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const a = document.createElement('div');
+    const b = document.createElement('div');
+    mockRect(a, { width: 40, height: 20 });
+    mockRect(b, { width: 80, height: 30 });
+
+    const target = createSignal<Element>(a);
+    const root = createRoot(() => useSize(() => target()));
+    const first = MockResizeObserver.instances[0]!;
+
+    target(b);
+    await Promise.resolve();
+    const second = MockResizeObserver.instances[1]!;
+
+    first.trigger([
+      {
+        target: a,
+        borderBoxSize: [{ inlineSize: 400, blockSize: 200 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+    expect(root.value.width()).toBe(80);
+    expect(root.value.height()).toBe(30);
+
+    second.trigger([
+      {
+        target: b,
+        borderBoxSize: [{ inlineSize: 90, blockSize: 45 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+    expect(root.value.width()).toBe(90);
+    expect(root.value.height()).toBe(45);
+
+    root.dispose();
+    second.trigger([
+      {
+        target: b,
+        borderBoxSize: [{ inlineSize: 120, blockSize: 60 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+    expect(root.value.width()).toBe(90);
+    expect(root.value.height()).toBe(45);
+  });
+
   it('observes ref-like target after it is assigned', async () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
 
