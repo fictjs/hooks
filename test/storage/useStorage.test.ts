@@ -275,6 +275,68 @@ describe('useStorage', () => {
     expect(second.value()).toBe(10);
   });
 
+  it('rolls back both window listeners when setup fails', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('setup-transaction', '1');
+    const windowRef = new EventTarget() as Window;
+    const addListener = windowRef.addEventListener.bind(windowRef);
+    const setupError = new Error('sync listener setup failed');
+    vi.spyOn(windowRef, 'addEventListener').mockImplementation((...args) => {
+      addListener(...args);
+      if (args[0] === 'fict-storage-sync') {
+        throw setupError;
+      }
+    });
+    const read = vi.fn((raw: string) => Number(raw));
+
+    expect(() =>
+      createRoot(() =>
+        useStorage('setup-transaction', 0, {
+          storage,
+          window: windowRef,
+          serializer: { read, write: String }
+        })
+      )
+    ).toThrow(setupError);
+
+    windowRef.dispatchEvent(
+      new CustomEvent('fict-storage-sync', {
+        detail: { key: 'setup-transaction', value: '1', storage }
+      })
+    );
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it('continues listener cleanup and invalidates listeners after a removal failure', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+    const removeListener = windowRef.removeEventListener.bind(windowRef);
+    const removedTypes: string[] = [];
+    const cleanupError = new Error('storage listener cleanup failed');
+    vi.spyOn(windowRef, 'removeEventListener').mockImplementation((...args) => {
+      removedTypes.push(args[0]);
+      if (args[0] === 'storage') {
+        throw cleanupError;
+      }
+      removeListener(...args);
+    });
+    const root = createRoot(() =>
+      useStorage('cleanup-transaction', 1, { storage, window: windowRef })
+    );
+
+    expect(() => root.dispose()).toThrow(cleanupError);
+    expect(removedTypes).toEqual(['storage', 'fict-storage-sync']);
+
+    const storageEvent = new Event('storage');
+    Object.defineProperties(storageEvent, {
+      key: { value: 'cleanup-transaction' },
+      newValue: { value: '5' },
+      storageArea: { value: storage }
+    });
+    windowRef.dispatchEvent(storageEvent);
+    expect(root.value.value()).toBe(1);
+  });
+
   it('handles serializer errors via onError', () => {
     const storage = new MemoryStorage();
     const onError = vi.fn();

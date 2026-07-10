@@ -303,6 +303,9 @@ export function createStorageHook<T>(
 
   if (windowRef && storage && listenToStorageChanges) {
     const storageListener = (event: StorageEvent) => {
+      if (!listening) {
+        return;
+      }
       if (event.storageArea !== storage || (event.key !== key && event.key !== null)) {
         return;
       }
@@ -310,6 +313,9 @@ export function createStorageHook<T>(
     };
 
     const customListener = (event: Event) => {
+      if (!listening) {
+        return;
+      }
       const custom = event as CustomEvent<StorageSyncDetail>;
       if (custom.detail?.storage !== storage || custom.detail.key !== key) {
         return;
@@ -317,13 +323,74 @@ export function createStorageHook<T>(
       syncFromStorage();
     };
 
-    windowRef.addEventListener('storage', storageListener);
-    windowRef.addEventListener(syncEvent, customListener);
+    let listening = true;
+    let disposed = false;
+    let storageRegistered = false;
+    let syncRegistered = false;
+
+    const cleanupListeners = () => {
+      listening = false;
+      const removeStorage = storageRegistered;
+      const removeSync = syncRegistered;
+      storageRegistered = false;
+      syncRegistered = false;
+
+      let cleanupFailed = false;
+      let cleanupError: unknown;
+      if (removeStorage) {
+        try {
+          windowRef.removeEventListener('storage', storageListener);
+        } catch (error) {
+          cleanupFailed = true;
+          cleanupError = error;
+        }
+      }
+      if (removeSync) {
+        try {
+          windowRef.removeEventListener(syncEvent, customListener);
+        } catch (error) {
+          if (!cleanupFailed) {
+            cleanupFailed = true;
+            cleanupError = error;
+          }
+        }
+      }
+      if (cleanupFailed) {
+        throw cleanupError;
+      }
+    };
 
     tryOnDestroy(() => {
-      windowRef.removeEventListener('storage', storageListener);
-      windowRef.removeEventListener(syncEvent, customListener);
+      disposed = true;
+      cleanupListeners();
     });
+
+    try {
+      storageRegistered = true;
+      windowRef.addEventListener('storage', storageListener);
+      storageRegistered = true;
+
+      if (!disposed) {
+        syncRegistered = true;
+        windowRef.addEventListener(syncEvent, customListener);
+        syncRegistered = true;
+      }
+
+      if (disposed) {
+        try {
+          cleanupListeners();
+        } catch {
+          // Owner disposal already completed; cleanup remains best-effort.
+        }
+      }
+    } catch (error) {
+      try {
+        cleanupListeners();
+      } catch {
+        // Preserve the listener setup failure after best-effort rollback.
+      }
+      throw error;
+    }
   }
 
   const value = function value(next?: T | ((prev: T) => T)) {
