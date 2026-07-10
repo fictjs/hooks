@@ -356,37 +356,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
     socket = currentSocket;
     socketUrlKey = nextUrlKey;
-    let initialStatus: WebSocketStatus;
-    try {
-      initialStatus = toStatus(currentSocket.readyState, currentSocket);
-    } catch (initialStateError) {
-      if (destroyed || currentOperation !== operationEpoch || socket !== currentSocket) {
-        return hasOwnedSocket();
-      }
-      socket = null;
-      socketUrlKey = null;
-      cleanupSocket = () => {};
-      try {
-        currentSocket.close();
-      } catch {
-        // Preserve the initial state failure after best-effort physical rollback.
-      }
-      if (destroyed || currentOperation !== operationEpoch || socket !== null) {
-        return hasOwnedSocket();
-      }
-      reportError(initialStateError);
-      if (destroyed || currentOperation !== operationEpoch || socket !== null) {
-        return hasOwnedSocket();
-      }
-      status('CLOSED');
-      scheduleReconnect();
-      return false;
-    }
-    status(initialStatus);
     const ownsSocketSetup = () => !destroyed && !manuallyClosed && socket === currentSocket;
-    if (!ownsSocketSetup()) {
-      return hasOwnedSocket();
-    }
 
     const onOpen = (event: Event) => {
       if (destroyed || socket !== currentSocket) {
@@ -460,61 +430,6 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     };
 
     const registrations: Array<{ type: string; listener: EventListener }> = [];
-    const removeRegistrations = () => {
-      for (const registration of registrations) {
-        try {
-          currentSocket.removeEventListener(registration.type, registration.listener);
-        } catch {
-          // Setup rollback is best-effort and must preserve the triggering operation.
-        }
-      }
-    };
-    const abandonInvalidSetup = () => {
-      removeRegistrations();
-      return hasOwnedSocket();
-    };
-
-    try {
-      const binaryType = options.binaryType;
-      if (!ownsSocketSetup()) {
-        return abandonInvalidSetup();
-      }
-      if (binaryType) {
-        currentSocket.binaryType = binaryType;
-        if (!ownsSocketSetup()) {
-          return abandonInvalidSetup();
-        }
-      }
-
-      const listeners: Array<{ type: string; listener: EventListener }> = [
-        { type: 'open', listener: onOpen as EventListener },
-        { type: 'message', listener: onMessage as EventListener },
-        { type: 'error', listener: onError as EventListener },
-        { type: 'close', listener: onClose as EventListener }
-      ];
-      for (const registration of listeners) {
-        registrations.push(registration);
-        currentSocket.addEventListener(registration.type, registration.listener);
-        if (!ownsSocketSetup()) {
-          return abandonInvalidSetup();
-        }
-      }
-    } catch (setupError) {
-      removeRegistrations();
-      if (socket === currentSocket) {
-        socket = null;
-        socketUrlKey = null;
-        cleanupSocket = () => {};
-        status('CLOSED');
-        try {
-          currentSocket.close();
-        } catch {
-          // Preserve the setup failure after best-effort socket rollback.
-        }
-      }
-      throw setupError;
-    }
-
     let cleaned = false;
     const cleanupCurrentSocket = () => {
       if (cleaned) {
@@ -532,7 +447,103 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         }
       }
     };
-    cleanupSocket = cleanupCurrentSocket;
+    const abandonInvalidSetup = () => {
+      cleanupCurrentSocket();
+      return hasOwnedSocket();
+    };
+    const rollbackSetupFailure = () => {
+      cleanupCurrentSocket();
+      if (socket === currentSocket) {
+        socket = null;
+        socketUrlKey = null;
+        status('CLOSED');
+        try {
+          currentSocket.close();
+        } catch {
+          // Preserve the setup failure after best-effort socket rollback.
+        }
+      }
+    };
+
+    try {
+      const binaryType = options.binaryType;
+      if (!ownsSocketSetup()) {
+        return abandonInvalidSetup();
+      }
+      if (binaryType) {
+        currentSocket.binaryType = binaryType;
+        if (!ownsSocketSetup()) {
+          return abandonInvalidSetup();
+        }
+      }
+
+      const closeRegistration = { type: 'close', listener: onClose as EventListener };
+      registrations.push(closeRegistration);
+      currentSocket.addEventListener(closeRegistration.type, closeRegistration.listener);
+      if (!ownsSocketSetup()) {
+        return abandonInvalidSetup();
+      }
+      cleanupSocket = cleanupCurrentSocket;
+    } catch (setupError) {
+      rollbackSetupFailure();
+      throw setupError;
+    }
+
+    let initialStatus: WebSocketStatus;
+    try {
+      const initialReadyState = currentSocket.readyState;
+      if (!ownsSocketSetup()) {
+        return hasOwnedSocket();
+      }
+      initialStatus = toStatus(initialReadyState, currentSocket);
+    } catch (initialStateError) {
+      if (destroyed || currentOperation !== operationEpoch || socket !== currentSocket) {
+        return hasOwnedSocket();
+      }
+      socket = null;
+      socketUrlKey = null;
+      cleanupCurrentSocket();
+      try {
+        currentSocket.close();
+      } catch {
+        // Preserve the initial state failure after best-effort physical rollback.
+      }
+      if (destroyed || currentOperation !== operationEpoch || socket !== null) {
+        return hasOwnedSocket();
+      }
+      reportError(initialStateError);
+      if (destroyed || currentOperation !== operationEpoch || socket !== null) {
+        return hasOwnedSocket();
+      }
+      status('CLOSED');
+      scheduleReconnect();
+      return false;
+    }
+    if (!ownsSocketSetup()) {
+      return hasOwnedSocket();
+    }
+    status(initialStatus);
+    if (!ownsSocketSetup()) {
+      return hasOwnedSocket();
+    }
+
+    try {
+      const listeners: Array<{ type: string; listener: EventListener }> = [
+        { type: 'open', listener: onOpen as EventListener },
+        { type: 'message', listener: onMessage as EventListener },
+        { type: 'error', listener: onError as EventListener }
+      ];
+      for (const registration of listeners) {
+        registrations.push(registration);
+        currentSocket.addEventListener(registration.type, registration.listener);
+        if (!ownsSocketSetup()) {
+          return abandonInvalidSetup();
+        }
+      }
+    } catch (setupError) {
+      rollbackSetupFailure();
+      throw setupError;
+    }
 
     return true;
   };

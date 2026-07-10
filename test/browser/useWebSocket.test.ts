@@ -578,6 +578,96 @@ describe('useWebSocket', () => {
     }
   );
 
+  it.each(['readyState', 'CONNECTING', 'status'] as const)(
+    'keeps close ownership when initial %s resolution closes the socket',
+    (trigger) => {
+      let closeDuringSetup = () => {};
+      let armed = true;
+      const onClose = vi.fn();
+      const globalWithHook = globalThis as typeof globalThis & {
+        __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+      };
+      const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+        registerSignal: vi.fn(),
+        updateSignal: (_id, value) => {
+          if (trigger === 'status' && armed && value === 'CONNECTING') {
+            armed = false;
+            closeDuringSetup();
+          }
+        },
+        registerComputed: vi.fn(),
+        updateComputed: vi.fn(),
+        registerEffect: vi.fn(),
+        effectRun: vi.fn()
+      };
+
+      try {
+        const ConfiguringWebSocket = function ConfiguringWebSocket(
+          url: string | URL,
+          protocols?: string | string[]
+        ) {
+          const currentSocket = new MockWebSocket(url, protocols);
+          vi.spyOn(currentSocket, 'addEventListener');
+          vi.spyOn(currentSocket, 'removeEventListener');
+          let readyState = currentSocket.readyState;
+          currentSocket.close.mockImplementation(() => {
+            readyState = MockWebSocket.CLOSING;
+          });
+          Object.defineProperty(currentSocket, 'readyState', {
+            configurable: true,
+            get() {
+              if (trigger === 'readyState' && armed) {
+                armed = false;
+                closeDuringSetup();
+              }
+              return readyState;
+            },
+            set(value: number) {
+              readyState = value;
+            }
+          });
+          if (trigger === 'CONNECTING') {
+            Object.defineProperty(currentSocket, 'CONNECTING', {
+              configurable: true,
+              get() {
+                if (armed) {
+                  armed = false;
+                  closeDuringSetup();
+                }
+                return MockWebSocket.CONNECTING;
+              }
+            });
+          }
+          return currentSocket;
+        } as unknown as typeof WebSocket;
+        const root = createRoot(() =>
+          useWebSocket('ws://fict.test', {
+            webSocket: ConfiguringWebSocket,
+            immediate: false,
+            onClose
+          })
+        );
+        closeDuringSetup = root.value.close;
+
+        expect(root.value.open()).toBe(true);
+        const currentSocket = MockWebSocket.instances[0]!;
+        expect(root.value.status()).toBe('CLOSING');
+        expect(currentSocket.addEventListener).toHaveBeenCalledOnce();
+        expect(currentSocket.addEventListener).toHaveBeenCalledWith('close', expect.any(Function));
+
+        currentSocket.serverClose();
+
+        expect(root.value.status()).toBe('CLOSED');
+        expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+        expect(onClose).toHaveBeenCalledOnce();
+        root.dispose();
+      } finally {
+        globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+      }
+    }
+  );
+
   it('stops setup when the binaryType setter disposes the owner', () => {
     let dispose = () => {};
     const addEventListener = vi.fn();
@@ -1477,8 +1567,9 @@ describe('useWebSocket', () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
-  it('does not bind listeners after the status update disposes the owner', () => {
+  it('rolls back the provisional close listener when the status update disposes the owner', () => {
     const addEventListener = vi.spyOn(MockWebSocket.prototype, 'addEventListener');
+    const removeEventListener = vi.spyOn(MockWebSocket.prototype, 'removeEventListener');
     let dispose = () => {};
     const globalWithHook = globalThis as typeof globalThis & {
       __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
@@ -1507,7 +1598,9 @@ describe('useWebSocket', () => {
       dispose = root.dispose;
 
       expect(root.value.open()).toBe(false);
-      expect(addEventListener).not.toHaveBeenCalled();
+      expect(addEventListener).toHaveBeenCalledOnce();
+      expect(addEventListener).toHaveBeenCalledWith('close', expect.any(Function));
+      expect(removeEventListener).toHaveBeenCalledOnce();
       expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledTimes(1);
       expect(root.value.status()).toBe('CLOSED');
     } finally {

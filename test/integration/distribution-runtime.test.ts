@@ -267,6 +267,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves useWebSocket initial setup ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-websocket-initial-setup-ownership.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves useWebSocket open transactions in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-websocket-open-transaction.mjs');
