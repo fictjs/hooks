@@ -54,9 +54,13 @@ describe('useEventListener', () => {
     const secondTarget = new EventTarget();
     const cleanupError = new Error('listener cleanup failed');
     const removeFirstListener = firstTarget.removeEventListener.bind(firstTarget);
+    let failCleanup = true;
     vi.spyOn(firstTarget, 'removeEventListener').mockImplementation((...args) => {
       removeFirstListener(...args);
-      throw cleanupError;
+      if (failCleanup) {
+        failCleanup = false;
+        throw cleanupError;
+      }
     });
     const handler = vi.fn();
     const { value: controls } = createRoot(() =>
@@ -69,6 +73,36 @@ describe('useEventListener', () => {
     secondTarget.dispatchEvent(new Event('cleanup'));
     expect(handler).not.toHaveBeenCalled();
     expect(controls.active()).toBe(false);
+
+    controls.start();
+    firstTarget.dispatchEvent(new Event('cleanup'));
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a listener restarted during cleanup', () => {
+    const target = new EventTarget();
+    const removeListener = target.removeEventListener.bind(target);
+    let restartOnRemove = false;
+    const controlsRef = {
+      current: undefined as ReturnType<typeof useEventListener> | undefined
+    };
+    vi.spyOn(target, 'removeEventListener').mockImplementation((...args) => {
+      removeListener(...args);
+      if (restartOnRemove) {
+        restartOnRemove = false;
+        controlsRef.current!.start();
+      }
+    });
+    const handler = vi.fn();
+    const controls = createRoot(() => useEventListener(target, 'reentrant', handler)).value;
+    controlsRef.current = controls;
+
+    restartOnRemove = true;
+    controls.stop();
+    target.dispatchEvent(new Event('reentrant'));
+
+    expect(controls.active()).toBe(true);
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it('supports stop and start controls', () => {

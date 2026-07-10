@@ -52,9 +52,9 @@ export function useEventListener<E extends Event = Event>(
   const applyStop = (stop: () => void) => {
     bound = true;
     stopCurrent = () => {
-      stop();
       bound = false;
       stopCurrent = () => {};
+      stop();
     };
   };
 
