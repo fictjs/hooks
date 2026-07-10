@@ -613,6 +613,78 @@ describe('useWebSocket', () => {
     expect(root.value.status()).toBe('CLOSED');
   });
 
+  it('preserves replacement cleanup when listener removal reentrantly opens', () => {
+    let open = () => false;
+    let armed = true;
+    const ConfiguringWebSocket = function ConfiguringWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      const removeEventListener = currentSocket.removeEventListener.bind(currentSocket);
+      vi.spyOn(currentSocket, 'removeEventListener').mockImplementation((...args) => {
+        removeEventListener(...args);
+        if (armed) {
+          armed = false;
+          open();
+        }
+      });
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ConfiguringWebSocket,
+        immediate: false
+      })
+    );
+    open = root.value.open;
+    root.value.open();
+
+    MockWebSocket.instances[0]!.serverClose();
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(MockWebSocket.instances[0]!.removeEventListener).toHaveBeenCalledTimes(4);
+    expect(MockWebSocket.instances[1]!.removeEventListener).not.toHaveBeenCalled();
+
+    root.dispose();
+    expect(MockWebSocket.instances[1]!.removeEventListener).toHaveBeenCalledTimes(4);
+    expect(MockWebSocket.instances[1]!.close).toHaveBeenCalledOnce();
+  });
+
+  it('continues listener cleanup when one removal throws', () => {
+    const cleanupError = new Error('listener cleanup failed');
+    let failCleanup = true;
+    const ConfiguringWebSocket = function ConfiguringWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      const removeEventListener = currentSocket.removeEventListener.bind(currentSocket);
+      vi.spyOn(currentSocket, 'removeEventListener').mockImplementation((...args) => {
+        removeEventListener(...args);
+        if (failCleanup) {
+          failCleanup = false;
+          throw cleanupError;
+        }
+      });
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ConfiguringWebSocket,
+        immediate: false
+      })
+    );
+    root.value.open();
+    MockWebSocket.instances[0]!.open();
+
+    expect(() => root.dispose()).not.toThrow();
+
+    expect(MockWebSocket.instances[0]!.removeEventListener).toHaveBeenCalledTimes(4);
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+    expect(root.value.status()).toBe('CLOSED');
+  });
+
   it('does not reconnect when a constructor error callback closes the connection', () => {
     vi.useFakeTimers();
     let closeFromError = () => {};

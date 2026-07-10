@@ -412,12 +412,24 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       throw setupError;
     }
 
-    cleanupSocket = () => {
-      for (const registration of registrations) {
-        currentSocket.removeEventListener(registration.type, registration.listener);
+    let cleaned = false;
+    const cleanupCurrentSocket = () => {
+      if (cleaned) {
+        return;
       }
-      cleanupSocket = () => {};
+      cleaned = true;
+      if (cleanupSocket === cleanupCurrentSocket) {
+        cleanupSocket = () => {};
+      }
+      for (const registration of registrations) {
+        try {
+          currentSocket.removeEventListener(registration.type, registration.listener);
+        } catch {
+          // Listener cleanup is terminal for this socket; continue removing the rest.
+        }
+      }
     };
+    cleanupSocket = cleanupCurrentSocket;
 
     return true;
   };
