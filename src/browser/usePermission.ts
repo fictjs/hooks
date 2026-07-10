@@ -124,18 +124,31 @@ export function usePermission(
       return false;
     }
 
+    let changeGeneration = 0;
+    let cleanupStatus = () => {};
     const onChange = () => {
-      if (!ownsStatus()) {
+      const changeId = ++changeGeneration;
+      const ownsChange = () =>
+        ownsStatus() && changeId === changeGeneration && cleanup === cleanupStatus;
+      if (!ownsChange()) {
         return;
       }
 
-      const matchesCurrentPermission = isSamePermission(statusPermission, readPermission());
-      if (!ownsStatus() || !matchesCurrentPermission) {
+      const currentPermission = readPermission();
+      if (!ownsChange()) {
+        return;
+      }
+      const matchesCurrentPermission = isSamePermission(statusPermission, currentPermission);
+      if (!ownsChange() || !matchesCurrentPermission) {
         return;
       }
       const changedState = nextStatus.state;
-      if (ownsStatus()) {
-        state(changedState);
+      if (!ownsChange()) {
+        return;
+      }
+      state(changedState);
+      if (!ownsChange()) {
+        return;
       }
     };
 
@@ -144,7 +157,8 @@ export function usePermission(
     const removeListener = () => {
       nextStatus.removeEventListener('change', onChange as EventListener);
     };
-    const cleanupStatus = () => {
+    cleanupStatus = () => {
+      changeGeneration += 1;
       cleanupRequested = true;
       if (cleanup === cleanupStatus) {
         cleanup = () => {};

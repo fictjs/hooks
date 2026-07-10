@@ -538,6 +538,50 @@ describe('usePermission', () => {
     expect(listeners.size).toBe(0);
   });
 
+  it('keeps a nested status change triggered from the state getter', async () => {
+    const listeners = new Set<EventListener>();
+    let currentState: PermissionState = 'granted';
+    let armed = false;
+    let nested = false;
+    const status = {
+      name: 'camera',
+      get state() {
+        if (armed && !nested) {
+          nested = true;
+          currentState = 'denied';
+          for (const listener of [...listeners]) {
+            listener(new Event('change'));
+          }
+          return 'granted';
+        }
+        return currentState;
+      },
+      addEventListener(_type: string, listener: EventListener) {
+        listeners.add(listener);
+      },
+      removeEventListener(_type: string, listener: EventListener) {
+        listeners.delete(listener);
+      }
+    } as unknown as PermissionStatus;
+    const root = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query: vi.fn(async () => status) } },
+        immediate: false
+      })
+    );
+    await expect(root.value.query()).resolves.toBe(status);
+    armed = true;
+
+    for (const listener of [...listeners]) {
+      listener(new Event('change'));
+    }
+
+    expect(nested).toBe(true);
+    expect(currentState).toBe('denied');
+    expect(root.value.state()).toBe('denied');
+    root.dispose();
+  });
+
   it('rolls back a listener registered after addEventListener disposes the owner', async () => {
     const listeners = new Set<EventListener>();
     let dispose = () => {};

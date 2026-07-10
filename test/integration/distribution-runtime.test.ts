@@ -995,4 +995,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps nested permission changes owned in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-permission-nested-change-ownership.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });
