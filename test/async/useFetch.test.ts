@@ -303,6 +303,23 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('does not start another request after dispose', async () => {
+    const mockFetch = vi.fn(async () => new Response('ok'));
+    const { value: state, dispose } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false,
+        initialData: 'initial'
+      })
+    );
+
+    dispose();
+
+    await expect(state.execute()).resolves.toBe('initial');
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(state.isLoading()).toBe(false);
+  });
+
   it('stores error for failed responses', async () => {
     const onError = vi.fn();
     const mockFetch = vi.fn(async () => new Response('fail', { status: 500 }));

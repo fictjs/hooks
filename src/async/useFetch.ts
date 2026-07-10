@@ -128,6 +128,7 @@ export function useFetch<T = unknown>(
   let requestId = 0;
   let activeRequestId: number | null = null;
   let controller: AbortController | undefined;
+  let disposed = false;
 
   const abort = () => {
     if (activeRequestId == null) {
@@ -144,6 +145,10 @@ export function useFetch<T = unknown>(
   };
 
   const execute = async (init?: RequestInit): Promise<T | null> => {
+    if (disposed) {
+      return data();
+    }
+
     abort();
     const id = ++requestId;
     activeRequestId = id;
@@ -269,7 +274,10 @@ export function useFetch<T = unknown>(
     void execute();
   }
 
-  tryOnDestroy(abort);
+  tryOnDestroy(() => {
+    disposed = true;
+    abort();
+  });
 
   return {
     data,
