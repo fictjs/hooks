@@ -308,6 +308,89 @@ describe('useClipboard', () => {
     }
   });
 
+  it('does not call a backend resolved by a getter that disposes the owner', async () => {
+    const writeText = vi.fn(async () => {});
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const navigatorRef = {
+      get clipboard() {
+        if (disposeOnRead) {
+          dispose();
+        }
+        return { writeText };
+      }
+    };
+    const root = createRoot(() =>
+      useClipboard({ navigator: navigatorRef, window: null, document: null })
+    );
+    dispose = root.dispose;
+
+    disposeOnRead = true;
+    await expect(root.value.copy('terminal-backend')).resolves.toBe(false);
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(root.value.text()).toBe('terminal-backend');
+    expect(root.value.copied()).toBe(false);
+  });
+
+  it('does not invoke a stale backend after its getter starts a newer copy', async () => {
+    const writes: string[] = [];
+    let copyNested: (value: string) => Promise<boolean> = () => Promise.resolve(false);
+    let reenter = false;
+    let nestedCopy: Promise<boolean> | undefined;
+    const clipboard = {
+      get writeText() {
+        if (reenter) {
+          reenter = false;
+          nestedCopy = copyNested('nested-copy');
+        }
+        return async (value: string) => {
+          writes.push(value);
+        };
+      }
+    };
+    const controls = createRoot(() =>
+      useClipboard({ navigator: { clipboard }, window: null, document: null })
+    ).value;
+    copyNested = controls.copy;
+
+    reenter = true;
+    await expect(controls.copy('outer-copy')).resolves.toBe(false);
+    await expect(nestedCopy).resolves.toBe(true);
+
+    expect(writes).toEqual(['nested-copy']);
+    expect(controls.text()).toBe('nested-copy');
+  });
+
+  it('stops fallback work when reading the body disposes the owner', async () => {
+    const execCommand = vi.fn(() => true);
+    const documentRef = createClipboardDocument(execCommand);
+    const originalBody = documentRef.body;
+    const createElement = vi.spyOn(documentRef, 'createElement');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    Object.defineProperty(documentRef, 'body', {
+      configurable: true,
+      get() {
+        if (disposeOnRead) {
+          dispose();
+        }
+        return originalBody;
+      }
+    });
+    const root = createRoot(() =>
+      useClipboard({ navigator: null, window: null, document: documentRef })
+    );
+    dispose = root.dispose;
+
+    disposeOnRead = true;
+    await expect(root.value.copy('terminal-fallback')).resolves.toBe(false);
+
+    expect(createElement).not.toHaveBeenCalled();
+    expect(execCommand).not.toHaveBeenCalled();
+    expect(root.value.copied()).toBe(false);
+  });
+
   it('does not schedule a reset after the copied signal update disposes the owner', async () => {
     vi.useFakeTimers();
     const writeText = vi.fn(async () => {});

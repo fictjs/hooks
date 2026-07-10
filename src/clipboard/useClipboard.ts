@@ -3,9 +3,11 @@ import { defaultDocument, defaultNavigator, defaultWindow } from '../internal/en
 import { tryOnDestroy } from '../internal/lifecycle';
 
 type NavigatorClipboardLike = {
-  clipboard?: {
-    writeText: (text: string) => Promise<void>;
-  };
+  clipboard?: ClipboardLike;
+};
+
+type ClipboardLike = {
+  writeText: (text: string) => Promise<void>;
 };
 
 export interface UseClipboardOptions {
@@ -22,22 +24,43 @@ export interface UseClipboardReturn {
   copy: (value: string) => Promise<boolean>;
 }
 
-function fallbackCopy(value: string, documentRef: Document): boolean {
+function fallbackCopy(value: string, documentRef: Document, canContinue: () => boolean): boolean {
   let textarea: HTMLTextAreaElement | undefined;
 
   try {
+    if (!canContinue()) {
+      return false;
+    }
     const body = documentRef.body;
-    if (!body) {
+    if (!canContinue() || !body) {
       return false;
     }
 
     textarea = documentRef.createElement('textarea');
+    if (!canContinue()) {
+      return false;
+    }
     textarea.value = value;
+    if (!canContinue()) {
+      return false;
+    }
     textarea.setAttribute('readonly', 'true');
+    if (!canContinue()) {
+      return false;
+    }
     textarea.style.position = 'absolute';
     textarea.style.left = '-9999px';
+    if (!canContinue()) {
+      return false;
+    }
     body.appendChild(textarea);
+    if (!canContinue()) {
+      return false;
+    }
     textarea.select();
+    if (!canContinue()) {
+      return false;
+    }
     return documentRef.execCommand('copy');
   } catch {
     return false;
@@ -107,9 +130,27 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       return false;
     }
 
-    if (navigatorRef?.clipboard?.writeText) {
+    let clipboard: ClipboardLike | undefined;
+    let writeText: ClipboardLike['writeText'] | undefined;
+    try {
+      clipboard = navigatorRef?.clipboard;
+      if (!canCommit()) {
+        return false;
+      }
+      writeText = clipboard?.writeText;
+    } catch {
+      if (canCommit()) {
+        copied(false);
+      }
+      return false;
+    }
+    if (!canCommit()) {
+      return false;
+    }
+
+    if (writeText) {
       try {
-        await navigatorRef.clipboard.writeText(value);
+        await writeText.call(clipboard, value);
         if (canCommit()) {
           copied(true);
           if (canCommit()) {
@@ -126,7 +167,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     }
 
     if (documentRef) {
-      const ok = fallbackCopy(value, documentRef);
+      const ok = fallbackCopy(value, documentRef, canCommit);
       if (canCommit()) {
         copied(ok);
         if (ok && canCommit()) {

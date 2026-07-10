@@ -3,6 +3,17 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
+  it.each(['esm', 'cjs'])('guards clipboard backend getters in the built %s entry', (format) => {
+    const fixture = resolve('test/fixtures/distribution-clipboard-getters.mjs');
+
+    expect(() =>
+      execFileSync(process.execPath, [fixture, format], {
+        cwd: process.cwd(),
+        stdio: 'pipe'
+      })
+    ).not.toThrow();
+  });
+
   it.each(['esm', 'cjs'])(
     'preserves nested scroll refresh ownership in the built %s entry',
     (format) => {
