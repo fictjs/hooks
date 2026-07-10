@@ -22,6 +22,9 @@ export function useIntervalFn(
   let timer: ReturnType<typeof setInterval> | undefined;
   let generation = 0;
   let disposed = false;
+  let operationGeneration = 0;
+
+  const ownsOperation = (operation: number) => operation === operationGeneration;
 
   const cancelTimer = () => {
     generation += 1;
@@ -35,6 +38,7 @@ export function useIntervalFn(
 
   const cancel = () => {
     if (!disposed) {
+      operationGeneration += 1;
       cancelTimer();
     }
   };
@@ -43,16 +47,17 @@ export function useIntervalFn(
     if (disposed) {
       return;
     }
-    cancel();
-    if (disposed) {
+    const operation = ++operationGeneration;
+    cancelTimer();
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     const wait = Math.max(0, toValue(interval as MaybeAccessor<number>));
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     pending(true);
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     const currentGeneration = ++generation;
@@ -78,6 +83,14 @@ export function useIntervalFn(
       }
       return;
     }
+    if (!ownsOperation(operation)) {
+      try {
+        clearInterval(nextTimer);
+      } catch {
+        // A superseding operation owns the live interval state.
+      }
+      return;
+    }
     if (currentGeneration === generation && pending()) {
       timer = nextTimer;
     }
@@ -91,6 +104,7 @@ export function useIntervalFn(
 
   tryOnDestroy(() => {
     disposed = true;
+    operationGeneration += 1;
     cancelTimer();
   });
   run();
