@@ -632,6 +632,20 @@ describe('distribution runtime', () => {
     }
   );
 
+  it.each(['esm', 'cjs'])(
+    'keeps permission preflight getters terminal in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-permission-preflight-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
   it.each(['esm', 'cjs'])('executes useWindowSize from the built %s entry', (format) => {
     const fixture = resolve('test/fixtures/distribution-window-size.mjs');
 

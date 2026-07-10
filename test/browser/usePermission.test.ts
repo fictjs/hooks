@@ -2,7 +2,7 @@ import { createRoot } from '@fictjs/runtime';
 import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
-import { usePermission } from '../../src/browser/usePermission';
+import { usePermission, type PermissionInput } from '../../src/browser/usePermission';
 
 class MockPermissionStatus extends EventTarget implements PermissionStatus {
   state: PermissionState;
@@ -328,6 +328,61 @@ describe('usePermission', () => {
 
     expect(root.value.state()).toBe('granted');
     await expect(root.value.query()).resolves.toBeNull();
+  });
+
+  it('does not reset state when a changed permission accessor disposes the owner', async () => {
+    const status = new MockPermissionStatus('camera', 'granted');
+    const query = vi.fn(async () => status);
+    let current: PermissionInput = 'camera';
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      usePermission(
+        () => {
+          if (disposeOnRead) dispose();
+          return current;
+        },
+        {
+          navigator: { permissions: { query } },
+          immediate: false
+        }
+      )
+    );
+    dispose = root.dispose;
+    await root.value.query();
+    expect(root.value.state()).toBe('granted');
+    current = 'microphone';
+    disposeOnRead = true;
+
+    await expect(root.value.query()).resolves.toBeNull();
+
+    expect(root.value.state()).toBe('granted');
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call a permissions query getter result after it disposes the owner', async () => {
+    const query = vi.fn(async () => new MockPermissionStatus('camera', 'granted'));
+    let dispose = () => {};
+    let disposeOnQueryRead = false;
+    const permissions = Object.defineProperty({}, 'query', {
+      get() {
+        if (disposeOnQueryRead) dispose();
+        return query;
+      }
+    });
+    const root = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions } as never,
+        immediate: false
+      })
+    );
+    dispose = root.dispose;
+    disposeOnQueryRead = true;
+
+    await expect(root.value.query()).resolves.toBeNull();
+
+    expect(query).not.toHaveBeenCalled();
+    expect(root.value.state()).toBe('prompt');
   });
 
   it('does not bind listener when query resolves after dispose', async () => {

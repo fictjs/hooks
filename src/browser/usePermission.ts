@@ -76,11 +76,28 @@ export function usePermission(
   let disposed = false;
 
   const syncPermission = () => {
+    const currentPermission = () => ({
+      permission: activePermission.current,
+      changed: false
+    });
+    if (disposed) {
+      return currentPermission();
+    }
+
     const nextPermission = readPermission();
+    if (disposed) {
+      return currentPermission();
+    }
     const changed = !isSamePermission(activePermission.current, nextPermission);
+    if (disposed) {
+      return currentPermission();
+    }
     if (changed) {
-      queryId += 1;
+      const syncId = ++queryId;
       cleanup();
+      if (disposed || syncId !== queryId) {
+        return currentPermission();
+      }
       activePermission.current = nextPermission;
       state(initialState);
     }
@@ -164,7 +181,16 @@ export function usePermission(
       return null;
     }
 
-    if (!navigatorRef?.permissions?.query) {
+    const permissions = navigatorRef?.permissions;
+    if (disposed) {
+      return null;
+    }
+    const queryStatus = permissions?.query;
+    if (disposed) {
+      return null;
+    }
+
+    if (typeof queryStatus !== 'function') {
       isSupported(false);
       return null;
     }
@@ -172,9 +198,12 @@ export function usePermission(
     const currentQueryId = ++queryId;
 
     isSupported(true);
+    if (disposed || currentQueryId !== queryId) {
+      return null;
+    }
 
     try {
-      const nextStatus = await navigatorRef.permissions.query(currentPermission);
+      const nextStatus = await queryStatus.call(permissions, currentPermission);
       if (disposed || currentQueryId !== queryId) {
         return null;
       }
