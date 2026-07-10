@@ -250,6 +250,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     socket = currentSocket;
     socketUrlKey = nextUrlKey;
     status(toStatus(currentSocket.readyState, currentSocket));
+    if (destroyed || currentOpenCallId !== openCallId || socket !== currentSocket) {
+      return hasOwnedSocket();
+    }
 
     if (options.binaryType) {
       currentSocket.binaryType = options.binaryType;

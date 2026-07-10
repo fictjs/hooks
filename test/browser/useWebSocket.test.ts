@@ -1,5 +1,6 @@
 import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useWebSocket } from '../../src/browser/useWebSocket';
 
@@ -617,6 +618,44 @@ describe('useWebSocket', () => {
     const socket = MockWebSocket.instances[0]!;
     dispose();
     expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not bind listeners after the status update disposes the owner', () => {
+    const addEventListener = vi.spyOn(MockWebSocket.prototype, 'addEventListener');
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 'CONNECTING') {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false
+        })
+      );
+      dispose = root.dispose;
+
+      expect(root.value.open()).toBe(false);
+      expect(addEventListener).not.toHaveBeenCalled();
+      expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledTimes(1);
+      expect(root.value.status()).toBe('CLOSED');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('does not reconnect or call user callbacks after dispose when close throws', () => {
