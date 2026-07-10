@@ -366,4 +366,98 @@ describe('useStorage', () => {
     const lastOnErrorCall = onError.mock.calls[onError.mock.calls.length - 1];
     expect((lastOnErrorCall?.[0] as Error).message).toBe('write failed');
   });
+
+  it('does not process a storage event after an event getter disposes the owner', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('terminal-event', '0');
+    const windowRef = new EventTarget() as Window;
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useStorage('terminal-event', 0, {
+        storage,
+        window: windowRef,
+        serializer: { read: Number, write: String }
+      })
+    );
+    dispose = root.dispose;
+    const event = new Event('storage');
+    Object.defineProperties(event, {
+      storageArea: {
+        get() {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return storage;
+        }
+      },
+      key: { value: 'terminal-event' },
+      newValue: { value: '5' }
+    });
+
+    disposeOnRead = true;
+    windowRef.dispatchEvent(event);
+
+    expect(root.value.value()).toBe(0);
+  });
+
+  it('preserves a nested set started by the serializer', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('serializer-reentry', '0');
+    let setNested: (value: number) => void = () => {};
+    let reenter = false;
+    const serializer = {
+      read: Number,
+      write(value: number) {
+        if (reenter) {
+          reenter = false;
+          setNested(2);
+        }
+        return String(value);
+      }
+    };
+    const controls = createRoot(() =>
+      useStorage('serializer-reentry', 0, {
+        storage,
+        window: new EventTarget() as Window,
+        serializer
+      })
+    ).value;
+    setNested = controls.set;
+
+    reenter = true;
+    controls.set(1);
+
+    expect(controls.value()).toBe(2);
+    expect(storage.getItem('serializer-reentry')).toBe('2');
+  });
+
+  it('preserves a nested set started while removing storage', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('remove-reentry', '1');
+    const removeItem = storage.removeItem.bind(storage);
+    let setNested: (value: number) => void = () => {};
+    let reenter = false;
+    vi.spyOn(storage, 'removeItem').mockImplementation((key) => {
+      removeItem(key);
+      if (reenter) {
+        reenter = false;
+        setNested(2);
+      }
+    });
+    const controls = createRoot(() =>
+      useStorage('remove-reentry', 0, {
+        storage,
+        window: new EventTarget() as Window,
+        serializer: { read: Number, write: String }
+      })
+    ).value;
+    setNested = controls.set;
+
+    reenter = true;
+    controls.remove();
+
+    expect(controls.value()).toBe(2);
+    expect(storage.getItem('remove-reentry')).toBe('2');
+  });
 });

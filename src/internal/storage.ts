@@ -179,6 +179,10 @@ export function createStorageHook<T>(
 
   let paused = false;
   let syncGeneration = 0;
+  let operationGeneration = 0;
+  let disposed = false;
+
+  const ownsOperation = (operation: number) => !disposed && operation === operationGeneration;
 
   const writeState = (next: T) => {
     syncGeneration += 1;
@@ -186,8 +190,18 @@ export function createStorageHook<T>(
   };
 
   const set = (next: T | ((prev: T) => T)) => {
+    if (disposed) {
+      return;
+    }
+    const operation = ++operationGeneration;
     const prev = state();
+    if (!ownsOperation(operation)) {
+      return;
+    }
     const value = resolveNextValue(next, prev);
+    if (!ownsOperation(operation)) {
+      return;
+    }
 
     if (value === undefined) {
       if (!storage) {
@@ -197,11 +211,19 @@ export function createStorageHook<T>(
       try {
         paused = true;
         storage.removeItem(key);
+        if (!ownsOperation(operation)) {
+          return;
+        }
         writeState(initial);
+        if (!ownsOperation(operation)) {
+          return;
+        }
         dispatchSync(null);
         return;
       } catch (error) {
-        safeCall(options.onError, error);
+        if (ownsOperation(operation)) {
+          safeCall(options.onError, error);
+        }
         return;
       } finally {
         paused = false;
@@ -215,34 +237,61 @@ export function createStorageHook<T>(
 
     try {
       const serialized = serializeValue(serializer, value);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       if (serialized === undefined) {
         paused = true;
         storage.removeItem(key);
+        if (!ownsOperation(operation)) {
+          return;
+        }
         writeState(initial);
+        if (!ownsOperation(operation)) {
+          return;
+        }
         dispatchSync(null);
         return;
       }
 
       const current = storage.getItem(key);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       if (current === serialized) {
         paused = true;
         writeState(value);
+        if (!ownsOperation(operation)) {
+          return;
+        }
         dispatchSync(serialized);
         return;
       }
 
       paused = true;
       storage.setItem(key, serialized);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       writeState(value);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       dispatchSync(serialized);
     } catch (error) {
-      safeCall(options.onError, error);
+      if (ownsOperation(operation)) {
+        safeCall(options.onError, error);
+      }
     } finally {
       paused = false;
     }
   };
 
   const remove = () => {
+    if (disposed) {
+      return;
+    }
+    const operation = ++operationGeneration;
     if (!storage) {
       writeState(initial);
       return;
@@ -251,10 +300,18 @@ export function createStorageHook<T>(
     try {
       paused = true;
       storage.removeItem(key);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       writeState(initial);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       dispatchSync(null);
     } catch (error) {
-      safeCall(options.onError, error);
+      if (ownsOperation(operation)) {
+        safeCall(options.onError, error);
+      }
     } finally {
       paused = false;
     }
@@ -275,7 +332,7 @@ export function createStorageHook<T>(
   };
 
   const syncFromRaw = (raw: string | null) => {
-    if (paused) {
+    if (disposed || paused) {
       return;
     }
 
@@ -289,7 +346,7 @@ export function createStorageHook<T>(
   };
 
   const syncFromStorage = () => {
-    if (paused || !storage) {
+    if (disposed || paused || !storage) {
       return;
     }
 
@@ -303,30 +360,53 @@ export function createStorageHook<T>(
 
   const listenToStorageChanges = options.listenToStorageChanges ?? true;
 
+  tryOnDestroy(() => {
+    disposed = true;
+    operationGeneration += 1;
+    syncGeneration += 1;
+  });
+
   if (windowRef && storage && listenToStorageChanges) {
     const storageListener = (event: StorageEvent) => {
-      if (!listening) {
+      if (disposed || !listening) {
         return;
       }
-      if (event.storageArea !== storage || (event.key !== key && event.key !== null)) {
+      const storageArea = event.storageArea;
+      if (disposed || !listening || storageArea !== storage) {
         return;
       }
-      syncFromRaw(event.newValue);
+      const eventKey = event.key;
+      if (disposed || !listening || (eventKey !== key && eventKey !== null)) {
+        return;
+      }
+      const newValue = event.newValue;
+      if (disposed || !listening) {
+        return;
+      }
+      syncFromRaw(newValue);
     };
 
     const customListener = (event: Event) => {
-      if (!listening) {
+      if (disposed || !listening) {
         return;
       }
       const custom = event as CustomEvent<StorageSyncDetail>;
-      if (custom.detail?.storage !== storage || custom.detail.key !== key) {
+      const detail = custom.detail;
+      if (disposed || !listening || !detail) {
+        return;
+      }
+      const detailStorage = detail.storage;
+      if (disposed || !listening || detailStorage !== storage) {
+        return;
+      }
+      const detailKey = detail.key;
+      if (disposed || !listening || detailKey !== key) {
         return;
       }
       syncFromStorage();
     };
 
     let listening = true;
-    let disposed = false;
     let storageRegistered = false;
     let syncRegistered = false;
 
