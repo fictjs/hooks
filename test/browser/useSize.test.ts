@@ -140,6 +140,30 @@ describe('useSize', () => {
     expect(state.left()).toBe(24);
   });
 
+  it('maps logical observer axes to physical size for vertical writing modes', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    element.style.writingMode = 'vertical-rl';
+    mockRect(element, { width: 80, height: 180 });
+
+    const { value: state } = createRoot(() => useSize(element));
+    const instance = MockResizeObserver.instances[0]!;
+    instance.trigger([
+      {
+        target: element,
+        contentRect: {
+          width: 120,
+          height: 240
+        } as DOMRectReadOnly,
+        borderBoxSize: [{ inlineSize: 240, blockSize: 120 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+
+    expect(state.width()).toBe(120);
+    expect(state.height()).toBe(240);
+  });
+
   it('rebinds observer when target changes', async () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
 

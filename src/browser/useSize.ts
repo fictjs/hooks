@@ -42,7 +42,18 @@ function readRect(target: Element) {
   };
 }
 
-function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions) {
+function usesVerticalWritingMode(target: Element, windowRef: Window | null | undefined): boolean {
+  const view = target.ownerDocument?.defaultView ?? windowRef;
+  const writingMode = view?.getComputedStyle?.(target).writingMode ?? '';
+  return /^(?:vertical|sideways|tb)/.test(writingMode);
+}
+
+function readBoxSize(
+  entry: ResizeObserverEntry,
+  box: ResizeObserverBoxOptions,
+  target: Element,
+  windowRef: Window | null | undefined
+) {
   const sizeSource =
     box === 'border-box'
       ? entry.borderBoxSize
@@ -52,6 +63,12 @@ function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions) 
   const size = Array.isArray(sizeSource) ? sizeSource[0] : sizeSource;
 
   if (size) {
+    if (usesVerticalWritingMode(target, windowRef)) {
+      return {
+        width: size.blockSize,
+        height: size.inlineSize
+      };
+    }
     return {
       width: size.inlineSize,
       height: size.blockSize
@@ -162,7 +179,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     observer = new Observer((entries: ResizeObserverEntry[]) => {
       const entry = entries[0];
       if (entry) {
-        const boxSize = readBoxSize(entry, box);
+        const boxSize = readBoxSize(entry, box, nextTarget, windowRef);
         if (boxSize) {
           width(boxSize.width);
           height(boxSize.height);
