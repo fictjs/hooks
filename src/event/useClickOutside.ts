@@ -1,8 +1,8 @@
 import { createMemo } from '@fictjs/runtime';
-import { useEventListener } from './useEventListener';
+import { useEventListener, type UseEventListenerControls } from './useEventListener';
 import {
   resolveIgnoreElement,
-  resolveTargetList,
+  resolveMaybeTarget,
   type IgnoreTarget,
   type MaybeElement
 } from '../internal/target';
@@ -28,28 +28,75 @@ type WindowWithDomConstructors = Window & {
   MouseEvent: typeof MouseEvent;
 };
 
-function getEventPath(event: Event): EventTarget[] {
-  return typeof event.composedPath === 'function' ? event.composedPath() : [];
+type OperationGuard = () => boolean;
+
+function getEventPath(event: Event, isCurrent: OperationGuard): EventTarget[] {
+  const composedPath = event.composedPath;
+  if (!isCurrent() || typeof composedPath !== 'function') {
+    return [];
+  }
+  const path = composedPath.call(event);
+  return isCurrent() ? path : [];
 }
 
-function isKeyboardClick(event: Event, MouseEventCtor?: typeof MouseEvent): boolean {
-  return !!MouseEventCtor && event instanceof MouseEventCtor && event.detail === 0;
+function isKeyboardClick(
+  event: Event,
+  MouseEventCtor: typeof MouseEvent | undefined,
+  isCurrent: OperationGuard
+): boolean {
+  const isMouseEvent = !!MouseEventCtor && event instanceof MouseEventCtor;
+  if (!isCurrent() || !isMouseEvent) {
+    return false;
+  }
+  const detail = event.detail;
+  return isCurrent() && detail === 0;
 }
 
-function isNodeInside(elements: Element[], node: Node, event: Event): boolean {
-  const path = getEventPath(event);
-  return elements.some(
-    (element) =>
-      element.contains(node) ||
-      path.includes(element) ||
-      path.some((entry) => {
-        try {
-          return element.contains(entry as Node);
-        } catch {
-          return false;
-        }
-      })
-  );
+function isNodeInside(
+  elements: Element[],
+  node: Node,
+  event: Event,
+  isCurrent: OperationGuard
+): boolean {
+  const path = getEventPath(event, isCurrent);
+  if (!isCurrent()) {
+    return false;
+  }
+
+  for (const element of elements) {
+    const containsNode = element.contains(node);
+    if (!isCurrent()) {
+      return false;
+    }
+    if (containsNode) {
+      return true;
+    }
+
+    const pathIncludesElement = path.includes(element);
+    if (!isCurrent()) {
+      return false;
+    }
+    if (pathIncludesElement) {
+      return true;
+    }
+
+    for (const entry of path) {
+      let containsEntry = false;
+      try {
+        containsEntry = element.contains(entry as Node);
+      } catch {
+        // Cross-realm and non-Node path entries are not descendants.
+      }
+      if (!isCurrent()) {
+        return false;
+      }
+      if (containsEntry) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function isNodeValue(probe: Element, target: EventTarget): target is Node {
@@ -83,31 +130,52 @@ export function useClickOutside(
   const MouseEventCtor = realmWindow?.MouseEvent;
 
   let pointerDownOutside = false;
+  let operation = 0;
+  let isActiveOperation: (currentOperation: number) => boolean = () => false;
 
-  const isOutside = (event: Event) => {
+  const isOutside = (event: Event, isCurrent: OperationGuard) => {
     const eventTarget = event.target;
-    if (!eventTarget || !documentRef) {
+    if (!isCurrent() || !eventTarget || !documentRef) {
       return false;
     }
 
-    const targetElements = resolveTargetList(target);
+    const targetElements: Element[] = [];
+    for (const item of toArray(target)) {
+      const resolved = resolveMaybeTarget(item);
+      if (!isCurrent()) {
+        return false;
+      }
+      if (resolved) {
+        targetElements.push(resolved);
+      }
+    }
     if (targetElements.length === 0) {
       return false;
     }
-    if (!isNodeValue(targetElements[0]!, eventTarget)) {
+    const targetIsNode = isNodeValue(targetElements[0]!, eventTarget);
+    if (!isCurrent() || !targetIsNode) {
       return false;
     }
     const node = eventTarget;
 
-    const ignoreElements = ignoreTargets.flatMap((item) => {
+    const ignoreElements: Element[] = [];
+    for (const item of ignoreTargets) {
       const resolved = resolveIgnoreElement(item, documentRef);
-      if (!resolved) {
-        return [];
+      if (!isCurrent()) {
+        return false;
       }
-      return Array.isArray(resolved) ? resolved : [resolved];
-    });
+      if (!resolved) {
+        continue;
+      }
+      ignoreElements.push(...(Array.isArray(resolved) ? resolved : [resolved]));
+    }
 
-    if (isNodeInside(targetElements, node, event) || isNodeInside(ignoreElements, node, event)) {
+    const insideTarget = isNodeInside(targetElements, node, event, isCurrent);
+    if (!isCurrent() || insideTarget) {
+      return false;
+    }
+    const insideIgnore = isNodeInside(ignoreElements, node, event, isCurrent);
+    if (!isCurrent() || insideIgnore) {
       return false;
     }
 
@@ -115,8 +183,11 @@ export function useClickOutside(
   };
 
   const onPointerDown = (event: Event) => {
+    const currentOperation = operation;
+    const isCurrent = () => isActiveOperation(currentOperation);
     try {
-      pointerDownOutside = isOutside(event);
+      const outside = isOutside(event, isCurrent);
+      pointerDownOutside = isCurrent() && outside;
     } catch (error) {
       pointerDownOutside = false;
       throw error;
@@ -124,8 +195,20 @@ export function useClickOutside(
   };
 
   const onClick = (event: Event) => {
+    const currentOperation = operation;
+    const isCurrent = () => isActiveOperation(currentOperation);
     try {
-      if ((pointerDownOutside || isKeyboardClick(event, MouseEventCtor)) && isOutside(event)) {
+      if (!isCurrent()) {
+        return;
+      }
+      const keyboardClick = pointerDownOutside
+        ? false
+        : isKeyboardClick(event, MouseEventCtor, isCurrent);
+      if (!isCurrent() || (!pointerDownOutside && !keyboardClick)) {
+        return;
+      }
+      const outside = isOutside(event, isCurrent);
+      if (isCurrent() && outside) {
         handler(event);
       }
     } finally {
@@ -133,16 +216,24 @@ export function useClickOutside(
     }
   };
 
-  const downControls = useEventListener(windowRef, 'pointerdown', onPointerDown, {
-    capture: options.capture ?? true,
-    passive: true
-  });
-  const clickControls = useEventListener(windowRef, 'click', onClick, {
+  const downControls: UseEventListenerControls = useEventListener(
+    windowRef,
+    'pointerdown',
+    onPointerDown,
+    {
+      capture: options.capture ?? true,
+      passive: true
+    }
+  );
+  const clickControls: UseEventListenerControls = useEventListener(windowRef, 'click', onClick, {
     capture: options.capture ?? true
   });
+  isActiveOperation = (currentOperation) =>
+    currentOperation === operation && downControls.active() && clickControls.active();
   const active = createMemo(() => downControls.active() && clickControls.active());
 
   const stopAll = () => {
+    operation += 1;
     pointerDownOutside = false;
     let cleanupFailed = false;
     let cleanupError: unknown;
@@ -163,6 +254,7 @@ export function useClickOutside(
 
   return {
     start() {
+      operation += 1;
       try {
         downControls.start();
         clickControls.start();

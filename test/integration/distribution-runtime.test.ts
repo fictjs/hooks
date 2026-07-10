@@ -144,4 +144,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'invalidates useClickOutside callbacks after stop and restart in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-click-outside-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });

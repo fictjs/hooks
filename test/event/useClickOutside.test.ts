@@ -155,6 +155,76 @@ describe('useClickOutside', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('does not handle a click whose target getter stops the controls', () => {
+    const target = document.createElement('div');
+    const outside = document.createElement('button');
+    const { windowRef, listeners } = createListenerWindow();
+    const handler = vi.fn();
+    const root = createRoot(() =>
+      useClickOutside(target, handler, { window: windowRef, document })
+    );
+    const controls = root.value;
+    const pointerDown = new Event('pointerdown');
+    Object.defineProperty(pointerDown, 'target', { value: outside });
+    for (const listener of listeners.get('pointerdown') ?? []) {
+      listener(pointerDown);
+    }
+    const clickListener = [...(listeners.get('click') ?? [])][0]!;
+    const click = new Event('click');
+    Object.defineProperty(click, 'target', {
+      get() {
+        controls.stop();
+        return outside;
+      }
+    });
+
+    clickListener(click);
+
+    expect(controls.active()).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    root.dispose();
+  });
+
+  it('invalidates a click when the target accessor stops and restarts the controls', () => {
+    const target = document.createElement('div');
+    const outside = document.createElement('button');
+    const { windowRef, listeners } = createListenerWindow();
+    const handler = vi.fn();
+    const controlsRef: { current?: ReturnType<typeof useClickOutside> } = {};
+    let restartOnRead = false;
+    const root = createRoot(() =>
+      useClickOutside(
+        () => {
+          if (restartOnRead) {
+            restartOnRead = false;
+            controlsRef.current?.stop();
+            controlsRef.current?.start();
+          }
+          return target;
+        },
+        handler,
+        { window: windowRef, document }
+      )
+    );
+    const controls = root.value;
+    controlsRef.current = controls;
+    const pointerDown = new Event('pointerdown');
+    Object.defineProperty(pointerDown, 'target', { value: outside });
+    for (const listener of listeners.get('pointerdown') ?? []) {
+      listener(pointerDown);
+    }
+    const clickListener = [...(listeners.get('click') ?? [])][0]!;
+    const click = new Event('click');
+    Object.defineProperty(click, 'target', { value: outside });
+    restartOnRead = true;
+
+    clickListener(click);
+
+    expect(controls.active()).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    root.dispose();
+  });
+
   it('rolls back both listeners when start fails partway through', () => {
     const target = document.createElement('div');
     const { windowRef, listeners, failures } = createListenerWindow();
