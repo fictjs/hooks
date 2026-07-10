@@ -87,16 +87,13 @@ export function usePermission(
     return { permission: activePermission.current, changed };
   };
 
-  const bindStatus = (nextStatus: PermissionStatus) => {
+  const bindStatus = (nextStatus: PermissionStatus, statusPermission: PermissionDescriptor) => {
     cleanup();
     state(nextStatus.state);
 
     const onChange = () => {
-      if (!disposed) {
-        const current = syncPermission();
-        if (!current.changed) {
-          state(nextStatus.state);
-        }
+      if (!disposed && isSamePermission(statusPermission, readPermission())) {
+        state(nextStatus.state);
       }
     };
 
@@ -128,7 +125,7 @@ export function usePermission(
       if (disposed || currentQueryId !== queryId) {
         return null;
       }
-      bindStatus(nextStatus);
+      bindStatus(nextStatus, currentPermission);
       return nextStatus;
     } catch {
       if (currentQueryId === queryId) {

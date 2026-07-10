@@ -223,6 +223,33 @@ describe('usePermission', () => {
     expect(query).toHaveBeenLastCalledWith(midiWithSysex);
   });
 
+  it('still queries an immediate source change after a stale status event', async () => {
+    const cameraStatus = new MockPermissionStatus('camera', 'granted');
+    const microphoneStatus = new MockPermissionStatus('microphone' as PermissionName, 'denied');
+    const query = vi.fn(async (input: PermissionDescriptor) => {
+      return input.name === 'camera' ? cameraStatus : microphoneStatus;
+    });
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } }
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(state.state()).toBe('granted');
+
+    permission('microphone');
+    cameraStatus.update('denied');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith({ name: 'microphone' });
+    expect(state.state()).toBe('denied');
+  });
+
   it('resets stale state when a non-immediate permission source changes', async () => {
     const cameraStatus = new MockPermissionStatus('camera', 'granted');
     const query = vi.fn(async () => cameraStatus);
@@ -240,7 +267,7 @@ describe('usePermission', () => {
     permission('microphone');
     cameraStatus.update('denied');
 
-    expect(state.state()).toBe('prompt');
+    expect(state.state()).toBe('granted');
     await Promise.resolve();
     expect(state.state()).toBe('prompt');
     expect(query).toHaveBeenCalledTimes(1);
