@@ -29,6 +29,48 @@ describe('useEventListener', () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
+  it('rolls back listeners when setup fails partway through', () => {
+    const firstTarget = new EventTarget();
+    const failingTarget = new EventTarget();
+    const setupError = new Error('listener setup failed');
+    const addFailingListener = failingTarget.addEventListener.bind(failingTarget);
+    vi.spyOn(failingTarget, 'addEventListener').mockImplementation((...args) => {
+      addFailingListener(...args);
+      throw setupError;
+    });
+    const handler = vi.fn();
+
+    expect(() =>
+      createRoot(() => useEventListener([firstTarget, failingTarget], 'partial', handler))
+    ).toThrow(setupError);
+
+    firstTarget.dispatchEvent(new Event('partial'));
+    failingTarget.dispatchEvent(new Event('partial'));
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('continues removing listeners after one cleanup fails', () => {
+    const firstTarget = new EventTarget();
+    const secondTarget = new EventTarget();
+    const cleanupError = new Error('listener cleanup failed');
+    const removeFirstListener = firstTarget.removeEventListener.bind(firstTarget);
+    vi.spyOn(firstTarget, 'removeEventListener').mockImplementation((...args) => {
+      removeFirstListener(...args);
+      throw cleanupError;
+    });
+    const handler = vi.fn();
+    const { value: controls } = createRoot(() =>
+      useEventListener([firstTarget, secondTarget], 'cleanup', handler)
+    );
+
+    expect(() => controls.stop()).toThrow(cleanupError);
+
+    firstTarget.dispatchEvent(new Event('cleanup'));
+    secondTarget.dispatchEvent(new Event('cleanup'));
+    expect(handler).not.toHaveBeenCalled();
+    expect(controls.active()).toBe(false);
+  });
+
   it('supports stop and start controls', () => {
     const target = new EventTarget();
     const handler = vi.fn();
