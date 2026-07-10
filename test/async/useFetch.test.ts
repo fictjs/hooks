@@ -246,6 +246,38 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('handles already-aborted external signals with the fallback signal merger', async () => {
+    const originalAnyDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', {
+      configurable: true,
+      value: undefined
+    });
+    const controller = new AbortController();
+    const reason = new Error('already aborted');
+    controller.abort(reason);
+    const mockFetch = vi.fn(async () => new Response('unexpected'));
+
+    try {
+      const { value: state } = createRoot(() =>
+        useFetch('https://example.com', {
+          fetch: mockFetch as never,
+          immediate: false,
+          initialData: 'initial'
+        })
+      );
+
+      await expect(state.execute({ signal: controller.signal })).resolves.toBe('initial');
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(state.aborted()).toBe(true);
+      expect(state.isLoading()).toBe(false);
+    } finally {
+      if (originalAnyDescriptor) {
+        Object.defineProperty(AbortSignal, 'any', originalAnyDescriptor);
+      }
+    }
+  });
+
   it('treats an external custom abort reason as an abort', async () => {
     const controller = new AbortController();
     const reason = new Error('stop');
