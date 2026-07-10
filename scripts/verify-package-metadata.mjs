@@ -264,6 +264,14 @@ smokeDistEntry(cjsEntry, 'cjs');
 
 const metadata = readJson('dist/index.fict.meta.json');
 const metadataContract = readJson('contracts/fict-metadata.json');
+const expectedRuntimeExports = new Set([
+  'clearRequestCache',
+  'useMount',
+  'useUnmount',
+  ...Object.keys(metadataContract.hooks ?? {})
+]);
+assertSameSet('ESM runtime exports', Object.keys(esmEntry), expectedRuntimeExports);
+assertSameSet('CommonJS runtime exports', Object.keys(cjsEntry), expectedRuntimeExports);
 if (metadata.version !== metadataContract.version) {
   fail(`expected metadata version ${metadataContract.version}, got ${metadata.version}`);
 }
@@ -310,5 +318,6 @@ const packedFiles = new Set(packed.files.map((file) => file.path));
 assertSameSet('npm pack output files', packedFiles, requiredPackageFiles);
 
 console.log(
-  `metadata verification passed: ${expectedHooks.size} reactive hooks, ${packed.files.length} packed files`
+  `metadata verification passed: ${expectedRuntimeExports.size} runtime exports, ` +
+    `${expectedHooks.size} reactive hooks, ${packed.files.length} packed files`
 );
