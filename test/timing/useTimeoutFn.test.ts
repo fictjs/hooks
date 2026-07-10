@@ -126,4 +126,43 @@ describe('useTimeoutFn', () => {
 
     expect(callback).toHaveBeenCalledTimes(0);
   });
+
+  it('does not run or flush after owner disposal', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const root = createRoot(() => useTimeoutFn(callback, 100));
+
+    root.dispose();
+    root.value.run();
+    root.value.flush();
+    vi.advanceTimersByTime(100);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(root.value.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops running when delay resolution disposes the owner', () => {
+    vi.useFakeTimers();
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const callback = vi.fn();
+    const root = createRoot(() =>
+      useTimeoutFn(callback, () => {
+        if (disposeOnRead) {
+          dispose();
+        }
+        return 100;
+      })
+    );
+    dispose = root.dispose;
+    disposeOnRead = true;
+
+    root.value.run();
+    vi.advanceTimersByTime(100);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(root.value.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

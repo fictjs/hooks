@@ -23,36 +23,67 @@ export function useRafFn(
   options: UseRafFnOptions = {}
 ): UseRafFnReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  const canRequestFrame = () => typeof windowRef?.requestAnimationFrame === 'function';
+  let disposed = false;
+  const canRequestFrame = () => !disposed && typeof windowRef?.requestAnimationFrame === 'function';
   const active = createSignal((options.immediate ?? true) && canRequestFrame());
 
   let rafId: number | undefined;
   const loopState = { generation: 0 };
+  let requestGeneration = 0;
   let lastTimestamp: number | undefined;
 
   const markInactive = () => {
-    active(false);
     loopState.generation += 1;
+    requestGeneration += 1;
     lastTimestamp = undefined;
     rafId = undefined;
+    active(false);
   };
 
   const schedule = (frameGeneration: number) => {
+    if (disposed || frameGeneration !== loopState.generation) {
+      return;
+    }
+    const currentRequestGeneration = ++requestGeneration;
+    let nextRafId: number;
     try {
-      rafId = windowRef!.requestAnimationFrame((timestamp) => loop(timestamp, frameGeneration));
+      nextRafId = windowRef!.requestAnimationFrame((timestamp) => {
+        if (
+          disposed ||
+          currentRequestGeneration !== requestGeneration ||
+          frameGeneration !== loopState.generation
+        ) {
+          return;
+        }
+        rafId = undefined;
+        loop(timestamp, frameGeneration);
+      });
     } catch (error) {
       if (frameGeneration === loopState.generation) {
         markInactive();
       }
       throw error;
     }
+    if (
+      disposed ||
+      currentRequestGeneration !== requestGeneration ||
+      frameGeneration !== loopState.generation ||
+      !active()
+    ) {
+      try {
+        windowRef?.cancelAnimationFrame?.(nextRafId);
+      } catch {
+        // Owner disposal makes this unowned frame best-effort cleanup.
+      }
+      return;
+    }
+    rafId = nextRafId;
   };
 
   const loop = (timestamp: number, frameGeneration: number) => {
-    if (!active() || frameGeneration !== loopState.generation) {
+    if (disposed || !active() || frameGeneration !== loopState.generation) {
       return;
     }
-    rafId = undefined;
 
     const delta = lastTimestamp == null ? 0 : timestamp - lastTimestamp;
     lastTimestamp = timestamp;
@@ -63,11 +94,15 @@ export function useRafFn(
       throw error;
     }
 
-    if (!active() || frameGeneration !== loopState.generation) {
+    if (disposed || !active() || frameGeneration !== loopState.generation) {
       return;
     }
 
-    if (canRequestFrame()) {
+    const canSchedule = canRequestFrame();
+    if (disposed || !active() || frameGeneration !== loopState.generation) {
+      return;
+    }
+    if (canSchedule) {
       schedule(frameGeneration);
     } else {
       markInactive();
@@ -75,19 +110,26 @@ export function useRafFn(
   };
 
   const start = () => {
-    if (active()) {
+    if (disposed || active()) {
       return;
     }
-    if (!canRequestFrame()) {
+    const canSchedule = canRequestFrame();
+    if (disposed) {
+      return;
+    }
+    if (!canSchedule) {
       active(false);
       return;
     }
     active(true);
+    if (disposed || !active()) {
+      return;
+    }
     loopState.generation += 1;
     schedule(loopState.generation);
   };
 
-  const stop = () => {
+  const stopLoop = () => {
     const currentRafId = rafId;
     markInactive();
 
@@ -96,12 +138,21 @@ export function useRafFn(
     }
   };
 
+  const stop = () => {
+    if (!disposed) {
+      stopLoop();
+    }
+  };
+
+  tryOnDestroy(() => {
+    disposed = true;
+    stopLoop();
+  });
+
   if (active()) {
     loopState.generation += 1;
     schedule(loopState.generation);
   }
-
-  tryOnDestroy(stop);
 
   return {
     active,

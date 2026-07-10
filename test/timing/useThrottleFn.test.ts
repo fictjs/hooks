@@ -146,6 +146,43 @@ describe('useThrottleFn', () => {
     expect(controls.pending()).toBe(false);
   });
 
+  it('does not schedule or flush after owner disposal', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const root = createRoot(() => useThrottleFn(callback, 100));
+
+    root.dispose();
+    root.value.run('late');
+    root.value.flush();
+    vi.advanceTimersByTime(100);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(root.value.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('clears a handle returned after scheduling disposes the owner', () => {
+    let dispose = () => {};
+    const clearTimeoutMock = vi.fn();
+    vi.stubGlobal('clearTimeout', clearTimeoutMock);
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => {
+        dispose();
+        return 7;
+      })
+    );
+    const callback = vi.fn();
+    const root = createRoot(() => useThrottleFn(callback, 100));
+    dispose = root.dispose;
+
+    root.value.run('late');
+
+    expect(root.value.pending()).toBe(false);
+    expect(callback).not.toHaveBeenCalled();
+    expect(clearTimeoutMock).toHaveBeenCalledWith(7);
+  });
+
   it('throttles calls with leading and trailing by default', () => {
     vi.useFakeTimers();
     const callback = vi.fn();

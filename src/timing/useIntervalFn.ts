@@ -21,8 +21,9 @@ export function useIntervalFn(
   const pending = createSignal(false);
   let timer: ReturnType<typeof setInterval> | undefined;
   let generation = 0;
+  let disposed = false;
 
-  const cancel = () => {
+  const cancelTimer = () => {
     generation += 1;
     const currentTimer = timer;
     timer = undefined;
@@ -32,15 +33,33 @@ export function useIntervalFn(
     }
   };
 
+  const cancel = () => {
+    if (!disposed) {
+      cancelTimer();
+    }
+  };
+
   const run = () => {
+    if (disposed) {
+      return;
+    }
     cancel();
+    if (disposed) {
+      return;
+    }
     const wait = Math.max(0, toValue(interval as MaybeAccessor<number>));
+    if (disposed) {
+      return;
+    }
     pending(true);
+    if (disposed) {
+      return;
+    }
     const currentGeneration = ++generation;
     let nextTimer: ReturnType<typeof setInterval>;
     try {
       nextTimer = setInterval(() => {
-        if (currentGeneration === generation) {
+        if (!disposed && currentGeneration === generation) {
           callback();
         }
       }, wait);
@@ -51,16 +70,29 @@ export function useIntervalFn(
       }
       throw error;
     }
+    if (disposed) {
+      try {
+        clearInterval(nextTimer);
+      } catch {
+        // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return;
+    }
     if (currentGeneration === generation && pending()) {
       timer = nextTimer;
     }
   };
 
   const flush = () => {
-    callback();
+    if (!disposed) {
+      callback();
+    }
   };
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelTimer();
+  });
   run();
 
   return {

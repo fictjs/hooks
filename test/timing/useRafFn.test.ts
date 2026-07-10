@@ -187,4 +187,37 @@ describe('useRafFn', () => {
     expect(callback).toHaveBeenCalledTimes(2);
     expect(state.active()).toBe(true);
   });
+
+  it('does not restart after owner disposal', () => {
+    const { windowRef } = createMockWindow();
+    const requestFrame = vi.spyOn(windowRef, 'requestAnimationFrame');
+    const callback = vi.fn();
+    const root = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    root.dispose();
+    root.value.start();
+
+    expect(root.value.active()).toBe(false);
+    expect(requestFrame).toHaveBeenCalledOnce();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('cancels a frame returned after scheduling disposes the owner', () => {
+    let dispose = () => {};
+    const cancelAnimationFrame = vi.fn();
+    const windowRef = {
+      requestAnimationFrame() {
+        dispose();
+        return 7;
+      },
+      cancelAnimationFrame
+    } as unknown as Window;
+    const root = createRoot(() => useRafFn(vi.fn(), { window: windowRef, immediate: false }));
+    dispose = root.dispose;
+
+    root.value.start();
+
+    expect(root.value.active()).toBe(false);
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(7);
+  });
 });

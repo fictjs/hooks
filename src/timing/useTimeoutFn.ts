@@ -21,8 +21,9 @@ export function useTimeoutFn(
   const pending = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
+  let disposed = false;
 
-  const cancel = () => {
+  const cancelTimer = () => {
     generation += 1;
     const currentTimer = timer;
     timer = undefined;
@@ -32,21 +33,41 @@ export function useTimeoutFn(
     }
   };
 
+  const cancel = () => {
+    if (!disposed) {
+      cancelTimer();
+    }
+  };
+
   const run = () => {
+    if (disposed) {
+      return;
+    }
     cancel();
+    if (disposed) {
+      return;
+    }
     const wait = Math.max(0, toValue(delay as MaybeAccessor<number>));
+    if (disposed) {
+      return;
+    }
 
     pending(true);
+    if (disposed) {
+      return;
+    }
     const currentGeneration = ++generation;
     let nextTimer: ReturnType<typeof setTimeout>;
     try {
       nextTimer = setTimeout(() => {
-        if (currentGeneration !== generation) {
+        if (disposed || currentGeneration !== generation) {
           return;
         }
         timer = undefined;
         pending(false);
-        callback();
+        if (!disposed) {
+          callback();
+        }
       }, wait);
     } catch (error) {
       if (currentGeneration === generation) {
@@ -55,20 +76,33 @@ export function useTimeoutFn(
       }
       throw error;
     }
+    if (disposed) {
+      try {
+        clearTimeout(nextTimer);
+      } catch {
+        // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return;
+    }
     if (currentGeneration === generation && pending()) {
       timer = nextTimer;
     }
   };
 
   const flush = () => {
-    if (!pending()) {
+    if (disposed || !pending()) {
       return;
     }
     cancel();
-    callback();
+    if (!disposed) {
+      callback();
+    }
   };
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelTimer();
+  });
   run();
 
   return {

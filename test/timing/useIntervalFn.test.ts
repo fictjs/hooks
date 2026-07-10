@@ -124,4 +124,19 @@ describe('useIntervalFn', () => {
     vi.advanceTimersByTime(100);
     expect(callback).toHaveBeenCalledTimes(0);
   });
+
+  it('does not run or flush after owner disposal', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const root = createRoot(() => useIntervalFn(callback, 100));
+
+    root.dispose();
+    root.value.run();
+    root.value.flush();
+    vi.advanceTimersByTime(100);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(root.value.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
