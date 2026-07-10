@@ -391,6 +391,192 @@ describe('useClipboard', () => {
     expect(root.value.copied()).toBe(false);
   });
 
+  it.each(['createElement', 'value', 'setAttribute', 'style', 'appendChild', 'select'] as const)(
+    'stops fallback work when %s disposes the owner',
+    async (phase) => {
+      let dispose = () => {};
+      let parentNode: { removeChild(node: unknown): unknown } | null = null;
+      let textareaValue = '';
+      const style = {} as CSSStyleDeclaration;
+      Object.defineProperties(style, {
+        position: {
+          configurable: true,
+          get: () => '',
+          set() {
+            if (phase === 'style') {
+              dispose();
+            }
+          }
+        },
+        left: {
+          configurable: true,
+          get: () => '',
+          set() {}
+        }
+      });
+      const textarea = {
+        get value() {
+          return textareaValue;
+        },
+        set value(next: string) {
+          textareaValue = next;
+          if (phase === 'value') {
+            dispose();
+          }
+        },
+        setAttribute() {
+          if (phase === 'setAttribute') {
+            dispose();
+          }
+        },
+        style,
+        select() {
+          if (phase === 'select') {
+            dispose();
+          }
+        },
+        remove() {
+          parentNode = null;
+        },
+        get parentNode() {
+          return parentNode;
+        }
+      } as unknown as HTMLTextAreaElement;
+      const body = {
+        appendChild(node: unknown) {
+          parentNode = body;
+          if (phase === 'appendChild') {
+            dispose();
+          }
+          return node;
+        },
+        removeChild(node: unknown) {
+          parentNode = null;
+          return node;
+        }
+      };
+      const execCommand = vi.fn(() => true);
+      const documentRef = {
+        body,
+        createElement() {
+          if (phase === 'createElement') {
+            dispose();
+          }
+          return textarea;
+        },
+        execCommand
+      } as unknown as Document;
+      const root = createRoot(() =>
+        useClipboard({ navigator: null, document: documentRef, window: null })
+      );
+      dispose = root.dispose;
+
+      await expect(root.value.copy(`terminal-${phase}`)).resolves.toBe(false);
+
+      expect(execCommand).not.toHaveBeenCalled();
+      expect(root.value.copied()).toBe(false);
+      expect(parentNode).toBeNull();
+    }
+  );
+
+  it('resets copied state with a synchronously firing window timer', async () => {
+    const clearTimeout = vi.fn();
+    const windowRef = {
+      setTimeout(callback: () => void) {
+        callback();
+        return 1;
+      },
+      clearTimeout
+    } as unknown as Window;
+    const root = createRoot(() =>
+      useClipboard({
+        navigator: { clipboard: { writeText: async () => {} } },
+        document: null,
+        window: windowRef
+      })
+    );
+
+    await expect(root.value.copy('synchronous')).resolves.toBe(true);
+
+    expect(root.value.copied()).toBe(false);
+    expect(clearTimeout).not.toHaveBeenCalled();
+    root.dispose();
+  });
+
+  it('keeps copied state when an injected timer returns no handle', async () => {
+    const clearTimeout = vi.fn();
+    const windowRef = {
+      setTimeout: vi.fn(() => undefined),
+      clearTimeout
+    } as unknown as Window;
+    const root = createRoot(() =>
+      useClipboard({
+        navigator: { clipboard: { writeText: async () => {} } },
+        document: null,
+        window: windowRef
+      })
+    );
+
+    await expect(root.value.copy('without-handle')).resolves.toBe(true);
+
+    expect(root.value.copied()).toBe(true);
+    root.dispose();
+    expect(clearTimeout).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale copied timer callback after a newer copy', async () => {
+    const callbacks = new Map<number, () => void>();
+    let timerId = 0;
+    const windowRef = {
+      setTimeout(callback: () => void) {
+        const id = ++timerId;
+        callbacks.set(id, callback);
+        return id;
+      },
+      clearTimeout: vi.fn()
+    } as unknown as Window;
+    const root = createRoot(() =>
+      useClipboard({
+        navigator: { clipboard: { writeText: async () => {} } },
+        document: null,
+        window: windowRef
+      })
+    );
+    await root.value.copy('first');
+    const staleCallback = callbacks.get(1)!;
+    await root.value.copy('second');
+
+    staleCallback();
+
+    expect(root.value.text()).toBe('second');
+    expect(root.value.copied()).toBe(true);
+    root.dispose();
+  });
+
+  it('clears copied state when resolving the Clipboard API throws', async () => {
+    vi.useFakeTimers();
+    let throwOnRead = false;
+    const clipboard = { writeText: vi.fn(async () => {}) };
+    const navigatorRef = {
+      get clipboard() {
+        if (throwOnRead) {
+          throw new Error('clipboard unavailable');
+        }
+        return clipboard;
+      }
+    };
+    const root = createRoot(() => useClipboard({ navigator: navigatorRef, document, window }));
+    await root.value.copy('first');
+    expect(root.value.copied()).toBe(true);
+    throwOnRead = true;
+
+    await expect(root.value.copy('second')).resolves.toBe(false);
+
+    expect(root.value.text()).toBe('second');
+    expect(root.value.copied()).toBe(false);
+    root.dispose();
+  });
+
   it('does not schedule a reset after the copied signal update disposes the owner', async () => {
     vi.useFakeTimers();
     const writeText = vi.fn(async () => {});
