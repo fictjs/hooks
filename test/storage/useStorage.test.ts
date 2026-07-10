@@ -189,6 +189,39 @@ describe('useStorage', () => {
     expect(second.value()).toBe(2);
   });
 
+  it('keeps sync state consistent through reentrant deserialization', () => {
+    const storage = new MemoryStorage();
+    const windowRef = new EventTarget() as Window;
+    const first = createRoot(() =>
+      useStorage('reentrant-sync', 0, { storage, window: windowRef })
+    ).value;
+    const second = createRoot(() =>
+      useStorage('reentrant-sync', 0, {
+        storage,
+        window: windowRef,
+        serializer: {
+          write: String,
+          read(raw) {
+            if (raw === '1') {
+              first.set(2);
+            }
+            return Number(raw);
+          }
+        }
+      })
+    ).value;
+    const third = createRoot(() =>
+      useStorage('reentrant-sync', 0, { storage, window: windowRef })
+    ).value;
+
+    first.set(1);
+
+    expect(storage.getItem('reentrant-sync')).toBe('2');
+    expect(first.value()).toBe(2);
+    expect(second.value()).toBe(2);
+    expect(third.value()).toBe(2);
+  });
+
   it('persists and syncs direct value signal writes', () => {
     const storage = new MemoryStorage();
     const windowRef = new EventTarget() as Window;

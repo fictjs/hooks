@@ -176,8 +176,10 @@ export function createStorageHook<T>(
   const state = createSignal(readStorage());
 
   let paused = false;
+  let syncGeneration = 0;
 
   const writeState = (next: T) => {
+    syncGeneration += 1;
     state(next);
   };
 
@@ -256,18 +258,42 @@ export function createStorageHook<T>(
     }
   };
 
+  const applySyncedRaw = (raw: string | null, generation: number) => {
+    if (raw == null) {
+      if (generation === syncGeneration) {
+        state(initial);
+      }
+      return;
+    }
+
+    const value = serializer.read(raw);
+    if (generation === syncGeneration) {
+      state(value);
+    }
+  };
+
   const syncFromRaw = (raw: string | null) => {
     if (paused) {
       return;
     }
 
-    if (raw == null) {
-      state(initial);
+    const generation = ++syncGeneration;
+
+    try {
+      applySyncedRaw(raw, generation);
+    } catch (error) {
+      safeCall(options.onError, error);
+    }
+  };
+
+  const syncFromStorage = () => {
+    if (paused || !storage) {
       return;
     }
 
+    const generation = ++syncGeneration;
     try {
-      state(serializer.read(raw));
+      applySyncedRaw(storage.getItem(key), generation);
     } catch (error) {
       safeCall(options.onError, error);
     }
@@ -288,7 +314,7 @@ export function createStorageHook<T>(
       if (custom.detail?.storage !== storage || custom.detail.key !== key) {
         return;
       }
-      syncFromRaw(custom.detail.value);
+      syncFromStorage();
     };
 
     windowRef.addEventListener('storage', storageListener);
