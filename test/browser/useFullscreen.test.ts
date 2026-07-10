@@ -365,6 +365,36 @@ describe('useFullscreen', () => {
     expect(documentMock.fullscreenElement).toBeNull();
   });
 
+  it('uses the exit method when the browser does not expose a fullscreen element', async () => {
+    const successful = createFullscreenMock();
+    const successRoot = createRoot(() =>
+      useFullscreen({
+        document: successful.documentMock as unknown as Document,
+        target: successful.main
+      })
+    );
+
+    await expect(successRoot.value.exit()).resolves.toBe(true);
+    expect(successful.documentMock.exitFullscreen).toHaveBeenCalledOnce();
+    expect(successRoot.value.isFullscreen()).toBe(false);
+
+    const failing = createFullscreenMock();
+    const exitError = new Error('exit failed');
+    failing.documentMock.exitFullscreen = vi.fn(async () => {
+      throw exitError;
+    });
+    const failureRoot = createRoot(() =>
+      useFullscreen({
+        document: failing.documentMock as unknown as Document,
+        target: failing.main
+      })
+    );
+
+    await expect(failureRoot.value.exit()).resolves.toBe(false);
+    expect(failing.documentMock.exitFullscreen).toHaveBeenCalledOnce();
+    expect(failureRoot.value.isFullscreen()).toBe(false);
+  });
+
   it('leaves a pending fullscreen entry alone when auto-exit is disabled', async () => {
     const { documentMock, main } = createFullscreenMock();
     let completeRequest = () => {};
