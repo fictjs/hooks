@@ -278,6 +278,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       try {
         const nextData = deserialize(messageEvent);
         data(nextData);
+        if (destroyed || socket !== currentSocket) {
+          return;
+        }
         options.onMessage?.(nextData, messageEvent);
       } catch (nextError) {
         reportError(nextError);

@@ -108,6 +108,46 @@ describe('useWebSocket', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it('does not call onMessage after the data signal update disposes the owner', () => {
+    const onMessage = vi.fn();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 'terminal-data') {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false,
+          onMessage
+        })
+      );
+      dispose = root.dispose;
+      root.value.open();
+
+      MockWebSocket.instances[0]!.message('terminal-data');
+
+      expect(onMessage).not.toHaveBeenCalled();
+      expect(root.value.status()).toBe('CLOSED');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('does not call onError after the error signal update disposes the owner', () => {
     const onError = vi.fn();
     let dispose = () => {};
