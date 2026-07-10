@@ -40,8 +40,10 @@ export function useResizeObserver(
   let setupReady = false;
   let observerGeneration = 0;
   let refreshGeneration = 0;
+  let controlGeneration = 0;
   let disposed = false;
   const canObserve = () => !disposed && active();
+  const ownsControl = (generation: number) => !disposed && generation === controlGeneration;
   const ownsRefresh = (generation: number) => !disposed && generation === refreshGeneration;
   const canRunSetup = (generation: number) => ownsRefresh(generation) && active();
 
@@ -208,6 +210,7 @@ export function useResizeObserver(
 
   tryOnDestroy(() => {
     disposed = true;
+    controlGeneration += 1;
     active(false);
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
@@ -223,17 +226,25 @@ export function useResizeObserver(
       if (disposed) {
         return;
       }
+      const controlId = ++controlGeneration;
       if (!active()) {
         active(true);
       } else if (!setupReady) {
         refresh();
+      }
+      if (!ownsControl(controlId)) {
+        return;
       }
     },
     stop() {
       if (disposed) {
         return;
       }
+      const controlId = ++controlGeneration;
       active(false);
+      if (!ownsControl(controlId)) {
+        return;
+      }
       cancelDeferredSetup();
       cancelDeferredSetup = () => {};
       cleanup();

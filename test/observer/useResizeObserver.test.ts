@@ -141,6 +141,45 @@ describe('useResizeObserver', () => {
     ).toBe(true);
   });
 
+  it('preserves an observer restarted from the active signal notification', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    let controls: ReturnType<typeof useResizeObserver>;
+    let restart = false;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (restart && value === false) {
+          restart = false;
+          controls.start();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      controls = createRoot(() => useResizeObserver(element)).value;
+      restart = true;
+      controls.stop();
+
+      expect(controls.active()).toBe(true);
+      expect(MockResizeObserver.instances).toHaveLength(1);
+      expect(MockResizeObserver.instances[0]!.disconnect).not.toHaveBeenCalled();
+
+      controls.stop();
+      expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledOnce();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('retains cleanup ownership when observe synchronously refreshes', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
     const first = document.createElement('div');
