@@ -22,6 +22,9 @@ export function useTimeoutFn(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
   let disposed = false;
+  let operationGeneration = 0;
+
+  const ownsOperation = (operation: number) => operation === operationGeneration;
 
   const cancelTimer = () => {
     generation += 1;
@@ -35,6 +38,7 @@ export function useTimeoutFn(
 
   const cancel = () => {
     if (!disposed) {
+      operationGeneration += 1;
       cancelTimer();
     }
   };
@@ -43,29 +47,33 @@ export function useTimeoutFn(
     if (disposed) {
       return;
     }
-    cancel();
-    if (disposed) {
+    const operation = ++operationGeneration;
+    cancelTimer();
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     const wait = Math.max(0, toValue(delay as MaybeAccessor<number>));
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
 
     pending(true);
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     const currentGeneration = ++generation;
     let nextTimer: ReturnType<typeof setTimeout>;
+    let firedSynchronously = false;
     try {
       nextTimer = setTimeout(() => {
         if (disposed || currentGeneration !== generation) {
           return;
         }
+        const callbackOperation = ++operationGeneration;
+        firedSynchronously = true;
         timer = undefined;
         pending(false);
-        if (!disposed) {
+        if (!disposed && ownsOperation(callbackOperation)) {
           callback();
         }
       }, wait);
@@ -84,6 +92,16 @@ export function useTimeoutFn(
       }
       return;
     }
+    if (!ownsOperation(operation)) {
+      if (!firedSynchronously) {
+        try {
+          clearTimeout(nextTimer);
+        } catch {
+          // A superseding operation owns the live timeout state.
+        }
+      }
+      return;
+    }
     if (currentGeneration === generation && pending()) {
       timer = nextTimer;
     }
@@ -93,14 +111,16 @@ export function useTimeoutFn(
     if (disposed || !pending()) {
       return;
     }
-    cancel();
-    if (!disposed) {
+    const operation = ++operationGeneration;
+    cancelTimer();
+    if (!disposed && ownsOperation(operation)) {
       callback();
     }
   };
 
   tryOnDestroy(() => {
     disposed = true;
+    operationGeneration += 1;
     cancelTimer();
   });
   run();
