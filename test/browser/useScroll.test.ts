@@ -170,6 +170,33 @@ describe('useScroll', () => {
     root.dispose();
   });
 
+  it('refreshes a non-reactive ref assigned after deferred setup', async () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 91, writable: true });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 92, writable: true });
+    const ref = { current: null as Element | null };
+    const root = createRoot(() =>
+      useScroll({
+        target: ref,
+        initialX: 1,
+        initialY: 2
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    ref.current = element;
+    root.value.refresh();
+
+    expect(root.value.x()).toBe(91);
+    expect(root.value.y()).toBe(92);
+
+    element.scrollTop = 93;
+    element.dispatchEvent(new Event('scroll'));
+    expect(root.value.y()).toBe(93);
+    root.dispose();
+  });
+
   it('uses fallback values without target/window', () => {
     const { value: state } = createRoot(() =>
       useScroll({

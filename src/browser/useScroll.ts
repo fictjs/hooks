@@ -22,6 +22,7 @@ export interface UseScrollOptions {
 export interface UseScrollReturn {
   x: () => number;
   y: () => number;
+  refresh: () => void;
 }
 
 function isWindowLike(target: unknown): target is Window {
@@ -120,21 +121,36 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     y(next.y);
   };
 
-  useEventListener(() => resolveScrollTarget() as EventTarget | undefined, 'scroll', update, {
-    passive: options.passive ?? true,
-    capture: options.capture
-  });
+  const scrollListener = useEventListener(
+    () => resolveScrollTarget() as EventTarget | undefined,
+    'scroll',
+    update,
+    {
+      passive: options.passive ?? true,
+      capture: options.capture
+    }
+  );
 
-  createEffect(() => {
+  const scheduleDeferredUpdate = () => {
+    cancelDeferredUpdate = deferTargetResolution(() => {
+      cancelDeferredUpdate = () => {};
+      scrollListener.refresh();
+      update();
+    });
+  };
+
+  const refresh = () => {
     cancelDeferredUpdate();
     cancelDeferredUpdate = () => {};
+    scrollListener.refresh();
     update();
     if (!resolveScrollTarget()) {
-      cancelDeferredUpdate = deferTargetResolution(() => {
-        cancelDeferredUpdate = () => {};
-        update();
-      });
+      scheduleDeferredUpdate();
     }
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredUpdate();
@@ -144,6 +160,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
 
   return {
     x,
-    y
+    y,
+    refresh
   };
 }
