@@ -134,6 +134,9 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
     }
 
     isSupported(isFullscreenSupported(documentRef));
+    if (disposed) {
+      return;
+    }
     const target = resolveTargetElement(options, documentRef);
     const fullscreenElement = getFullscreenElement(documentRef);
     isFullscreen(!!target && !!fullscreenElement && fullscreenElement === target);

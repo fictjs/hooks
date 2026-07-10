@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useFullscreen } from '../../src/browser/useFullscreen';
 
@@ -196,6 +197,50 @@ describe('useFullscreen', () => {
 
     await other.requestFullscreen();
     expect(state.isFullscreen()).toBe(false);
+  });
+
+  it('stops updating when the support signal write disposes the owner', () => {
+    const { documentMock, main } = createFullscreenMock();
+    documentMock.fullscreenEnabled = false;
+    Object.defineProperty(documentMock, 'exitFullscreen', {
+      configurable: true,
+      value: undefined
+    });
+    let dispose = () => {};
+    let disposedOnSupport = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === true && !disposedOnSupport) {
+          disposedOnSupport = true;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useFullscreen({ document: documentMock as unknown as Document, target: main })
+      );
+      dispose = root.dispose;
+      documentMock.fullscreenEnabled = true;
+      documentMock.fullscreenElement = main;
+
+      documentMock.dispatchEvent(new Event('fullscreenchange'));
+
+      expect(disposedOnSupport).toBe(true);
+      expect(root.value.isFullscreen()).toBe(false);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('exits fullscreen automatically on dispose when autoExit is enabled', async () => {
