@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -142,6 +143,76 @@ describe('useDebounceFn', () => {
     expect(callback).toHaveBeenCalledOnce();
     expect(callback).toHaveBeenCalledWith('new');
     expect(controls.pending()).toBe(false);
+  });
+
+  it('preserves a run made synchronously while clearing the previous timer', () => {
+    let timerId = 0;
+    const scheduled = new Map<number, () => void>();
+    let reenter = false;
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      const id = ++timerId;
+      scheduled.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal('clearTimeout', (id: number) => {
+      scheduled.delete(id);
+      if (reenter) {
+        reenter = false;
+        controls.run('inner');
+      }
+    });
+    const callback = vi.fn();
+    const controls = createRoot(() => useDebounceFn(callback, 100)).value;
+
+    controls.run('first');
+    reenter = true;
+    controls.run('outer');
+
+    expect(scheduled.size).toBe(1);
+    for (const timer of scheduled.values()) timer();
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback).toHaveBeenCalledWith('inner');
+  });
+
+  it('honors cancellation from a synchronous pending notification', () => {
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    let timerId = 0;
+    const scheduled = new Map<number, () => void>();
+    let controls: ReturnType<typeof useDebounceFn>;
+    let cancelOnPending = false;
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      const id = ++timerId;
+      scheduled.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal('clearTimeout', (id: number) => scheduled.delete(id));
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (cancelOnPending && value === true) {
+          cancelOnPending = false;
+          controls.cancel();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      controls = createRoot(() => useDebounceFn(vi.fn(), 100)).value;
+      cancelOnPending = true;
+      controls.run();
+
+      expect(controls.pending()).toBe(false);
+      expect(scheduled.size).toBe(0);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('does not schedule or flush after owner disposal', () => {

@@ -3,6 +3,20 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
+  it.each(['esm', 'cjs'])(
+    'preserves debounce operation ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-debounce-reentry.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
   it.each(['esm', 'cjs'])('executes useDocumentVisibility from the built %s entry', (format) => {
     const fixture = resolve('test/fixtures/distribution-document-visibility.mjs');
 

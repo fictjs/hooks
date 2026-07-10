@@ -41,6 +41,9 @@ export function createDebouncedFn<T extends Procedure>(
   };
   const pending = createSignal(false);
   let disposed = false;
+  let operationGeneration = 0;
+
+  const ownsOperation = (operation: number) => operation === operationGeneration;
 
   const clearTimer = () => {
     if (!state.timerScheduled) {
@@ -53,32 +56,41 @@ export function createDebouncedFn<T extends Procedure>(
     clearTimeout(timer as ReturnType<typeof setTimeout>);
   };
 
-  const clearMaxTimer = () => {
-    if (!state.maxTimerScheduled) {
-      return;
-    }
-    const maxTimer = state.maxTimer;
-    state.maxTimerGeneration += 1;
-    state.maxTimer = undefined;
-    state.maxTimerScheduled = false;
-    clearTimeout(maxTimer as ReturnType<typeof setTimeout>);
-  };
-
   const clearTimers = () => {
+    const timer = state.timer;
+    const maxTimer = state.maxTimer;
+    const shouldClearTimer = state.timerScheduled;
+    const shouldClearMaxTimer = state.maxTimerScheduled;
+
+    if (shouldClearTimer) {
+      state.timerGeneration += 1;
+      state.timer = undefined;
+      state.timerScheduled = false;
+    }
+    if (shouldClearMaxTimer) {
+      state.maxTimerGeneration += 1;
+      state.maxTimer = undefined;
+      state.maxTimerScheduled = false;
+    }
+
     let cleanupFailed = false;
     let cleanupError: unknown;
-    try {
-      clearTimer();
-    } catch (error) {
-      cleanupFailed = true;
-      cleanupError = error;
-    }
-    try {
-      clearMaxTimer();
-    } catch (error) {
-      if (!cleanupFailed) {
+    if (shouldClearTimer) {
+      try {
+        clearTimeout(timer as ReturnType<typeof setTimeout>);
+      } catch (error) {
         cleanupFailed = true;
         cleanupError = error;
+      }
+    }
+    if (shouldClearMaxTimer) {
+      try {
+        clearTimeout(maxTimer as ReturnType<typeof setTimeout>);
+      } catch (error) {
+        if (!cleanupFailed) {
+          cleanupFailed = true;
+          cleanupError = error;
+        }
       }
     }
     if (cleanupFailed) {
@@ -86,37 +98,57 @@ export function createDebouncedFn<T extends Procedure>(
     }
   };
 
-  const invoke = () => {
-    if (disposed) {
+  const invoke = (operation: number) => {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     if (!state.lastArgs) {
+      try {
+        clearTimers();
+      } catch (error) {
+        if (ownsOperation(operation)) {
+          pending(false);
+        }
+        throw error;
+      }
+      if (disposed || !ownsOperation(operation)) {
+        return;
+      }
       pending(false);
-      clearTimers();
       return;
     }
 
     const args = state.lastArgs;
     state.lastArgs = undefined;
+    try {
+      clearTimers();
+    } catch (error) {
+      if (ownsOperation(operation)) {
+        pending(false);
+      }
+      throw error;
+    }
+    if (disposed || !ownsOperation(operation)) {
+      return;
+    }
     pending(false);
-    clearTimers();
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     fn(...args);
   };
 
-  const scheduleTimers = (): boolean => {
+  const scheduleTimers = (operation: number): boolean => {
     let firedSynchronously = false;
 
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return firedSynchronously;
     }
 
     if (state.timerScheduled) {
       clearTimer();
     }
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return firedSynchronously;
     }
 
@@ -128,15 +160,18 @@ export function createDebouncedFn<T extends Procedure>(
         if (disposed || timerGeneration !== state.timerGeneration || !state.timerScheduled) {
           return;
         }
+        const callbackOperation = ++operationGeneration;
         firedSynchronously = true;
         state.timer = undefined;
         state.timerScheduled = false;
         if (trailing) {
-          invoke();
+          invoke(callbackOperation);
         } else {
           state.lastArgs = undefined;
-          pending(false);
           clearTimers();
+          if (!disposed && ownsOperation(callbackOperation)) {
+            pending(false);
+          }
         }
       }, wait);
     } catch (error) {
@@ -154,11 +189,30 @@ export function createDebouncedFn<T extends Procedure>(
       }
       return firedSynchronously;
     }
+    if (!ownsOperation(operation)) {
+      if (timerGeneration === state.timerGeneration && state.timerScheduled) {
+        state.timerGeneration += 1;
+        state.timerScheduled = false;
+        try {
+          clearTimeout(timer);
+        } catch {
+          // A superseding operation owns the live debounce state.
+        }
+      }
+      return firedSynchronously;
+    }
     if (timerGeneration === state.timerGeneration && state.timerScheduled) {
       state.timer = timer;
     }
 
-    if (!disposed && trailing && maxWait != null && maxWait >= 0 && !state.maxTimerScheduled) {
+    if (
+      !disposed &&
+      ownsOperation(operation) &&
+      trailing &&
+      maxWait != null &&
+      maxWait >= 0 &&
+      !state.maxTimerScheduled
+    ) {
       const effectiveMaxWait = Math.max(maxWait, wait);
       state.maxTimerScheduled = true;
       const maxTimerGeneration = ++state.maxTimerGeneration;
@@ -172,10 +226,11 @@ export function createDebouncedFn<T extends Procedure>(
           ) {
             return;
           }
+          const callbackOperation = ++operationGeneration;
           firedSynchronously = true;
           state.maxTimer = undefined;
           state.maxTimerScheduled = false;
-          invoke();
+          invoke(callbackOperation);
         }, effectiveMaxWait);
       } catch (error) {
         if (maxTimerGeneration === state.maxTimerGeneration) {
@@ -192,6 +247,18 @@ export function createDebouncedFn<T extends Procedure>(
         }
         return firedSynchronously;
       }
+      if (!ownsOperation(operation)) {
+        if (maxTimerGeneration === state.maxTimerGeneration && state.maxTimerScheduled) {
+          state.maxTimerGeneration += 1;
+          state.maxTimerScheduled = false;
+          try {
+            clearTimeout(maxTimer);
+          } catch {
+            // A superseding operation owns the live debounce state.
+          }
+        }
+        return firedSynchronously;
+      }
       if (maxTimerGeneration === state.maxTimerGeneration && state.maxTimerScheduled) {
         state.maxTimer = maxTimer;
       }
@@ -204,36 +271,39 @@ export function createDebouncedFn<T extends Procedure>(
     if (disposed) {
       return;
     }
+    const operation = ++operationGeneration;
     const shouldCallLeading = leading && !state.timerScheduled;
     if (trailing) {
       state.lastArgs = args;
       pending(true);
-      if (disposed) {
-        state.lastArgs = undefined;
+      if (disposed || !ownsOperation(operation)) {
         return;
       }
     }
     let firedSynchronously: boolean;
     try {
-      firedSynchronously = scheduleTimers();
+      firedSynchronously = scheduleTimers(operation);
     } catch (error) {
-      state.lastArgs = undefined;
-      pending(false);
-      try {
-        clearTimers();
-      } catch {
-        // Preserve the scheduling failure after best-effort rollback.
+      if (ownsOperation(operation)) {
+        try {
+          cancelPending(operation);
+        } catch {
+          // Preserve the scheduling failure after best-effort rollback.
+        }
       }
       throw error;
     }
 
-    if (disposed) {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
 
     if (shouldCallLeading && !(trailing && firedSynchronously)) {
       state.lastArgs = undefined;
       pending(false);
+      if (disposed || !ownsOperation(operation)) {
+        return;
+      }
       try {
         fn(...args);
       } catch (error) {
@@ -247,27 +317,39 @@ export function createDebouncedFn<T extends Procedure>(
     }
   };
 
-  const cancelPending = () => {
-    pending(false);
+  const cancelPending = (operation: number) => {
     state.lastArgs = undefined;
-    clearTimers();
+    try {
+      clearTimers();
+    } catch (error) {
+      if (ownsOperation(operation)) {
+        pending(false);
+      }
+      throw error;
+    }
+    if (ownsOperation(operation)) {
+      pending(false);
+    }
   };
 
   const cancel = () => {
     if (!disposed) {
-      cancelPending();
+      const operation = ++operationGeneration;
+      cancelPending(operation);
     }
   };
 
   const flush = () => {
     if (!disposed && pending()) {
-      invoke();
+      const operation = ++operationGeneration;
+      invoke(operation);
     }
   };
 
   tryOnDestroy(() => {
     disposed = true;
-    cancelPending();
+    const operation = ++operationGeneration;
+    cancelPending(operation);
   });
 
   return {
