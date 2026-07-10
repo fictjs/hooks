@@ -283,10 +283,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       socketUrlKey = null;
       cleanupSocket();
       status('CLOSED');
-      options.onClose?.(event as CloseEvent);
-
-      if (!manuallyClosed) {
-        scheduleReconnect();
+      try {
+        options.onClose?.(event as CloseEvent);
+      } catch (nextError) {
+        reportError(nextError);
+      } finally {
+        if (!destroyed && !manuallyClosed && socket == null && reconnectTimer == null) {
+          scheduleReconnect();
+        }
       }
     };
 
