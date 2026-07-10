@@ -59,3 +59,5 @@ function clearRequestCache(cacheKey?: string): void;
 - Use `clearRequestCache(cacheKey?)` to clear the browser default cache.
 - Stale or canceled requests do not update state and do not trigger `onSuccess`, `onError`, or
   `onFinally`; callbacks are latest-request only.
+- `runAsync()` propagates lifecycle callback exceptions to its caller. Detached `run()`, automatic,
+  and polling executions consume those exceptions because no caller can observe their promise.

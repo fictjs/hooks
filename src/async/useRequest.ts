@@ -199,7 +199,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     }
 
     pollingTimer = setTimeout(() => {
-      void runAsync(...currentParams);
+      runDetached(currentParams);
     }, options.pollingInterval);
   };
 
@@ -282,8 +282,14 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     }
   };
 
+  const runDetached = (currentParams: TParams) => {
+    void runAsync(...currentParams).catch(() => {
+      // Detached executions have no caller to receive lifecycle callback failures.
+    });
+  };
+
   const run = (...currentParams: TParams) => {
-    void runAsync(...currentParams);
+    runDetached(currentParams);
   };
 
   const cancel = () => {
@@ -312,7 +318,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
   if (!options.manual) {
     const initialParams = options.defaultParams ?? ([] as unknown as TParams);
-    void runAsync(...initialParams);
+    runDetached(initialParams);
   }
 
   tryOnDestroy(cancel);

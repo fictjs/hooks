@@ -224,6 +224,40 @@ describe('useRequest', () => {
     expect(done).toHaveBeenCalledWith([], 10, null);
   });
 
+  it('consumes lifecycle callback failures from run()', async () => {
+    const service = vi.fn(async () => 10);
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        onFinally() {
+          throw new Error('detached callback failed');
+        }
+      })
+    );
+
+    state.run();
+    await vi.waitFor(() => expect(state.loading()).toBe(false));
+
+    expect(state.data()).toBe(10);
+    expect(state.error()).toBeNull();
+  });
+
+  it('consumes lifecycle callback failures from automatic execution', async () => {
+    const service = vi.fn(async () => 11);
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        onSuccess() {
+          throw new Error('automatic callback failed');
+        }
+      })
+    );
+
+    await vi.waitFor(() => expect(state.loading()).toBe(false));
+
+    expect(state.data()).toBe(11);
+    expect(state.error()).toBeNull();
+  });
+
   it('runs onFinally only for the latest concurrent request', async () => {
     let resolveFirst: ((value: number) => void) | undefined;
     const service = vi.fn((value: number) => {
@@ -370,6 +404,32 @@ describe('useRequest', () => {
     await vi.advanceTimersByTimeAsync(100);
     await Promise.resolve();
     expect(service).toHaveBeenCalledTimes(2);
+  });
+
+  it('consumes callback failures from detached polling runs', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => 12);
+    const onSuccess = vi.fn(() => {
+      if (service.mock.calls.length > 1) {
+        throw new Error('poll callback failed');
+      }
+    });
+    const { value: state, dispose } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onSuccess
+      })
+    );
+
+    await state.runAsync();
+    await vi.advanceTimersByTimeAsync(20);
+    await Promise.resolve();
+
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(state.data()).toBe(12);
+    expect(state.loading()).toBe(false);
+    dispose();
   });
 
   it('does not restart polling when onSuccess disposes the root', async () => {
