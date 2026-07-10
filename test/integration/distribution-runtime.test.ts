@@ -102,4 +102,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps reentrant useResizeObserver cleanup owned in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-resize-observer-reentrant.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });

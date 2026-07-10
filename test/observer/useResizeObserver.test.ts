@@ -115,6 +115,32 @@ describe('useResizeObserver', () => {
     expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(second, undefined);
   });
 
+  it('keeps the observer created by a refresh reentered from disconnect', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const root = createRoot(() => useResizeObserver(element));
+    let refreshOnDisconnect = true;
+    MockResizeObserver.onDisconnect = () => {
+      if (refreshOnDisconnect) {
+        refreshOnDisconnect = false;
+        root.value.refresh();
+      }
+    };
+
+    root.value.refresh();
+
+    expect(MockResizeObserver.instances).toHaveLength(2);
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(element, undefined);
+    expect(MockResizeObserver.instances[1]!.disconnect).not.toHaveBeenCalled();
+
+    root.value.stop();
+
+    expect(
+      MockResizeObserver.instances.every((instance) => instance.disconnect.mock.calls.length === 1)
+    ).toBe(true);
+  });
+
   it('retains cleanup ownership when observe synchronously refreshes', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
     const first = document.createElement('div');

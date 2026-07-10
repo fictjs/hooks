@@ -39,17 +39,20 @@ export function useResizeObserver(
   let cancelDeferredSetup = () => {};
   let setupReady = false;
   let observerGeneration = 0;
+  let refreshGeneration = 0;
   let disposed = false;
   const canObserve = () => !disposed && active();
+  const ownsRefresh = (generation: number) => !disposed && generation === refreshGeneration;
+  const canRunSetup = (generation: number) => ownsRefresh(generation) && active();
 
-  const setup = (): boolean => {
-    if (!canObserve()) {
+  const setup = (refreshId: number): boolean => {
+    if (!canRunSetup(refreshId)) {
       return true;
     }
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
-      if (!canObserve()) {
+      if (!canRunSetup(refreshId)) {
         return true;
       }
       setupReady = true;
@@ -57,7 +60,7 @@ export function useResizeObserver(
     }
 
     const targets = resolveTargetList(target);
-    if (!canObserve()) {
+    if (!canRunSetup(refreshId)) {
       return true;
     }
     if (targets.length === 0) {
@@ -65,7 +68,7 @@ export function useResizeObserver(
     }
 
     const observeOptions = options.box ? { box: options.box } : undefined;
-    if (!canObserve()) {
+    if (!canRunSetup(refreshId)) {
       return true;
     }
 
@@ -94,13 +97,13 @@ export function useResizeObserver(
       }
     };
 
-    if (!canObserve() || generation !== observerGeneration) {
+    if (!canRunSetup(refreshId) || generation !== observerGeneration) {
       disconnectUnowned();
       return true;
     }
 
     isSupported(true);
-    if (!canObserve() || generation !== observerGeneration) {
+    if (!canRunSetup(refreshId) || generation !== observerGeneration) {
       disconnectUnowned();
       return true;
     }
@@ -121,11 +124,19 @@ export function useResizeObserver(
 
     try {
       for (const element of targets) {
-        if (!canObserve() || generation !== observerGeneration || cleanup !== cleanupObserver) {
+        if (
+          !canRunSetup(refreshId) ||
+          generation !== observerGeneration ||
+          cleanup !== cleanupObserver
+        ) {
           return true;
         }
         observer.observe(element, observeOptions);
-        if (!canObserve() || generation !== observerGeneration || cleanup !== cleanupObserver) {
+        if (
+          !canRunSetup(refreshId) ||
+          generation !== observerGeneration ||
+          cleanup !== cleanupObserver
+        ) {
           return true;
         }
       }
@@ -141,19 +152,22 @@ export function useResizeObserver(
     return true;
   };
 
-  const scheduleDeferredSetup = () => {
+  const scheduleDeferredSetup = (refreshId: number) => {
     cancelDeferredSetup();
+    if (!canRunSetup(refreshId)) {
+      return;
+    }
     cancelDeferredSetup = deferTargetResolution(() => {
       cancelDeferredSetup = () => {};
-      if (disposed || !active()) {
+      if (!canRunSetup(refreshId)) {
         return;
       }
       cleanup();
-      setupReady = false;
-      if (!canObserve()) {
+      if (!canRunSetup(refreshId)) {
         return;
       }
-      setup();
+      setupReady = false;
+      setup(refreshId);
     });
   };
 
@@ -161,17 +175,24 @@ export function useResizeObserver(
     if (disposed) {
       return;
     }
+    const refreshId = ++refreshGeneration;
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
+    if (!ownsRefresh(refreshId)) {
+      return;
+    }
     cleanup();
+    if (!ownsRefresh(refreshId)) {
+      return;
+    }
     setupReady = false;
 
     if (!canObserve()) {
       return;
     }
 
-    if (!setup()) {
-      scheduleDeferredSetup();
+    if (!setup(refreshId) && canRunSetup(refreshId)) {
+      scheduleDeferredSetup(refreshId);
     }
   };
 
