@@ -380,6 +380,20 @@ describe('distribution runtime', () => {
     }
   );
 
+  it.each(['esm', 'cjs'])(
+    'preserves useSize operation ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-size-operation.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
   it.each(['esm', 'cjs'])('executes useFullscreen from the built %s entry', (format) => {
     const fixture = resolve('test/fixtures/distribution-fullscreen.mjs');
 

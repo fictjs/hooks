@@ -110,57 +110,61 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
   let observer: ResizeObserver | null = null;
   let cancelDeferredTarget = () => {};
   let observerGeneration = 0;
+  let operationGeneration = 0;
   let disposed = false;
+  const beginOperation = () => ++operationGeneration;
+  const ownsOperation = (operation: number) => !disposed && operation === operationGeneration;
+  const canRunSetup = (operation: number) => ownsOperation(operation) && active();
 
-  const applyRect = (nextTarget: Element) => {
-    if (disposed) {
+  const applyRect = (nextTarget: Element, canCommit: () => boolean) => {
+    if (!canCommit()) {
       return;
     }
     const rect = readRect(nextTarget);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     width(rect.width);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     height(rect.height);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     top(rect.top);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     left(rect.left);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     x(rect.x);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     y(rect.y);
   };
 
-  const applyPosition = (nextTarget: Element) => {
-    if (disposed) {
+  const applyPosition = (nextTarget: Element, canCommit: () => boolean) => {
+    if (!canCommit()) {
       return;
     }
     const rect = readRect(nextTarget);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     top(rect.top);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     left(rect.left);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     x(rect.x);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     y(rect.y);
@@ -170,11 +174,13 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     if (disposed) {
       return;
     }
+    const operation = beginOperation();
+    const canCommit = () => ownsOperation(operation);
     const nextTarget = resolveMaybeTarget(target);
-    if (!nextTarget) {
+    if (!canCommit() || !nextTarget) {
       return;
     }
-    applyRect(nextTarget);
+    applyRect(nextTarget, canCommit);
   };
 
   const resizeListener = useEventListener(windowRef, 'resize', update, {
@@ -185,9 +191,17 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     windowRef,
     'scroll',
     () => {
+      if (disposed || !active()) {
+        return;
+      }
+      const operation = beginOperation();
+      const canCommit = () => ownsOperation(operation) && active();
       const nextTarget = resolveMaybeTarget(target);
+      if (!canCommit()) {
+        return;
+      }
       if (nextTarget) {
-        applyPosition(nextTarget);
+        applyPosition(nextTarget, canCommit);
       }
     },
     {
@@ -207,24 +221,22 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     currentObserver.disconnect();
   };
 
-  const startObserving = (nextTarget: Element) => {
-    if (disposed) {
+  const startObserving = (nextTarget: Element, operation: number) => {
+    if (!canRunSetup(operation)) {
       return;
     }
-    applyRect(nextTarget);
-    if (disposed) {
+    const canCommit = () => canRunSetup(operation);
+    applyRect(nextTarget, canCommit);
+    if (!canRunSetup(operation)) {
       return;
     }
     if (windowRef) {
       resizeListener.start();
-      if (disposed) {
-        resizeListener.stop();
+      if (!canRunSetup(operation)) {
         return;
       }
       scrollListener.start();
-      if (disposed) {
-        resizeListener.stop();
-        scrollListener.stop();
+      if (!canRunSetup(operation)) {
         return;
       }
     }
@@ -236,7 +248,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     }
 
     isSupported(true);
-    if (disposed) {
+    if (!canRunSetup(operation)) {
       return;
     }
     const generation = ++observerGeneration;
@@ -244,28 +256,34 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       if (disposed || !active() || generation !== observerGeneration) {
         return;
       }
+      const callbackOperation = beginOperation();
+      const canCommitObserver = () =>
+        ownsOperation(callbackOperation) && active() && generation === observerGeneration;
       const entry = entries[0];
+      if (!canCommitObserver()) {
+        return;
+      }
       if (entry) {
         const boxSize = readBoxSize(entry, box, nextTarget, windowRef);
-        if (disposed || !active() || generation !== observerGeneration) {
+        if (!canCommitObserver()) {
           return;
         }
         if (boxSize) {
           width(boxSize.width);
-          if (disposed || !active() || generation !== observerGeneration) {
+          if (!canCommitObserver()) {
             return;
           }
           height(boxSize.height);
-          if (disposed || !active() || generation !== observerGeneration) {
+          if (!canCommitObserver()) {
             return;
           }
-          applyPosition(nextTarget);
+          applyPosition(nextTarget, canCommitObserver);
           return;
         }
-        applyRect(nextTarget);
+        applyRect(nextTarget, canCommitObserver);
         return;
       }
-      applyRect(nextTarget);
+      applyRect(nextTarget, canCommitObserver);
     });
 
     const disconnectNextObserver = () => {
@@ -276,6 +294,8 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       }
     };
 
+    // Observer identity remains generation-owned so a synchronous refresh can install a
+    // replacement without the superseded setup disconnecting that newer observer.
     if (disposed || generation !== observerGeneration) {
       disconnectNextObserver();
       return;
@@ -307,27 +327,29 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     }
   };
 
-  const scheduleDeferredTarget = () => {
-    if (disposed) {
+  const scheduleDeferredTarget = (operation: number) => {
+    if (!canRunSetup(operation)) {
       return;
     }
     cancelDeferredTarget();
-    if (disposed) {
+    if (!canRunSetup(operation)) {
       return;
     }
-    cancelDeferredTarget = deferTargetResolution(() => {
+    const cancel = deferTargetResolution(() => {
       cancelDeferredTarget = () => {};
       if (disposed || !active()) {
         return;
       }
+      const deferredOperation = beginOperation();
+      const canContinue = () => canRunSetup(deferredOperation);
 
       const nextTarget = target ? resolveMaybeTarget(target) : undefined;
-      if (disposed) {
+      if (!canContinue()) {
         return;
       }
       if (!nextTarget) {
         resizeListener.stop();
-        if (disposed) {
+        if (!canContinue()) {
           return;
         }
         scrollListener.stop();
@@ -335,33 +357,38 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       }
 
       stopObserver();
-      if (disposed) {
+      if (!canContinue()) {
         return;
       }
-      startObserving(nextTarget);
+      startObserving(nextTarget, deferredOperation);
     });
+    if (!canRunSetup(operation)) {
+      cancel();
+      return;
+    }
+    cancelDeferredTarget = cancel;
   };
 
-  const refresh = () => {
-    if (disposed) {
+  const refreshOperation = (operation: number) => {
+    if (!ownsOperation(operation)) {
       return;
     }
     cancelDeferredTarget();
-    if (disposed) {
+    if (!ownsOperation(operation)) {
       return;
     }
     cancelDeferredTarget = () => {};
     stopObserver();
-    if (disposed) {
+    if (!ownsOperation(operation)) {
       return;
     }
     resizeListener.stop();
-    if (disposed) {
+    if (!ownsOperation(operation)) {
       return;
     }
     scrollListener.stop();
 
-    if (disposed) {
+    if (!ownsOperation(operation)) {
       return;
     }
 
@@ -370,33 +397,52 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     }
 
     const nextTarget = target ? resolveMaybeTarget(target) : undefined;
-    if (disposed) {
+    if (!ownsOperation(operation)) {
       return;
     }
     if (!nextTarget) {
       if (target) {
-        scheduleDeferredTarget();
+        scheduleDeferredTarget(operation);
       }
       return;
     }
 
-    startObserving(nextTarget);
+    startObserving(nextTarget, operation);
+  };
+
+  const refresh = () => {
+    if (disposed) {
+      return;
+    }
+    refreshOperation(beginOperation());
   };
 
   createEffect(() => {
     refresh();
 
     onCleanup(() => {
+      const cleanupOperation = beginOperation();
+      const canContinue = () => disposed || cleanupOperation === operationGeneration;
       cancelDeferredTarget();
       cancelDeferredTarget = () => {};
+      if (!canContinue()) {
+        return;
+      }
       resizeListener.stop();
+      if (!canContinue()) {
+        return;
+      }
       scrollListener.stop();
+      if (!canContinue()) {
+        return;
+      }
       stopObserver();
     });
   });
 
   tryOnDestroy(() => {
     disposed = true;
+    operationGeneration += 1;
     observerGeneration += 1;
     active(false);
   });
@@ -415,21 +461,35 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       if (disposed) {
         return;
       }
+      const operation = beginOperation();
       if (!active()) {
         active(true);
       } else {
-        refresh();
+        refreshOperation(operation);
       }
     },
     stop() {
       if (disposed) {
         return;
       }
+      const operation = beginOperation();
       active(false);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       cancelDeferredTarget();
+      if (!ownsOperation(operation)) {
+        return;
+      }
       cancelDeferredTarget = () => {};
       resizeListener.stop();
+      if (!ownsOperation(operation)) {
+        return;
+      }
       scrollListener.stop();
+      if (!ownsOperation(operation)) {
+        return;
+      }
       stopObserver();
     },
     refresh

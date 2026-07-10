@@ -1,5 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
-import { createSignal } from '@fictjs/runtime/advanced';
+import { createSignal, type FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSize } from '../../src/browser/useSize';
 
@@ -429,6 +429,93 @@ describe('useSize', () => {
     windowRef.dispatchEvent(new Event('resize'));
     expect(state.width()).toBe(30);
     expect(state.height()).toBe(40);
+  });
+
+  it('stops a resize operation when its width write stops the instance', () => {
+    const windowRef = new EventTarget() as Window;
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60, top: 10, left: 20 });
+    let stop = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === 200) {
+          armed = false;
+          stop();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useSize(element, { window: windowRef }));
+      stop = root.value.stop;
+      mockRect(element, { width: 200, height: 120, top: 30, left: 40 });
+      armed = true;
+
+      windowRef.dispatchEvent(new Event('resize'));
+
+      expect(root.value.active()).toBe(false);
+      expect(root.value.width()).toBe(200);
+      expect(root.value.height()).toBe(60);
+      expect(root.value.top()).toBe(10);
+      expect(root.value.left()).toBe(20);
+      expect(root.value.x()).toBe(20);
+      expect(root.value.y()).toBe(10);
+      root.dispose();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not continue setup when resize listener registration stops the instance', () => {
+    const windowTarget = new EventTarget();
+    const windowRef = windowTarget as Window;
+    const listenerSets = new Map<string, Set<EventListenerOrEventListenerObject>>();
+    const addEventListener = windowTarget.addEventListener.bind(windowTarget);
+    const removeEventListener = windowTarget.removeEventListener.bind(windowTarget);
+    let stop = () => {};
+    let stopOnResizeAdd = false;
+    vi.spyOn(windowTarget, 'addEventListener').mockImplementation((type, listener, options) => {
+      if (listener) {
+        const listeners = listenerSets.get(type) ?? new Set<EventListenerOrEventListenerObject>();
+        listeners.add(listener);
+        listenerSets.set(type, listeners);
+      }
+      addEventListener(type, listener, options);
+      if (stopOnResizeAdd && type === 'resize') {
+        stopOnResizeAdd = false;
+        stop();
+      }
+    });
+    vi.spyOn(windowTarget, 'removeEventListener').mockImplementation((type, listener, options) => {
+      if (listener) {
+        listenerSets.get(type)?.delete(listener);
+      }
+      removeEventListener(type, listener, options);
+    });
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const root = createRoot(() => useSize(element, { window: windowRef }));
+    stop = root.value.stop;
+    expect(listenerSets.get('resize')?.size).toBe(1);
+    expect(listenerSets.get('scroll')?.size).toBe(1);
+    stopOnResizeAdd = true;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(listenerSets.get('resize')?.size).toBe(0);
+    expect(listenerSets.get('scroll')?.size).toBe(0);
+    root.dispose();
   });
 
   it('updates position when scrolling changes the target rect', () => {
