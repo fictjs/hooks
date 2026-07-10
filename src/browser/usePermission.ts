@@ -108,15 +108,20 @@ export function usePermission(
     nextStatus: PermissionStatus,
     statusPermission: PermissionDescriptor,
     statusQueryId: number
-  ) => {
+  ): boolean => {
     const ownsStatus = () => !disposed && statusQueryId === queryId;
     cleanup();
     if (!ownsStatus()) {
-      return;
+      return false;
     }
-    state(nextStatus.state);
+
+    const nextState = nextStatus.state;
     if (!ownsStatus()) {
-      return;
+      return false;
+    }
+    state(nextState);
+    if (!ownsStatus()) {
+      return false;
     }
 
     const onChange = () => {
@@ -125,8 +130,12 @@ export function usePermission(
       }
 
       const matchesCurrentPermission = isSamePermission(statusPermission, readPermission());
-      if (ownsStatus() && matchesCurrentPermission) {
-        state(nextStatus.state);
+      if (!ownsStatus() || !matchesCurrentPermission) {
+        return;
+      }
+      const changedState = nextStatus.state;
+      if (ownsStatus()) {
+        state(changedState);
       }
     };
 
@@ -171,7 +180,10 @@ export function usePermission(
       } catch {
         // A terminal or superseded registration has no owner for cleanup failures.
       }
+      return false;
     }
+
+    return true;
   };
 
   const queryPermission = async (
@@ -207,7 +219,12 @@ export function usePermission(
       if (disposed || currentQueryId !== queryId) {
         return null;
       }
-      bindStatus(nextStatus, currentPermission, currentQueryId);
+      if (!bindStatus(nextStatus, currentPermission, currentQueryId)) {
+        return null;
+      }
+      if (disposed || currentQueryId !== queryId) {
+        return null;
+      }
       return nextStatus;
     } catch {
       if (currentQueryId === queryId) {

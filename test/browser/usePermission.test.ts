@@ -432,10 +432,110 @@ describe('usePermission', () => {
     );
     dispose = root.dispose;
 
-    await expect(root.value.query()).resolves.toBe(status);
+    await expect(root.value.query()).resolves.toBeNull();
 
-    expect(root.value.state()).toBe('granted');
+    expect(root.value.state()).toBe('prompt');
     expect(addEventListener).not.toHaveBeenCalled();
+  });
+
+  it('does not commit or return a status superseded from its state getter', async () => {
+    const secondStatus = new MockPermissionStatus('camera', 'denied');
+    let resolveSecond: (status: PermissionStatus) => void = () => {};
+    const secondQuery = new Promise<PermissionStatus>((resolve) => {
+      resolveSecond = resolve;
+    });
+    let nested: Promise<PermissionStatus | null> | undefined;
+    let reenter = false;
+    const firstStatus = {
+      name: 'camera',
+      get state() {
+        if (reenter) {
+          reenter = false;
+          nested = state.query();
+        }
+        return 'granted';
+      },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as PermissionStatus;
+    const query = vi
+      .fn<() => Promise<PermissionStatus>>()
+      .mockResolvedValueOnce(firstStatus)
+      .mockReturnValueOnce(secondQuery);
+    const state = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query } },
+        immediate: false
+      })
+    ).value;
+    reenter = true;
+
+    await expect(state.query()).resolves.toBeNull();
+
+    expect(state.state()).toBe('prompt');
+    expect(firstStatus.addEventListener).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledTimes(2);
+
+    resolveSecond(secondStatus);
+    await expect(nested).resolves.toBe(secondStatus);
+    expect(state.state()).toBe('denied');
+  });
+
+  it('does not commit a change superseded from the status state getter', async () => {
+    const listeners = new Set<EventListener>();
+    const secondStatus = new MockPermissionStatus('camera', 'denied');
+    let resolveSecond: (status: PermissionStatus) => void = () => {};
+    const secondQuery = new Promise<PermissionStatus>((resolve) => {
+      resolveSecond = resolve;
+    });
+    let nested: Promise<PermissionStatus | null> | undefined;
+    let currentState: PermissionState = 'granted';
+    let reenter = false;
+    const statusWithUpdate = {
+      name: 'camera',
+      get state() {
+        if (reenter) {
+          reenter = false;
+          nested = state.query();
+        }
+        return currentState;
+      },
+      addEventListener(_type: string, listener: EventListener) {
+        listeners.add(listener);
+      },
+      removeEventListener(_type: string, listener: EventListener) {
+        listeners.delete(listener);
+      },
+      update(nextState: PermissionState) {
+        currentState = nextState;
+        for (const listener of [...listeners]) {
+          listener(new Event('change'));
+        }
+      }
+    };
+    const firstStatus = statusWithUpdate as unknown as PermissionStatus;
+    const query = vi
+      .fn<() => Promise<PermissionStatus>>()
+      .mockResolvedValueOnce(firstStatus)
+      .mockReturnValueOnce(secondQuery);
+    const state = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query } },
+        immediate: false
+      })
+    ).value;
+    await expect(state.query()).resolves.toBe(firstStatus);
+    reenter = true;
+
+    statusWithUpdate.update('denied');
+
+    expect(state.state()).toBe('granted');
+    expect(query).toHaveBeenCalledTimes(2);
+
+    resolveSecond(secondStatus);
+    await expect(nested).resolves.toBe(secondStatus);
+    expect(state.state()).toBe('denied');
+    expect(listeners.size).toBe(0);
   });
 
   it('rolls back a listener registered after addEventListener disposes the owner', async () => {
@@ -460,7 +560,7 @@ describe('usePermission', () => {
     );
     dispose = root.dispose;
 
-    await expect(root.value.query()).resolves.toBe(status);
+    await expect(root.value.query()).resolves.toBeNull();
 
     expect(listeners.size).toBe(0);
     expect(root.value.state()).toBe('granted');
@@ -539,7 +639,7 @@ describe('usePermission', () => {
       ).value;
       reenter = true;
 
-      await expect(state.query()).resolves.toBe(firstStatus);
+      await expect(state.query()).resolves.toBeNull();
       firstStatus.update('denied');
 
       expect(firstAddListener).not.toHaveBeenCalled();

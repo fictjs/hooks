@@ -965,4 +965,20 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps permission status snapshots owned in the built %s entry',
+    (format) => {
+      const fixture = resolve(
+        'test/fixtures/distribution-permission-status-snapshot-ownership.mjs'
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });
