@@ -36,6 +36,7 @@ jobs:
           pnpm test:types:ts53
           pnpm test:coverage
           pnpm build
+          pnpm lint:dist
           pnpm verify:metadata
           pnpm test:attw
         env:

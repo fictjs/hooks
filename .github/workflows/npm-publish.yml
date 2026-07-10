@@ -43,6 +43,7 @@ jobs:
       - run: pnpm test:types:ts53
       - run: pnpm test:coverage
       - run: pnpm build
+      - run: pnpm lint:dist
       - run: pnpm verify:metadata
       - run: pnpm test:attw
       - name: Check published version
