@@ -294,6 +294,46 @@ describe('useFullscreen', () => {
     expect(main.requestFullscreen).toHaveBeenCalledTimes(1);
   });
 
+  it('shares an in-flight auto-exit when a pending entry completes after dispose', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    let completeRequest = () => {};
+    let completeExit = () => {};
+    main.requestFullscreen = vi.fn(() => {
+      documentMock.fullscreenElement = main;
+      return new Promise<void>((resolve) => {
+        completeRequest = resolve;
+      });
+    });
+    documentMock.exitFullscreen = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completeExit = () => {
+            documentMock.fullscreenElement = null;
+            resolve();
+          };
+        })
+    );
+    const root = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    const pendingEnter = root.value.enter();
+    root.dispose();
+    expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
+
+    completeRequest();
+    await Promise.resolve();
+    expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
+
+    completeExit();
+    await expect(pendingEnter).resolves.toBe(false);
+    expect(documentMock.fullscreenElement).toBeNull();
+  });
+
   it('leaves a pending fullscreen entry alone when auto-exit is disabled', async () => {
     const { documentMock, main } = createFullscreenMock();
     let completeRequest = () => {};

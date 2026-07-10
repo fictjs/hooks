@@ -120,6 +120,7 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
   const isSupported = createSignal(isFullscreenSupported(documentRef));
   const isFullscreen = createSignal(false);
   let disposed = false;
+  let exitInFlight: { target: Element; promise: Promise<boolean> } | null = null;
 
   function update(): void {
     if (disposed) {
@@ -138,22 +139,36 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
     isFullscreen(!!target && !!fullscreenElement && fullscreenElement === target);
   }
 
-  const exitTargetIfCurrent = async (target: Element): Promise<boolean> => {
-    if (!documentRef || getFullscreenElement(documentRef) !== target) {
-      return false;
+  const exitTargetIfCurrent = (target: Element): Promise<boolean> => {
+    if (exitInFlight?.target === target) {
+      return exitInFlight.promise;
     }
 
-    const exitMethod = resolveExitMethod(documentRef);
-    if (!exitMethod) {
-      return false;
-    }
+    const promise = (async () => {
+      if (!documentRef || getFullscreenElement(documentRef) !== target) {
+        return false;
+      }
 
-    try {
-      await exitMethod.call(documentRef);
-      return true;
-    } catch {
-      return false;
-    }
+      const exitMethod = resolveExitMethod(documentRef);
+      if (!exitMethod) {
+        return false;
+      }
+
+      try {
+        await exitMethod.call(documentRef);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    exitInFlight = { target, promise };
+    const clearInFlight = () => {
+      if (exitInFlight?.promise === promise) {
+        exitInFlight = null;
+      }
+    };
+    void promise.then(clearInFlight, clearInFlight);
+    return promise;
   };
 
   useEventListener(
