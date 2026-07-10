@@ -209,7 +209,7 @@ export function useFetch<T = unknown>(
           ...(abortPromise ? [abortPromise] : [])
         ]);
 
-      if (requestSignal?.aborted) {
+      if (disposed || id !== requestId || requestSignal?.aborted) {
         return data();
       }
 

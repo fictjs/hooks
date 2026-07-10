@@ -77,6 +77,54 @@ describe('useFetch', () => {
     }
   });
 
+  it('does not resolve input for a stale request invalidated during signal resolution', async () => {
+    vi.stubGlobal('AbortController', undefined);
+    vi.stubGlobal('AbortSignal', undefined);
+
+    let dispose = () => {};
+    try {
+      const stateRef = { current: undefined as ReturnType<typeof useFetch<string>> | undefined };
+      let reentered = false;
+      let reentrantRequest: Promise<string | null> | undefined;
+      let inputReads = 0;
+      const init = Object.defineProperty({} as RequestInit, 'signal', {
+        get() {
+          if (!reentered) {
+            reentered = true;
+            reentrantRequest = stateRef.current!.execute();
+          }
+          return undefined;
+        }
+      });
+      const mockFetch = vi.fn(async () => new Response('latest'));
+      const root = createRoot(() =>
+        useFetch<string>(
+          () => {
+            inputReads += 1;
+            return 'https://example.com';
+          },
+          {
+            fetch: mockFetch as never,
+            immediate: false,
+            init
+          }
+        )
+      );
+      dispose = root.dispose;
+      stateRef.current = root.value;
+
+      const staleRequest = root.value.execute();
+      await Promise.all([staleRequest, reentrantRequest!]);
+
+      expect(inputReads).toBe(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(root.value.data()).toBe('latest');
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('does not overwrite a request started by an abort listener', async () => {
     const stateRef = { current: undefined as ReturnType<typeof useFetch<string>> | undefined };
     let reentrantRequest: Promise<string | null> | undefined;
