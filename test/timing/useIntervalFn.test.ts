@@ -24,6 +24,51 @@ describe('useIntervalFn', () => {
     expect(controls.pending()).toBe(false);
   });
 
+  it('rolls back pending state when scheduling fails', () => {
+    const scheduleError = new Error('schedule failed');
+    const setIntervalMock = vi
+      .fn<() => number>()
+      .mockReturnValueOnce(1)
+      .mockImplementationOnce(() => {
+        throw scheduleError;
+      })
+      .mockReturnValue(2);
+    vi.stubGlobal('setInterval', setIntervalMock);
+    vi.stubGlobal('clearInterval', vi.fn());
+    const controls = createRoot(() => useIntervalFn(vi.fn(), 100)).value;
+
+    expect(() => controls.run()).toThrow(scheduleError);
+    expect(controls.pending()).toBe(false);
+
+    controls.run();
+    expect(controls.pending()).toBe(true);
+  });
+
+  it('invalidates the callback before a failing cleanup', () => {
+    const cleanupError = new Error('cleanup failed');
+    let scheduled: (() => void) | undefined;
+    vi.stubGlobal(
+      'setInterval',
+      vi.fn((callback: () => void) => {
+        scheduled = callback;
+        return 1;
+      })
+    );
+    vi.stubGlobal(
+      'clearInterval',
+      vi.fn(() => {
+        throw cleanupError;
+      })
+    );
+    const callback = vi.fn();
+    const controls = createRoot(() => useIntervalFn(callback, 100)).value;
+
+    expect(() => controls.cancel()).toThrow(cleanupError);
+    expect(controls.pending()).toBe(false);
+    scheduled?.();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
   it('runs callback on interval', () => {
     vi.useFakeTimers();
     const callback = vi.fn();

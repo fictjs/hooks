@@ -20,22 +20,40 @@ export function useIntervalFn(
 ): UseIntervalFnControls {
   const pending = createSignal(false);
   let timer: ReturnType<typeof setInterval> | undefined;
+  let generation = 0;
 
   const cancel = () => {
-    if (timer !== undefined) {
-      clearInterval(timer);
-      timer = undefined;
-    }
+    generation += 1;
+    const currentTimer = timer;
+    timer = undefined;
     pending(false);
+    if (currentTimer !== undefined) {
+      clearInterval(currentTimer);
+    }
   };
 
   const run = () => {
     cancel();
     const wait = Math.max(0, toValue(interval as MaybeAccessor<number>));
     pending(true);
-    timer = setInterval(() => {
-      callback();
-    }, wait);
+    const currentGeneration = ++generation;
+    let nextTimer: ReturnType<typeof setInterval>;
+    try {
+      nextTimer = setInterval(() => {
+        if (currentGeneration === generation) {
+          callback();
+        }
+      }, wait);
+    } catch (error) {
+      if (currentGeneration === generation) {
+        timer = undefined;
+        pending(false);
+      }
+      throw error;
+    }
+    if (currentGeneration === generation && pending()) {
+      timer = nextTimer;
+    }
   };
 
   const flush = () => {

@@ -20,13 +20,16 @@ export function useTimeoutFn(
 ): UseTimeoutFnControls {
   const pending = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let generation = 0;
 
   const cancel = () => {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      timer = undefined;
-    }
+    generation += 1;
+    const currentTimer = timer;
+    timer = undefined;
     pending(false);
+    if (currentTimer !== undefined) {
+      clearTimeout(currentTimer);
+    }
   };
 
   const run = () => {
@@ -34,11 +37,27 @@ export function useTimeoutFn(
     const wait = Math.max(0, toValue(delay as MaybeAccessor<number>));
 
     pending(true);
-    timer = setTimeout(() => {
-      timer = undefined;
-      pending(false);
-      callback();
-    }, wait);
+    const currentGeneration = ++generation;
+    let nextTimer: ReturnType<typeof setTimeout>;
+    try {
+      nextTimer = setTimeout(() => {
+        if (currentGeneration !== generation) {
+          return;
+        }
+        timer = undefined;
+        pending(false);
+        callback();
+      }, wait);
+    } catch (error) {
+      if (currentGeneration === generation) {
+        timer = undefined;
+        pending(false);
+      }
+      throw error;
+    }
+    if (currentGeneration === generation && pending()) {
+      timer = nextTimer;
+    }
   };
 
   const flush = () => {
