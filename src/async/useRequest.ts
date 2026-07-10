@@ -141,6 +141,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   const retryDelayCancelers = new Set<() => void>();
   let disposed = false;
   let commitGeneration = 0;
+  let refreshGeneration = 0;
 
   const waitForRetry = (ms: number): Promise<void> => {
     return new Promise((resolve) => {
@@ -402,11 +403,26 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const refresh = async () => {
+    if (disposed) {
+      return data();
+    }
+
+    const id = ++refreshGeneration;
+    const requestId = callId;
     const currentParams = params() ?? options.defaultParams;
+    if (disposed || id !== refreshGeneration || requestId !== callId) {
+      return data();
+    }
     if (!currentParams) {
       return data();
     }
-    return runAsync(...currentParams);
+
+    const resolvedParams = [...currentParams] as TParams;
+    if (disposed || id !== refreshGeneration || requestId !== callId) {
+      return data();
+    }
+
+    return runAsync(...resolvedParams);
   };
 
   const mutate = (value: TData | ((prev: TData | undefined) => TData)) => {

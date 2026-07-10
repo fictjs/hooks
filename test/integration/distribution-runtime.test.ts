@@ -46,6 +46,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves nested request refresh ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-request-refresh-ownership.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves virtual-list scroll ownership in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-virtual-list-reentry.mjs');

@@ -611,6 +611,47 @@ describe('useRequest', () => {
     expect(service).toHaveBeenNthCalledWith(2, 'fict');
   });
 
+  it('preserves a nested refresh started by the default params getter', async () => {
+    const calls: string[] = [];
+    let nested: Promise<string | undefined> | undefined;
+    let phase: 'setup' | 'outer' | 'inner' = 'setup';
+    const options = Object.defineProperty(
+      { manual: true as const, defaultParams: undefined as [string] | undefined },
+      'defaultParams',
+      {
+        enumerable: true,
+        get() {
+          if (phase === 'setup') {
+            return undefined;
+          }
+          if (phase === 'outer') {
+            phase = 'inner';
+            nested = state.refresh();
+            return ['outer'];
+          }
+          return ['inner'];
+        }
+      }
+    );
+    const state = createRoot(() =>
+      useRequest(
+        async (value: string) => {
+          calls.push(value);
+          return value;
+        },
+        options
+      )
+    ).value;
+    phase = 'outer';
+
+    await state.refresh();
+    await nested;
+
+    expect(calls).toEqual(['inner']);
+    expect(state.data()).toBe('inner');
+    expect(state.params()).toEqual(['inner']);
+  });
+
   it('ignores stale responses after cancel', async () => {
     let resolveLater: ((value: number) => void) | undefined;
     const service = vi.fn(
