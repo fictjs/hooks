@@ -152,6 +152,39 @@ describe('useSize', () => {
     expect(state.left()).toBe(24);
   });
 
+  it('keeps bounding-rect and requested-box measurements as distinct phases', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 240, height: 144 });
+
+    const { value: state } = createRoot(() => useSize(element, { box: 'content-box' }));
+    const instance = MockResizeObserver.instances[0]!;
+
+    expect(state.width()).toBe(240);
+    expect(state.height()).toBe(144);
+    expect(instance.observe).toHaveBeenCalledWith(element, { box: 'content-box' });
+
+    instance.trigger([
+      {
+        target: element,
+        contentRect: {
+          width: 120,
+          height: 72
+        } as DOMRectReadOnly,
+        contentBoxSize: [{ inlineSize: 120, blockSize: 72 }],
+        borderBoxSize: [{ inlineSize: 160, blockSize: 96 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+
+    expect(state.width()).toBe(120);
+    expect(state.height()).toBe(72);
+
+    state.update();
+    expect(state.width()).toBe(240);
+    expect(state.height()).toBe(144);
+  });
+
   it('maps logical observer axes to physical size for vertical writing modes', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
 
