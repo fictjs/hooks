@@ -697,6 +697,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'keeps useFetch fallback signal registration transactional in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-fetch-signal-transaction.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps useAsyncState terminal after error-triggered disposal in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-async-state-terminal.mjs');

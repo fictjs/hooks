@@ -3,6 +3,55 @@ import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useFetch } from '../../src/async/useFetch';
 
+class AdversarialAbortSignal {
+  aborted = false;
+  reason: unknown;
+  addError: unknown;
+  removeError: unknown;
+  private readonly listeners = new Set<EventListenerOrEventListenerObject>();
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
+    if (type !== 'abort' || !listener) {
+      return;
+    }
+    this.listeners.add(listener);
+    if (this.addError) {
+      throw this.addError;
+    }
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
+    if (type !== 'abort' || !listener) {
+      return;
+    }
+    if (this.removeError) {
+      throw this.removeError;
+    }
+    this.listeners.delete(listener);
+  }
+
+  abort(reason?: unknown): void {
+    this.aborted = true;
+    this.reason = reason;
+    const event = new Event('abort');
+    for (const listener of [...this.listeners]) {
+      if (typeof listener === 'function') {
+        listener.call(this, event);
+      } else {
+        listener.handleEvent(event);
+      }
+    }
+  }
+
+  listenerCount(): number {
+    return this.listeners.size;
+  }
+
+  asAbortSignal(): AbortSignal {
+    return this as unknown as AbortSignal;
+  }
+}
+
 describe('useFetch', () => {
   it('fetches and parses JSON', async () => {
     const mockFetch = vi.fn(
@@ -352,6 +401,88 @@ describe('useFetch', () => {
 
       expect(addListener).toHaveBeenCalledWith('abort', expect.any(Function), { once: true });
       expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+    } finally {
+      if (originalAnyDescriptor) {
+        Object.defineProperty(AbortSignal, 'any', originalAnyDescriptor);
+      }
+    }
+  });
+
+  it('rolls back every fallback listener when registration throws after adding', async () => {
+    const originalAnyDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', {
+      configurable: true,
+      value: undefined
+    });
+    const addError = new Error('add failed');
+    const firstSignal = new AdversarialAbortSignal();
+    const failingSignal = new AdversarialAbortSignal();
+    failingSignal.addError = addError;
+    const fetcher = vi.fn(async () => new Response('unexpected'));
+
+    try {
+      const root = createRoot(() =>
+        useFetch('https://example.com', {
+          fetch: fetcher as never,
+          immediate: false,
+          initialData: 'initial',
+          init: { signal: firstSignal.asAbortSignal() }
+        })
+      );
+
+      await expect(root.value.execute({ signal: failingSignal.asAbortSignal() })).resolves.toBe(
+        'initial'
+      );
+
+      expect(root.value.error()).toBe(addError);
+      expect(root.value.isLoading()).toBe(false);
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(firstSignal.listenerCount()).toBe(0);
+      expect(failingSignal.listenerCount()).toBe(0);
+      root.dispose();
+    } finally {
+      if (originalAnyDescriptor) {
+        Object.defineProperty(AbortSignal, 'any', originalAnyDescriptor);
+      }
+    }
+  });
+
+  it('finishes fallback abort when one listener removal throws', async () => {
+    const originalAnyDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+    Object.defineProperty(AbortSignal, 'any', {
+      configurable: true,
+      value: undefined
+    });
+    const removeError = new Error('remove failed');
+    const failingSignal = new AdversarialAbortSignal();
+    const laterSignal = new AdversarialAbortSignal();
+    failingSignal.removeError = removeError;
+    let mergedSignal: AbortSignal | undefined;
+    const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      mergedSignal = init?.signal ?? undefined;
+      return new Promise<Response>(() => {});
+    });
+
+    try {
+      const root = createRoot(() =>
+        useFetch('https://example.com', {
+          fetch: fetcher as never,
+          immediate: false,
+          initialData: 'initial',
+          init: { signal: failingSignal.asAbortSignal() }
+        })
+      );
+      const pending = root.value.execute({ signal: laterSignal.asAbortSignal() });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+
+      expect(() => failingSignal.abort(removeError)).not.toThrow();
+
+      await expect(pending).resolves.toBe('initial');
+      expect(mergedSignal?.aborted).toBe(true);
+      expect(root.value.aborted()).toBe(true);
+      expect(root.value.isLoading()).toBe(false);
+      expect(laterSignal.listenerCount()).toBe(0);
+      root.dispose();
     } finally {
       if (originalAnyDescriptor) {
         Object.defineProperty(AbortSignal, 'any', originalAnyDescriptor);

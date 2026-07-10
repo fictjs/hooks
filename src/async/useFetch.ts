@@ -76,29 +76,43 @@ function mergeAbortSignals(...signals: Array<AbortSignal | null | undefined>): M
   }
 
   const controller = new AbortController();
-  let cleanup = () => {};
+  const registrations: AbortSignal[] = [];
+  let cleanupActive = true;
+  const cleanup = () => {
+    if (!cleanupActive) {
+      return;
+    }
+    cleanupActive = false;
+    const currentRegistrations = registrations.splice(0);
+    for (const signal of currentRegistrations) {
+      try {
+        signal.removeEventListener('abort', abort);
+      } catch {
+        // Listener teardown is best-effort; every remaining registration must still be tried.
+      }
+    }
+  };
   const abort = () => {
     cleanup();
     const abortedSignal = activeSignals.find((signal) => signal.aborted);
     controller.abort(abortedSignal?.reason);
   };
 
-  cleanup = () => {
+  try {
     for (const signal of activeSignals) {
-      signal.removeEventListener('abort', abort);
+      if (signal.aborted) {
+        abort();
+        return {
+          signal: controller.signal,
+          cleanup
+        };
+      }
+      registrations.push(signal);
+      signal.addEventListener('abort', abort, { once: true });
     }
-    cleanup = () => {};
-  };
-
-  for (const signal of activeSignals) {
-    if (signal.aborted) {
-      abort();
-      return {
-        signal: controller.signal,
-        cleanup
-      };
-    }
-    signal.addEventListener('abort', abort, { once: true });
+  } catch (error) {
+    cleanup();
+    throw error;
   }
 
   return {
