@@ -227,12 +227,29 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return hasOwnedSocket();
     }
 
-    if (socket && (socket.readyState === socket.CONNECTING || socket.readyState === socket.OPEN)) {
+    const existingSocket = socket;
+    const existingReadyState = existingSocket?.readyState;
+    if (destroyed || currentOpenCallId !== openCallId || socket !== existingSocket) {
+      return hasOwnedSocket();
+    }
+    const existingConnectingState = existingSocket?.CONNECTING;
+    if (destroyed || currentOpenCallId !== openCallId || socket !== existingSocket) {
+      return hasOwnedSocket();
+    }
+    const existingOpenState = existingSocket?.OPEN;
+    if (destroyed || currentOpenCallId !== openCallId || socket !== existingSocket) {
+      return hasOwnedSocket();
+    }
+
+    if (
+      existingSocket &&
+      (existingReadyState === existingConnectingState || existingReadyState === existingOpenState)
+    ) {
       if (socketUrlKey === nextUrlKey) {
         return true;
       }
 
-      if (!closeSocketForReplacement(socket)) {
+      if (!closeSocketForReplacement(existingSocket)) {
         return false;
       }
     }

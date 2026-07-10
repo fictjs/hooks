@@ -448,6 +448,33 @@ describe('useWebSocket', () => {
     expect(root.value.status()).toBe('CLOSED');
   });
 
+  it('does not dereference cleared ownership after a readyState getter disposes the owner', () => {
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false
+      })
+    );
+    root.value.open();
+    const currentSocket = MockWebSocket.instances[0]!;
+    let armed = true;
+    Object.defineProperty(currentSocket, 'readyState', {
+      configurable: true,
+      get() {
+        if (armed) {
+          armed = false;
+          root.dispose();
+        }
+        return MockWebSocket.CONNECTING;
+      }
+    });
+
+    expect(() => root.value.open()).not.toThrow();
+    expect(root.value.open()).toBe(false);
+    expect(root.value.status()).toBe('CLOSED');
+    expect(currentSocket.close).toHaveBeenCalledOnce();
+  });
+
   it('does not reconnect when a constructor error callback closes the connection', () => {
     vi.useFakeTimers();
     let closeFromError = () => {};
