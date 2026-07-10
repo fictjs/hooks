@@ -6,6 +6,7 @@ import { clearRequestCache, useRequest } from '../../src/async/useRequest';
 describe('useRequest', () => {
   afterEach(() => {
     clearRequestCache();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -373,6 +374,28 @@ describe('useRequest', () => {
 
     expect(service).toHaveBeenCalledTimes(3);
     expect(state.data()).toBe(5);
+  });
+
+  it('retries when the delay timer fires synchronously during registration', async () => {
+    const clearTimer = vi.fn();
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      callback();
+      return 1;
+    });
+    vi.stubGlobal('clearTimeout', clearTimer);
+    const service = vi.fn().mockRejectedValueOnce(new Error('retry')).mockResolvedValue(2);
+    const state = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        retryCount: 1,
+        retryInterval: 1
+      })
+    ).value;
+
+    await expect(state.runAsync()).resolves.toBe(2);
+
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(clearTimer).toHaveBeenCalledWith(1);
   });
 
   it('reuses cached data by cacheKey', async () => {

@@ -145,17 +145,25 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   const waitForRetry = (ms: number): Promise<void> => {
     return new Promise((resolve) => {
       let settled = false;
+      const registration: { timer?: ReturnType<typeof setTimeout> } = {};
       const finish = () => {
         if (settled) {
           return;
         }
         settled = true;
-        clearTimeout(timer);
+        if (registration.timer !== undefined) {
+          clearTimeout(registration.timer);
+        }
         retryDelayCancelers.delete(finish);
         resolve();
       };
-      const timer = setTimeout(finish, ms);
       retryDelayCancelers.add(finish);
+      const nextTimer = setTimeout(finish, ms);
+      if (settled) {
+        clearTimeout(nextTimer);
+        return;
+      }
+      registration.timer = nextTimer;
     });
   };
 
