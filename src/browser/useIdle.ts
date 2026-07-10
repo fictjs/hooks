@@ -84,16 +84,27 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
 
     let fired = false;
     let nextTimer: ReturnType<typeof setTimeout> | null = null;
-    nextTimer = setTimeout(() => {
-      fired = true;
-      if (nextTimer != null && timer === nextTimer) {
-        timer = null;
+    try {
+      nextTimer = setTimeout(() => {
+        fired = true;
+        if (nextTimer != null && timer === nextTimer) {
+          timer = null;
+        }
+        if (!isCurrentOperation(currentOperation) || !activeSignal()) {
+          return;
+        }
+        idle(true);
+      }, timeout);
+    } catch (error) {
+      if (isCurrentOperation(currentOperation)) {
+        try {
+          pause();
+        } catch {
+          // Preserve the timer registration failure after best-effort rollback.
+        }
       }
-      if (!isCurrentOperation(currentOperation) || !activeSignal()) {
-        return;
-      }
-      idle(true);
-    }, timeout);
+      throw error;
+    }
     if (fired) {
       return;
     }

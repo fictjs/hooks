@@ -275,6 +275,29 @@ describe('useIdle', () => {
     }
   });
 
+  it('rolls back and can resume after timer registration fails', () => {
+    vi.useFakeTimers();
+    const timerError = new Error('timer registration failed');
+    vi.spyOn(globalThis, 'setTimeout').mockImplementationOnce(() => {
+      throw timerError;
+    });
+    const windowRef = new EventTarget() as Window;
+    const root = createRoot(() =>
+      useIdle({ window: windowRef, document: null, immediate: false, timeout: 1000 })
+    );
+
+    expect(() => root.value.resume()).toThrow(timerError);
+    expect(root.value.active()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    expect(() => root.value.resume()).not.toThrow();
+    expect(root.value.active()).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(1000);
+    expect(root.value.idle()).toBe(true);
+    root.dispose();
+  });
+
   it('returns unsupported state when window is missing', () => {
     const { value: state } = createRoot(() =>
       useIdle({
