@@ -310,6 +310,56 @@ describe('useClickOutside', () => {
     iframe.remove();
   });
 
+  it('accepts an adopted outside node from another realm', () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const foreignWindow = iframe.contentWindow as Window & typeof globalThis;
+    const foreignOutside = iframe.contentDocument!.createElement('button');
+    const target = document.createElement('div');
+    const adoptedOutside = document.adoptNode(foreignOutside);
+    document.body.append(target, adoptedOutside);
+    const handler = vi.fn();
+    const { dispose } = createRoot(() => useClickOutside(target, handler));
+
+    expect(adoptedOutside).toBeInstanceOf(foreignWindow.Node);
+    expect(adoptedOutside).not.toBeInstanceOf(window.Node);
+
+    adoptedOutside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    adoptedOutside.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(handler).toHaveBeenCalledOnce();
+
+    dispose();
+    target.remove();
+    adoptedOutside.remove();
+    iframe.remove();
+  });
+
+  it('rejects a spoofed non-node event target', () => {
+    const target = document.createElement('div');
+    const { windowRef, listeners } = createListenerWindow();
+    const handler = vi.fn();
+    const { dispose } = createRoot(() =>
+      useClickOutside(target, handler, { window: windowRef, document })
+    );
+    const spoofedTarget = new EventTarget();
+    Object.defineProperty(spoofedTarget, 'nodeType', { value: 1 });
+    const withTarget = <T extends Event>(event: T): T => {
+      Object.defineProperty(event, 'target', { value: spoofedTarget });
+      return event;
+    };
+
+    for (const listener of listeners.get('pointerdown') ?? []) {
+      listener(withTarget(new Event('pointerdown')));
+    }
+    for (const listener of listeners.get('click') ?? []) {
+      listener(withTarget(new MouseEvent('click', { detail: 1 })));
+    }
+
+    expect(handler).not.toHaveBeenCalled();
+    dispose();
+  });
+
   it('derives the event realm from an injected document', () => {
     const iframe = document.createElement('iframe');
     document.body.appendChild(iframe);

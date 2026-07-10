@@ -26,7 +26,6 @@ export interface UseClickOutsideControls {
 type WindowWithDomConstructors = Window & {
   Event: typeof Event;
   MouseEvent: typeof MouseEvent;
-  Node: typeof Node;
 };
 
 function getEventPath(event: Event): EventTarget[] {
@@ -37,19 +36,29 @@ function isKeyboardClick(event: Event, MouseEventCtor?: typeof MouseEvent): bool
   return !!MouseEventCtor && event instanceof MouseEventCtor && event.detail === 0;
 }
 
-function isNodeInside(
-  elements: Element[],
-  node: Node,
-  event: Event,
-  NodeCtor: typeof Node
-): boolean {
+function isNodeInside(elements: Element[], node: Node, event: Event): boolean {
   const path = getEventPath(event);
   return elements.some(
     (element) =>
       element.contains(node) ||
       path.includes(element) ||
-      path.some((entry) => entry instanceof NodeCtor && element.contains(entry))
+      path.some((entry) => {
+        try {
+          return element.contains(entry as Node);
+        } catch {
+          return false;
+        }
+      })
   );
+}
+
+function isNodeValue(probe: Element, target: EventTarget): target is Node {
+  try {
+    probe.contains(target as Node);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -71,22 +80,24 @@ export function useClickOutside(
       : options.window;
   const ignoreTargets = options.ignore ? toArray(options.ignore) : [];
   const realmWindow = (windowRef ?? documentRef?.defaultView) as WindowWithDomConstructors | null;
-  const NodeCtor = realmWindow?.Node;
   const MouseEventCtor = realmWindow?.MouseEvent;
 
   let pointerDownOutside = false;
 
   const isOutside = (event: Event) => {
     const eventTarget = event.target;
-    if (!eventTarget || !documentRef || !NodeCtor || !(eventTarget instanceof NodeCtor)) {
+    if (!eventTarget || !documentRef) {
       return false;
     }
-    const node = eventTarget as Node;
 
     const targetElements = resolveTargetList(target);
     if (targetElements.length === 0) {
       return false;
     }
+    if (!isNodeValue(targetElements[0]!, eventTarget)) {
+      return false;
+    }
+    const node = eventTarget;
 
     const ignoreElements = ignoreTargets.flatMap((item) => {
       const resolved = resolveIgnoreElement(item, documentRef);
@@ -96,10 +107,7 @@ export function useClickOutside(
       return Array.isArray(resolved) ? resolved : [resolved];
     });
 
-    if (
-      isNodeInside(targetElements, node, event, NodeCtor) ||
-      isNodeInside(ignoreElements, node, event, NodeCtor)
-    ) {
+    if (isNodeInside(targetElements, node, event) || isNodeInside(ignoreElements, node, event)) {
       return false;
     }
 
