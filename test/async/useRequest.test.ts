@@ -158,6 +158,126 @@ describe('useRequest', () => {
     }
   });
 
+  it('does not call onError when the error signal update disposes the root', async () => {
+    const requestError = new Error('request failed');
+    const onError = vi.fn();
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === requestError) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useRequest(
+          async () => {
+            throw requestError;
+          },
+          { manual: true, onError }
+        )
+      );
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.runAsync()).resolves.toBeUndefined();
+
+      expect(root.value.error()).toBe(requestError);
+      expect(root.value.loading()).toBe(false);
+      expect(onError).not.toHaveBeenCalled();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not call onFinally when the loading completion disposes the root', async () => {
+    const onFinally = vi.fn();
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === false) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useRequest(async () => 1, { manual: true, onFinally }));
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.runAsync()).resolves.toBe(1);
+
+      expect(root.value.data()).toBe(1);
+      expect(root.value.loading()).toBe(false);
+      expect(onFinally).not.toHaveBeenCalled();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not overwrite nested run params after a loading signal notification', async () => {
+    let state: ReturnType<typeof useRequest<string, [string]>>;
+    let nested: Promise<string | undefined> | undefined;
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === true) {
+          armed = false;
+          nested = state.runAsync('inner');
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      state = createRoot(() =>
+        useRequest(async (value: string) => value, { manual: true })
+      ).value;
+      armed = true;
+
+      await state.runAsync('outer');
+      await nested;
+
+      expect(state.params()).toEqual(['inner']);
+      expect(state.data()).toBe('inner');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('retries failed requests', async () => {
     const service = vi
       .fn<(...args: [number]) => Promise<number>>()

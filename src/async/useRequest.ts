@@ -243,9 +243,24 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     let finalError: unknown = null;
 
     stopPolling();
+    if (disposed || id !== callId) {
+      return data();
+    }
+
     loading(true);
+    if (disposed || id !== callId) {
+      return data();
+    }
+
     error(null);
+    if (disposed || id !== callId) {
+      return data();
+    }
+
     params(currentParams);
+    if (disposed || id !== callId) {
+      return data();
+    }
 
     try {
       let result: TData;
@@ -258,8 +273,17 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
         finalError = err;
         error(err);
+        if (disposed || id !== callId) {
+          return data();
+        }
+
+        const onError = options.onError;
+        if (disposed || id !== callId) {
+          return data();
+        }
+
         try {
-          options.onError?.(err, currentParams);
+          onError?.(err, currentParams);
         } finally {
           if (id === callId) {
             schedulePolling(currentParams);
@@ -290,7 +314,12 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     } finally {
       if (id === callId) {
         loading(false);
-        options.onFinally?.(currentParams, finalData, finalError);
+        if (!disposed && id === callId) {
+          const onFinally = options.onFinally;
+          if (!disposed && id === callId) {
+            onFinally?.(currentParams, finalData, finalError);
+          }
+        }
       }
     }
   };
