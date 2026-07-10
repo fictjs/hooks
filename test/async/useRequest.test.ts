@@ -1,7 +1,11 @@
 import { createRoot } from '@fictjs/runtime';
 import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearRequestCache, useRequest } from '../../src/async/useRequest';
+import {
+  clearRequestCache,
+  useRequest,
+  type UseRequestCacheEntry
+} from '../../src/async/useRequest';
 
 describe('useRequest', () => {
   afterEach(() => {
@@ -351,6 +355,45 @@ describe('useRequest', () => {
     expect(callbacks).toEqual(['inner']);
     expect(state.data()).toBe('inner');
     expect(cacheProvider.get('cache-reentry')?.data).toBe('inner');
+  });
+
+  it('does not prune cache committed by a nested mutate from an expiry getter', () => {
+    const stateRef = {
+      current: undefined as ReturnType<typeof useRequest<number>> | undefined
+    };
+    let reenter = false;
+    const entry = Object.defineProperty(
+      { data: 0, timestamp: Date.now(), expiresAt: Infinity },
+      'expiresAt',
+      {
+        enumerable: true,
+        get() {
+          if (reenter) {
+            reenter = false;
+            stateRef.current!.mutate(2);
+            return 0;
+          }
+          return Infinity;
+        }
+      }
+    ) as UseRequestCacheEntry<number>;
+    const cacheProvider = new Map<string, UseRequestCacheEntry<number>>([
+      ['expiry-getter-reentry', entry]
+    ]);
+    const state = createRoot(() =>
+      useRequest(async () => 0, {
+        manual: true,
+        cacheKey: 'expiry-getter-reentry',
+        cacheProvider
+      })
+    ).value;
+    stateRef.current = state;
+    reenter = true;
+
+    state.mutate(1);
+
+    expect(state.data()).toBe(2);
+    expect(cacheProvider.get('expiry-getter-reentry')?.data).toBe(2);
   });
 
   it('retries failed requests', async () => {

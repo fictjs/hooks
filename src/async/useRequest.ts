@@ -83,7 +83,12 @@ function pruneExpiredCache<T>(
       return false;
     }
 
-    if (entry.expiresAt <= now) {
+    const expiresAt = entry.expiresAt;
+    if (!ownsOperation()) {
+      return false;
+    }
+
+    if (expiresAt <= now) {
       cache.delete(key);
       if (!ownsOperation()) {
         return false;
