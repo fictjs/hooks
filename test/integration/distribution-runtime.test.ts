@@ -116,4 +116,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps reentrant useEventListener cleanup owned in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-event-listener-reentrant.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });

@@ -105,6 +105,47 @@ describe('useEventListener', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it('keeps the listener created by a refresh reentered from removal', () => {
+    const target = new EventTarget();
+    const handler = vi.fn();
+    const activeListeners = new Set<EventListenerOrEventListenerObject>();
+    const addListener = target.addEventListener.bind(target);
+    const removeListener = target.removeEventListener.bind(target);
+    const addListenerSpy = vi
+      .spyOn(target, 'addEventListener')
+      .mockImplementation((...args) => {
+        if (args[1]) {
+          activeListeners.add(args[1]);
+        }
+        addListener(...args);
+      });
+    let refreshOnRemove = false;
+    let refresh = () => {};
+    vi.spyOn(target, 'removeEventListener').mockImplementation((...args) => {
+      removeListener(...args);
+      if (args[1]) {
+        activeListeners.delete(args[1]);
+      }
+      if (refreshOnRemove) {
+        refreshOnRemove = false;
+        refresh();
+      }
+    });
+    const root = createRoot(() => useEventListener(target, 'reentrant-refresh', handler));
+    refresh = root.value.refresh;
+    refreshOnRemove = true;
+
+    root.value.refresh();
+
+    expect(addListenerSpy).toHaveBeenCalledTimes(2);
+    expect(activeListeners.size).toBe(1);
+    target.dispatchEvent(new Event('reentrant-refresh'));
+    expect(handler).toHaveBeenCalledOnce();
+
+    root.value.stop();
+    expect(activeListeners.size).toBe(0);
+  });
+
   it('supports stop and start controls', () => {
     const target = new EventTarget();
     const handler = vi.fn();

@@ -29,16 +29,19 @@ export function useEventListener<E extends Event = Event>(
   let bound = false;
   let disposed = false;
   let bindingGeneration = 0;
+  let refreshGeneration = 0;
 
   const canBind = () => !disposed && active();
+  const ownsRefresh = (generation: number) => !disposed && generation === refreshGeneration;
+  const canRunBind = (generation: number) => ownsRefresh(generation) && active();
 
-  const bind = (): (() => void) | undefined => {
+  const bind = (refreshId: number): (() => void) | undefined => {
     const targets = resolveTargetList(target);
-    if (!canBind()) {
+    if (!canRunBind(refreshId)) {
       return undefined;
     }
     const eventNames = toArray(toValue(event as MaybeAccessor<EventName>));
-    if (!canBind()) {
+    if (!canRunBind(refreshId)) {
       return undefined;
     }
 
@@ -59,7 +62,7 @@ export function useEventListener<E extends Event = Event>(
       passive: options.passive,
       signal: options.signal
     };
-    if (!canBind() || generation !== bindingGeneration) {
+    if (!canRunBind(refreshId) || generation !== bindingGeneration) {
       return undefined;
     }
     const controller = addEventListeners(targets, eventNames, listener, listenerOptions);
@@ -69,7 +72,7 @@ export function useEventListener<E extends Event = Event>(
       }
       controller.stop();
     };
-    if (!canBind() || generation !== bindingGeneration) {
+    if (!canRunBind(refreshId) || generation !== bindingGeneration) {
       try {
         stop();
       } catch {
@@ -89,12 +92,12 @@ export function useEventListener<E extends Event = Event>(
     };
   };
 
-  const bindCurrent = (): boolean => {
-    const stop = bind();
+  const bindCurrent = (refreshId: number): boolean => {
+    const stop = bind(refreshId);
     if (!stop) {
       return false;
     }
-    if (!canBind()) {
+    if (!canRunBind(refreshId)) {
       try {
         stop();
       } catch {
@@ -106,21 +109,21 @@ export function useEventListener<E extends Event = Event>(
     return true;
   };
 
-  const scheduleDeferredBind = () => {
+  const scheduleDeferredBind = (refreshId: number) => {
     cancelDeferredBind();
-    if (!canBind()) {
+    if (!canRunBind(refreshId)) {
       return;
     }
     cancelDeferredBind = deferTargetResolution(() => {
       cancelDeferredBind = () => {};
-      if (!canBind()) {
+      if (!canRunBind(refreshId)) {
         return;
       }
       stopCurrent();
-      if (!canBind()) {
+      if (!canRunBind(refreshId)) {
         return;
       }
-      bindCurrent();
+      bindCurrent(refreshId);
     });
   };
 
@@ -128,19 +131,23 @@ export function useEventListener<E extends Event = Event>(
     if (disposed) {
       return;
     }
+    const refreshId = ++refreshGeneration;
     cancelDeferredBind();
     cancelDeferredBind = () => {};
-    if (disposed) {
+    if (!ownsRefresh(refreshId)) {
       return;
     }
     stopCurrent();
+    if (!ownsRefresh(refreshId)) {
+      return;
+    }
 
     if (!canBind()) {
       return;
     }
 
-    if (!bindCurrent() && canBind()) {
-      scheduleDeferredBind();
+    if (!bindCurrent(refreshId) && canRunBind(refreshId)) {
+      scheduleDeferredBind(refreshId);
     }
   };
 
