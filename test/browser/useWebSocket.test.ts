@@ -178,6 +178,86 @@ describe('useWebSocket', () => {
     expect(state.error()).toBe(connectError);
   });
 
+  it('preserves a socket opened reentrantly from a constructor error callback', () => {
+    vi.useFakeTimers();
+    const connectError = new Error('connect failed');
+    let openReentrantly = () => false;
+    let constructions = 0;
+    let reentered = false;
+    let reentrantOpenResult: boolean | undefined;
+    const ReentrantWebSocket = function ReentrantWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      constructions += 1;
+      if (constructions === 1) {
+        throw connectError;
+      }
+      return new MockWebSocket(url, protocols);
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ReentrantWebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        immediate: false,
+        onError() {
+          if (!reentered) {
+            reentered = true;
+            reentrantOpenResult = openReentrantly();
+            MockWebSocket.instances[0]!.open();
+          }
+          throw new Error('error callback failed');
+        }
+      })
+    );
+    openReentrantly = root.value.open;
+
+    expect(root.value.open()).toBe(true);
+
+    expect(reentrantOpenResult).toBe(true);
+    expect(constructions).toBe(2);
+    expect(root.value.status()).toBe('OPEN');
+    expect(root.value.error()).toBeNull();
+    expect(root.value.reconnectCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(root.value.send('payload')).toBe(true);
+    expect(MockWebSocket.instances[0]!.send).toHaveBeenCalledWith('payload');
+    root.dispose();
+  });
+
+  it('does not reconnect when a constructor error callback closes the connection', () => {
+    vi.useFakeTimers();
+    let closeFromError = () => {};
+    let constructions = 0;
+    class ThrowingWebSocket {
+      constructor() {
+        constructions += 1;
+        throw new Error('connect failed');
+      }
+    }
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ThrowingWebSocket as never,
+        autoReconnect: { retries: 1, delay: 0 },
+        immediate: false,
+        onError() {
+          closeFromError();
+          throw new Error('error callback failed');
+        }
+      })
+    );
+    closeFromError = root.value.close;
+
+    expect(root.value.open()).toBe(false);
+
+    expect(root.value.status()).toBe('CLOSED');
+    expect(root.value.reconnectCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.runAllTimers();
+    expect(constructions).toBe(1);
+    root.dispose();
+  });
+
   it('reports send errors through onError', () => {
     const onError = vi.fn();
     const sendError = new Error('send failed');

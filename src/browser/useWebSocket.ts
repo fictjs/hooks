@@ -118,6 +118,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   let reconnectAttempts = 0;
   let cleanupSocket = () => {};
   let destroyed = false;
+  let openCallId = 0;
+
+  const hasOwnedSocket = () => socket !== null;
 
   const reportError = (nextError: unknown) => {
     error(nextError);
@@ -193,6 +196,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     if (destroyed) {
       return false;
     }
+    const currentOpenCallId = ++openCallId;
 
     const resolvedUrl = toValue(url);
     if (!webSocketCtor) {
@@ -235,6 +239,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       currentSocket = new webSocketCtor(resolvedUrl, options.protocols);
     } catch (nextError) {
       reportError(nextError);
+      if (destroyed || currentOpenCallId !== openCallId) {
+        return hasOwnedSocket();
+      }
       status('CLOSED');
       scheduleReconnect();
       return false;
@@ -319,6 +326,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return;
     }
 
+    openCallId += 1;
     const previousManuallyClosed = manuallyClosed;
     const previousReconnectAttempts = reconnectAttempts;
     const previousReconnectCount = reconnectCount();
