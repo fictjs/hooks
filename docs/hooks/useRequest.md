@@ -51,8 +51,8 @@ function clearRequestCache(cacheKey?: string): void;
   set `manual: true`; the TypeScript API rejects an unsafe parameterless automatic call.
 - `cacheKey` enables shared in-memory cache across hook instances.
 - `staleTime` controls when cached data is considered too old to apply.
-- `cacheTime` bounds how long a cache entry stays in the global cache; the default is five minutes.
-- `cacheSize` bounds the global request cache; the default keeps the newest 100 entries.
+- `cacheTime` bounds how long an entry stays in the selected cache; the default is five minutes.
+- `cacheSize` bounds the selected cache; the default keeps the newest 100 entries.
 - In browsers, the default cache is shared across hook instances. During SSR/Node execution,
   the default cache is isolated per hook to prevent data from crossing requests. Pass a
   request-scoped `cacheProvider` when server-side hooks need to share cached values.
