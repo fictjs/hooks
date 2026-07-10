@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import { createSignal } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useMediaQuery } from '../../src/browser/useMediaQuery';
 
@@ -91,6 +92,65 @@ describe('useMediaQuery', () => {
 
     mql.setMatches(true);
     expect(state.matches()).toBe(true);
+  });
+
+  it('does not update when reading a change event disposes the owner', () => {
+    const mql = new MockMediaQueryList('(prefers-reduced-motion: reduce)', false);
+    const windowRef = { matchMedia: vi.fn(() => mql) } as unknown as Window;
+    let dispose = () => {};
+    const root = createRoot(() =>
+      useMediaQuery('(prefers-reduced-motion: reduce)', { window: windowRef })
+    );
+    dispose = root.dispose;
+    const event = new Event('change') as MediaQueryListEvent;
+    Object.defineProperty(event, 'matches', {
+      configurable: true,
+      get() {
+        dispose();
+        return true;
+      }
+    });
+
+    mql.dispatchEvent(event);
+
+    expect(root.value.matches()).toBe(false);
+  });
+
+  it('rolls back a listener whose registration disposes the owner', async () => {
+    const query = createSignal('first');
+    let dispose = () => {};
+    let disposeOnAdd = false;
+    const listenerSets = new Map<string, Set<EventListener>>();
+    const windowRef = {
+      matchMedia(value: string) {
+        const listeners = new Set<EventListener>();
+        listenerSets.set(value, listeners);
+        return {
+          matches: false,
+          addEventListener(_type: string, listener: EventListener) {
+            listeners.add(listener);
+            if (disposeOnAdd) {
+              disposeOnAdd = false;
+              dispose();
+            }
+          },
+          removeEventListener(_type: string, listener: EventListener) {
+            listeners.delete(listener);
+          }
+        } as unknown as MediaQueryList;
+      }
+    } as unknown as Window;
+    const root = createRoot(() => useMediaQuery(() => query(), { window: windowRef }));
+    dispose = root.dispose;
+    expect(listenerSets.get('first')?.size).toBe(1);
+    disposeOnAdd = true;
+
+    query('second');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(listenerSets.get('first')?.size).toBe(0);
+    expect(listenerSets.get('second')?.size).toBe(0);
   });
 
   it('supports legacy media query listeners', () => {
