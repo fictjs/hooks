@@ -13,4 +13,15 @@ describe('distribution runtime', () => {
       })
     ).not.toThrow();
   });
+
+  it('executes useFullscreen from the built ESM entry', () => {
+    const fixture = resolve('test/fixtures/distribution-fullscreen.mjs');
+
+    expect(() =>
+      execFileSync(process.execPath, [fixture], {
+        cwd: process.cwd(),
+        stdio: 'pipe'
+      })
+    ).not.toThrow();
+  });
 });

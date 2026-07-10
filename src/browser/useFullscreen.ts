@@ -121,7 +121,7 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
   const isFullscreen = createSignal(false);
   let disposed = false;
 
-  const update = () => {
+  function update(): void {
     if (disposed) {
       return;
     }
@@ -136,7 +136,7 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
     const target = resolveTargetElement(options, documentRef);
     const fullscreenElement = getFullscreenElement(documentRef);
     isFullscreen(!!target && !!fullscreenElement && fullscreenElement === target);
-  };
+  }
 
   const exitTargetIfCurrent = async (target: Element): Promise<boolean> => {
     if (!documentRef || getFullscreenElement(documentRef) !== target) {
