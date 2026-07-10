@@ -67,11 +67,26 @@ export function useVirtualList<T>(
   const overscan = Math.floor(normalizeNonNegative(options.overscan, 2));
 
   const scrollTopSignal = createSignal(normalizeNonNegative(options.initialScrollTop));
+  let scrollOperationGeneration = 0;
+
+  const commitScrollTop = (value: number, operation: number) => {
+    const nextScrollTop = normalizeNonNegative(value);
+    if (operation !== scrollOperationGeneration) {
+      return;
+    }
+    scrollTopSignal(nextScrollTop);
+  };
+
+  const setScrollTop = (value: number) => {
+    const operation = ++scrollOperationGeneration;
+    commitScrollTop(value, operation);
+  };
+
   const scrollTop = function scrollTop(next?: number) {
     if (arguments.length === 0) {
       return scrollTopSignal();
     }
-    scrollTopSignal(normalizeNonNegative(next));
+    setScrollTop(next ?? 0);
   } as typeof scrollTopSignal;
 
   const totalHeight = createMemo(() => toValue(source as MaybeAccessor<T[]>).length * itemHeight);
@@ -103,20 +118,21 @@ export function useVirtualList<T>(
     return buildVirtualItems(items, from, to, itemHeight);
   });
 
-  const setScrollTop = (value: number) => {
-    scrollTop(value);
-  };
-
   const scrollTo = (index: number) => {
     setScrollTop(index * itemHeight);
   };
 
   const onScroll = (event: Event) => {
+    const operation = ++scrollOperationGeneration;
     const element = event.target as HTMLElement | null;
-    if (!element) {
+    if (!element || operation !== scrollOperationGeneration) {
       return;
     }
-    setScrollTop(element.scrollTop);
+    const nextScrollTop = element.scrollTop;
+    if (operation !== scrollOperationGeneration) {
+      return;
+    }
+    commitScrollTop(nextScrollTop, operation);
   };
 
   return {

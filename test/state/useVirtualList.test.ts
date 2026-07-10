@@ -246,4 +246,25 @@ describe('useVirtualList', () => {
     state.onScroll({ target: container } as unknown as Event);
     expect(state.scrollTop()).toBe(80);
   });
+
+  it('preserves a nested scroll update started by the element getter', () => {
+    let setNested: (value: number) => void = () => {};
+    const state = createRoot(() =>
+      useVirtualList([1, 2, 3], {
+        itemHeight: 10,
+        containerHeight: 20
+      })
+    ).value;
+    setNested = state.setScrollTop;
+    const element = {
+      get scrollTop() {
+        setNested(20);
+        return 10;
+      }
+    };
+
+    state.onScroll({ target: element } as unknown as Event);
+
+    expect(state.scrollTop()).toBe(20);
+  });
 });
