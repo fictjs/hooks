@@ -204,6 +204,77 @@ describe('useIdle', () => {
     root.dispose();
   });
 
+  it('treats becoming visible as user activity', () => {
+    vi.useFakeTimers();
+    const windowRef = new EventTarget() as Window;
+    const documentRef = new EventTarget() as Document;
+    let visibilityState: DocumentVisibilityState = 'hidden';
+    Object.defineProperty(documentRef, 'visibilityState', {
+      configurable: true,
+      get() {
+        return visibilityState;
+      }
+    });
+    const { value: state } = createRoot(() =>
+      useIdle({ window: windowRef, document: documentRef, timeout: 1000 })
+    );
+    vi.advanceTimersByTime(1000);
+    expect(state.idle()).toBe(true);
+
+    visibilityState = 'visible';
+    documentRef.dispatchEvent(new Event('visibilitychange'));
+
+    expect(state.idle()).toBe(false);
+    expect(state.lastActive()).toBe(Date.now());
+    vi.advanceTimersByTime(1000);
+    expect(state.idle()).toBe(true);
+  });
+
+  it('resets while active and ignores controls after disposal', () => {
+    vi.useFakeTimers();
+    const windowRef = new EventTarget() as Window;
+    const root = createRoot(() => useIdle({ window: windowRef, document: null, timeout: 1000 }));
+    vi.advanceTimersByTime(1000);
+    expect(root.value.idle()).toBe(true);
+
+    root.value.reset();
+
+    expect(root.value.idle()).toBe(false);
+    expect(vi.getTimerCount()).toBe(1);
+    const lastActive = root.value.lastActive();
+    root.dispose();
+    root.value.pause();
+    root.value.reset();
+    root.value.resume();
+
+    expect(root.value.active()).toBe(false);
+    expect(root.value.lastActive()).toBe(lastActive);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('supports timeout implementations that invoke callbacks synchronously', () => {
+    const windowRef = new EventTarget() as Window;
+    const timeout = vi.spyOn(globalThis, 'setTimeout').mockImplementationOnce((callback) => {
+      (callback as () => void)();
+      return 17 as unknown as ReturnType<typeof setTimeout>;
+    });
+
+    try {
+      const root = createRoot(() =>
+        useIdle({ window: windowRef, document: null, immediate: false, timeout: 1000 })
+      );
+
+      root.value.resume();
+
+      expect(timeout).toHaveBeenCalled();
+      expect(root.value.active()).toBe(true);
+      expect(root.value.idle()).toBe(true);
+      root.dispose();
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   it('returns unsupported state when window is missing', () => {
     const { value: state } = createRoot(() =>
       useIdle({
