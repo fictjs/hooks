@@ -74,4 +74,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps useFetch terminal after error-triggered disposal in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-fetch-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });

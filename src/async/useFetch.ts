@@ -269,6 +269,10 @@ export function useFetch<T = unknown>(
       }
 
       error(err);
+      if (disposed || id !== requestId) {
+        return data();
+      }
+
       options.onError?.(err);
       return data();
     } finally {

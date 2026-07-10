@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useFetch } from '../../src/async/useFetch';
 
@@ -475,6 +476,58 @@ describe('useFetch', () => {
 
     expect((state.error() as Error).message).toContain('500');
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onError when the error signal update disposes the root', async () => {
+    const requestError = new Error('request failed');
+    const mockFetch = vi.fn(async () => {
+      throw requestError;
+    });
+    const onError = vi.fn();
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === requestError) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useFetch('https://example.com', {
+          fetch: mockFetch as never,
+          immediate: false,
+          initialData: 'initial',
+          onError
+        })
+      );
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.execute()).resolves.toBe('initial');
+
+      expect(root.value.error()).toBe(requestError);
+      expect(root.value.aborted()).toBe(true);
+      expect(root.value.isLoading()).toBe(false);
+      expect(onError).not.toHaveBeenCalled();
+
+      await expect(root.value.execute()).resolves.toBe('initial');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('consumes onError failures from immediate execution', async () => {
