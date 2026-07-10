@@ -31,6 +31,13 @@ function normalizePermission(input: PermissionInput): PermissionDescriptor {
   return input;
 }
 
+function isSamePermission(a: PermissionDescriptor, b: PermissionDescriptor): boolean {
+  const aRecord = a as unknown as Record<string, unknown>;
+  const bRecord = b as unknown as Record<string, unknown>;
+  const keys = new Set([...Object.keys(aRecord), ...Object.keys(bRecord)]);
+  return [...keys].every((key) => Object.is(aRecord[key], bRecord[key]));
+}
+
 /**
  * Reactive Permissions API helper.
  *
@@ -48,9 +55,23 @@ export function usePermission(
   const isSupported = createSignal<boolean>(!!navigatorRef?.permissions?.query);
   const state = createSignal<PermissionState>(initialState);
 
-  let activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
+  const readPermission = () =>
+    normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
+  const activePermission = { current: readPermission() };
+  let initialized = false;
   let cleanup = () => {};
   let queryId = 0;
+
+  const syncPermission = () => {
+    const nextPermission = readPermission();
+    const changed = !isSamePermission(activePermission.current, nextPermission);
+    if (changed) {
+      queryId += 1;
+      cleanup();
+      activePermission.current = nextPermission;
+    }
+    return { permission: activePermission.current, changed };
+  };
 
   const bindStatus = (nextStatus: PermissionStatus) => {
     cleanup();
@@ -67,14 +88,15 @@ export function usePermission(
     };
   };
 
-  const query = async (): Promise<PermissionStatus | null> => {
+  const queryPermission = async (
+    currentPermission: PermissionDescriptor
+  ): Promise<PermissionStatus | null> => {
     if (!navigatorRef?.permissions?.query) {
       isSupported(false);
       return null;
     }
 
     const currentQueryId = ++queryId;
-    const currentPermission = activePermission;
 
     isSupported(true);
 
@@ -93,12 +115,18 @@ export function usePermission(
     }
   };
 
+  const query = (): Promise<PermissionStatus | null> => {
+    const current = syncPermission();
+    return queryPermission(current.permission);
+  };
+
   createEffect(() => {
-    queryId += 1;
-    cleanup();
-    activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
-    if (options.immediate ?? true) {
-      void query();
+    const current = syncPermission();
+    if (!initialized || current.changed) {
+      initialized = true;
+      if (options.immediate ?? true) {
+        void queryPermission(current.permission);
+      }
     }
   });
 

@@ -137,6 +137,26 @@ describe('usePermission', () => {
     expect(addEventListener).not.toHaveBeenCalled();
   });
 
+  it('queries the current permission when the source changes in the same tick', async () => {
+    const status = new MockPermissionStatus('microphone' as PermissionName, 'granted');
+    const query = vi.fn(async () => status);
+    const navigatorRef = { permissions: { query } } as unknown as Navigator;
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: navigatorRef as never,
+        immediate: false
+      })
+    );
+
+    permission('microphone');
+    const result = state.query();
+
+    expect(query).toHaveBeenCalledWith({ name: 'microphone' });
+    await expect(result).resolves.toBe(status);
+    expect(state.state()).toBe('granted');
+  });
+
   it('cleans up change listener on dispose', async () => {
     const status = new MockPermissionStatus('camera', 'granted');
     const navigatorRef = {
