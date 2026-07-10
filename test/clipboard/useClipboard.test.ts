@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useClipboard } from '../../src/clipboard/useClipboard';
 
@@ -271,6 +272,76 @@ describe('useClipboard', () => {
     expect(vi.getTimerCount()).toBe(0);
     await expect(root.value.copy('after dispose')).resolves.toBe(false);
     expect(writeText).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not write after the text signal update disposes the owner', async () => {
+    const writeText = vi.fn(async () => {});
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 'terminal') {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useClipboard({ navigator: { clipboard: { writeText } }, window, document })
+      );
+      dispose = root.dispose;
+
+      await expect(root.value.copy('terminal')).resolves.toBe(false);
+      expect(writeText).not.toHaveBeenCalled();
+      expect(root.value.copied()).toBe(false);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not schedule a reset after the copied signal update disposes the owner', async () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn(async () => {});
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === true) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useClipboard({ navigator: { clipboard: { writeText } }, window, document })
+      );
+      dispose = root.dispose;
+
+      await expect(root.value.copy('copied')).resolves.toBe(true);
+      expect(writeText).toHaveBeenCalledOnce();
+      expect(root.value.copied()).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('creates and clears copied timers in the injected window realm', async () => {

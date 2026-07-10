@@ -103,13 +103,18 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     const currentGeneration = ++generation;
     const canCommit = () => !disposed && currentGeneration === generation;
     text(value);
+    if (!canCommit()) {
+      return false;
+    }
 
     if (navigatorRef?.clipboard?.writeText) {
       try {
         await navigatorRef.clipboard.writeText(value);
         if (canCommit()) {
           copied(true);
-          resetCopiedLater();
+          if (canCommit()) {
+            resetCopiedLater();
+          }
         }
         return true;
       } catch {
@@ -124,7 +129,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       const ok = fallbackCopy(value, documentRef);
       if (canCommit()) {
         copied(ok);
-        if (ok) {
+        if (ok && canCommit()) {
           resetCopiedLater();
         }
       }
