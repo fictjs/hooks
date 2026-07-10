@@ -199,13 +199,20 @@ const hookDocFiles = walkFiles(path.join(root, 'docs/hooks')).map(toRootRelative
 assertSameSet('hook documentation files', hookDocFiles, requiredHookDocs);
 
 const readme = readFileSync(path.join(root, 'README.md'), 'utf8');
-if (/github\.com\/fictjs\/hooks\/(?:blob|tree)\/main\/docs\//.test(readme)) {
-  fail('README hook documentation links must not point at the moving main branch');
-}
-const readmeHookDocLinks = [...readme.matchAll(/\]\(\.\/(docs\/hooks\/[^)#?]+\.md)\)/g)].map(
+const versionedDocsRoot = `https://github.com/fictjs/hooks/tree/v${pkg.version}/docs/hooks`;
+const versionedDocsFileRoot = `https://github.com/fictjs/hooks/blob/v${pkg.version}/`;
+const expectedReadmeHookDocLinks = [
+  versionedDocsRoot,
+  ...requiredHookDocs.map((doc) => `${versionedDocsFileRoot}${doc}`)
+];
+const readmeHookDocLinks = [...readme.matchAll(/\]\(([^)\s]*docs\/hooks[^)\s]*)\)/g)].map(
   (match) => match[1]
 );
-assertSameSet('README hook documentation links', readmeHookDocLinks, requiredHookDocs);
+assertSameSet(
+  'versioned README hook documentation links',
+  readmeHookDocLinks,
+  expectedReadmeHookDocLinks
+);
 
 const packageEntryPaths = [
   ['main', pkg.main],
