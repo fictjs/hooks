@@ -216,6 +216,52 @@ describe('useFullscreen', () => {
     expect(state.isFullscreen()).toBe(false);
   });
 
+  it('contains auto-exit failures during disposal', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    const { value: state, dispose } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    await state.enter();
+    documentMock.exitFullscreen = vi.fn(async () => {
+      throw new Error('exit denied');
+    });
+
+    expect(dispose).not.toThrow();
+    await Promise.resolve();
+
+    expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(documentMock.fullscreenElement).toBe(main);
+    expect(state.isFullscreen()).toBe(false);
+  });
+
+  it('skips auto-exit safely when the exit method disappears', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    const { value: state, dispose } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    await state.enter();
+    Object.defineProperty(documentMock, 'exitFullscreen', {
+      configurable: true,
+      value: undefined
+    });
+
+    expect(dispose).not.toThrow();
+    await Promise.resolve();
+
+    expect(documentMock.fullscreenElement).toBe(main);
+    expect(state.isFullscreen()).toBe(false);
+  });
+
   it('exits a pending fullscreen entry that completes after dispose', async () => {
     const { documentMock, main } = createFullscreenMock();
     let completeRequest = () => {};
@@ -246,6 +292,62 @@ describe('useFullscreen', () => {
     expect(root.value.isFullscreen()).toBe(false);
     await expect(root.value.enter()).resolves.toBe(false);
     expect(main.requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a pending fullscreen entry alone when auto-exit is disabled', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    let completeRequest = () => {};
+    main.requestFullscreen = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completeRequest = () => {
+            documentMock.fullscreenElement = main;
+            resolve();
+          };
+        })
+    );
+    const root = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: false
+      })
+    );
+
+    const pendingEnter = root.value.enter();
+    root.dispose();
+    completeRequest();
+
+    await expect(pendingEnter).resolves.toBe(false);
+    expect(documentMock.exitFullscreen).not.toHaveBeenCalled();
+    expect(documentMock.fullscreenElement).toBe(main);
+    expect(root.value.isFullscreen()).toBe(false);
+  });
+
+  it('contains a pending fullscreen rejection after dispose', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    let rejectRequest: (error: Error) => void = () => {};
+    main.requestFullscreen = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectRequest = reject;
+        })
+    );
+    const root = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    const pendingEnter = root.value.enter();
+    root.dispose();
+    rejectRequest(new Error('request denied'));
+
+    await expect(pendingEnter).resolves.toBe(false);
+    expect(root.value.isFullscreen()).toBe(false);
+    expect(documentMock.exitFullscreen).not.toHaveBeenCalled();
   });
 
   it('does not exit another element fullscreen on dispose', async () => {
