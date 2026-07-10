@@ -121,15 +121,29 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       }
     }
     let firedSynchronously = false;
-    const nextTimer = windowRef.setTimeout(() => {
-      firedSynchronously = true;
-      if (!canCommit()) {
-        return;
-      }
-      copied(false);
-      timer = undefined;
-    }, copiedDuring);
+    let scheduling = true;
+    let nextTimer: number | undefined;
+    try {
+      nextTimer = windowRef.setTimeout(() => {
+        firedSynchronously = true;
+        if (!canCommit()) {
+          return;
+        }
+        if (!scheduling && timer !== nextTimer) {
+          return;
+        }
+        if (!scheduling) {
+          timer = undefined;
+        }
+        copied(false);
+      }, copiedDuring);
+    } finally {
+      scheduling = false;
+    }
     if (firedSynchronously) {
+      return;
+    }
+    if (nextTimer === undefined) {
       return;
     }
     if (!canCommit()) {

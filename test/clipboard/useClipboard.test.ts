@@ -499,6 +499,66 @@ describe('useClipboard', () => {
     await expect(root.value.copy('after-dispose')).resolves.toBe(false);
   });
 
+  it('preserves a timer created reentrantly from the copied reset signal', async () => {
+    const timers = new Map<number, () => void>();
+    let timerId = 0;
+    const windowRef = {
+      setTimeout(callback: () => void) {
+        const id = ++timerId;
+        timers.set(id, callback);
+        return id;
+      },
+      clearTimeout(id: number) {
+        timers.delete(id);
+      }
+    } as unknown as Window;
+    let copyNested = () => Promise.resolve(false);
+    let nestedCopy: Promise<boolean> | undefined;
+    let resetReentry = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (resetReentry && value === false) {
+          resetReentry = false;
+          nestedCopy = copyNested();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useClipboard({
+          navigator: { clipboard: { writeText: async () => {} } },
+          window: windowRef,
+          document: null
+        })
+      );
+      copyNested = () => root.value.copy('nested-reset');
+      await root.value.copy('first');
+
+      const [firstTimerId, firstTimer] = [...timers.entries()][0]!;
+      timers.delete(firstTimerId);
+      resetReentry = true;
+      firstTimer();
+      await expect(nestedCopy).resolves.toBe(true);
+
+      expect(timers.size).toBe(1);
+      expect(root.value.copied()).toBe(true);
+      root.dispose();
+      expect(timers.size).toBe(0);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('creates and clears copied timers in the injected window realm', async () => {
     const setTimeoutRef = vi.fn(() => 42);
     const clearTimeoutRef = vi.fn();
