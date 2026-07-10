@@ -131,7 +131,54 @@ const requiredDistFiles = [
   'dist/index.fict.meta.json',
   'dist/index.js'
 ];
-const requiredPackageFiles = ['LICENSE', 'README.md', 'package.json', ...requiredDistFiles];
+const requiredHookDocs = [
+  'docs/hooks/useAsyncState.md',
+  'docs/hooks/useClickOutside.md',
+  'docs/hooks/useClipboard.md',
+  'docs/hooks/useCounter.md',
+  'docs/hooks/useDebounceFn.md',
+  'docs/hooks/useDocumentVisibility.md',
+  'docs/hooks/useEventListener.md',
+  'docs/hooks/useFetch.md',
+  'docs/hooks/useFocusWithin.md',
+  'docs/hooks/useFullscreen.md',
+  'docs/hooks/useGeolocation.md',
+  'docs/hooks/useHover.md',
+  'docs/hooks/useIdle.md',
+  'docs/hooks/useIntersectionObserver.md',
+  'docs/hooks/useIntervalFn.md',
+  'docs/hooks/useKeyPress.md',
+  'docs/hooks/useLocalStorage.md',
+  'docs/hooks/useMediaQuery.md',
+  'docs/hooks/useMount.md',
+  'docs/hooks/useMutationObserver.md',
+  'docs/hooks/useNetwork.md',
+  'docs/hooks/usePermission.md',
+  'docs/hooks/usePrevious.md',
+  'docs/hooks/useRafFn.md',
+  'docs/hooks/useRequest.md',
+  'docs/hooks/useResizeObserver.md',
+  'docs/hooks/useScroll.md',
+  'docs/hooks/useSessionStorage.md',
+  'docs/hooks/useSize.md',
+  'docs/hooks/useStorage.md',
+  'docs/hooks/useThrottleFn.md',
+  'docs/hooks/useTimeoutFn.md',
+  'docs/hooks/useTitle.md',
+  'docs/hooks/useToggle.md',
+  'docs/hooks/useUnmount.md',
+  'docs/hooks/useVirtualList.md',
+  'docs/hooks/useWebSocket.md',
+  'docs/hooks/useWindowScroll.md',
+  'docs/hooks/useWindowSize.md'
+];
+const requiredPackageFiles = [
+  'LICENSE',
+  'README.md',
+  'package.json',
+  ...requiredDistFiles,
+  ...requiredHookDocs
+];
 
 const pkg = readJson('package.json');
 if (pkg.name !== '@fictjs/hooks') {
@@ -146,7 +193,19 @@ if (
 if (pkg.fict?.metadata !== './dist/index.fict.meta.json') {
   fail('package.json must declare fict.metadata as ./dist/index.fict.meta.json');
 }
-assertSameSet('package.json files allowlist', pkg.files ?? [], ['dist']);
+assertSameSet('package.json files allowlist', pkg.files ?? [], ['dist', 'docs']);
+
+const hookDocFiles = walkFiles(path.join(root, 'docs/hooks')).map(toRootRelative);
+assertSameSet('hook documentation files', hookDocFiles, requiredHookDocs);
+
+const readme = readFileSync(path.join(root, 'README.md'), 'utf8');
+if (/github\.com\/fictjs\/hooks\/(?:blob|tree)\/main\/docs\//.test(readme)) {
+  fail('README hook documentation links must not point at the moving main branch');
+}
+const readmeHookDocLinks = [...readme.matchAll(/\]\(\.\/(docs\/hooks\/[^)#?]+\.md)\)/g)].map(
+  (match) => match[1]
+);
+assertSameSet('README hook documentation links', readmeHookDocLinks, requiredHookDocs);
 
 const packageEntryPaths = [
   ['main', pkg.main],
