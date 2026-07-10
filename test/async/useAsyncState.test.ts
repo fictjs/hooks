@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useAsyncState } from '../../src/async/useAsyncState';
 
@@ -168,5 +169,50 @@ describe('useAsyncState', () => {
     expect(root.value.error()).toBeNull();
     expect(root.value.isLoading()).toBe(false);
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not call onError when the error signal update disposes the root', async () => {
+    const executionError = new Error('execution failed');
+    const executor = vi.fn(async () => {
+      throw executionError;
+    });
+    const onError = vi.fn();
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === executionError) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useAsyncState(executor, 'initial', { onError }));
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.execute()).rejects.toBe(executionError);
+
+      expect(root.value.state()).toBe('initial');
+      expect(root.value.error()).toBe(executionError);
+      expect(root.value.isLoading()).toBe(false);
+      expect(onError).not.toHaveBeenCalled();
+
+      await expect(root.value.execute()).resolves.toBe('initial');
+      expect(executor).toHaveBeenCalledTimes(1);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 });

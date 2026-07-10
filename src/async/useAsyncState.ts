@@ -74,7 +74,9 @@ export function useAsyncState<T, Args extends unknown[] = []>(
     } catch (err) {
       if (id === callId) {
         error(err);
-        options.onError?.(err);
+        if (!disposed && id === callId) {
+          options.onError?.(err);
+        }
       }
       throw err;
     } finally {
