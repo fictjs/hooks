@@ -213,6 +213,39 @@ describe('useFullscreen', () => {
 
     dispose();
     expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(state.isFullscreen()).toBe(false);
+  });
+
+  it('exits a pending fullscreen entry that completes after dispose', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    let completeRequest = () => {};
+    main.requestFullscreen = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completeRequest = () => {
+            documentMock.fullscreenElement = main;
+            resolve();
+          };
+        })
+    );
+    const root = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    const pendingEnter = root.value.enter();
+    root.dispose();
+    completeRequest();
+
+    await expect(pendingEnter).resolves.toBe(false);
+    expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(documentMock.fullscreenElement).toBeNull();
+    expect(root.value.isFullscreen()).toBe(false);
+    await expect(root.value.enter()).resolves.toBe(false);
+    expect(main.requestFullscreen).toHaveBeenCalledTimes(1);
   });
 
   it('does not exit another element fullscreen on dispose', async () => {

@@ -119,8 +119,13 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
 
   const isSupported = createSignal(isFullscreenSupported(documentRef));
   const isFullscreen = createSignal(false);
+  let disposed = false;
 
   const update = () => {
+    if (disposed) {
+      return;
+    }
+
     if (!documentRef) {
       isFullscreen(false);
       isSupported(false);
@@ -131,6 +136,24 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
     const target = resolveTargetElement(options, documentRef);
     const fullscreenElement = getFullscreenElement(documentRef);
     isFullscreen(!!target && !!fullscreenElement && fullscreenElement === target);
+  };
+
+  const exitTargetIfCurrent = async (target: Element): Promise<boolean> => {
+    if (!documentRef || getFullscreenElement(documentRef) !== target) {
+      return false;
+    }
+
+    const exitMethod = resolveExitMethod(documentRef);
+    if (!exitMethod) {
+      return false;
+    }
+
+    try {
+      await exitMethod.call(documentRef);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   useEventListener(
@@ -146,7 +169,7 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
   });
 
   const enter = async (): Promise<boolean> => {
-    if (!documentRef || !isSupported()) {
+    if (disposed || !documentRef || !isSupported()) {
       return false;
     }
 
@@ -162,16 +185,24 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
 
     try {
       await request.call(target);
+      if (disposed) {
+        if (options.autoExit) {
+          await exitTargetIfCurrent(target);
+        }
+        return false;
+      }
       update();
       return true;
     } catch {
-      update();
+      if (!disposed) {
+        update();
+      }
       return false;
     }
   };
 
   const exit = async (): Promise<boolean> => {
-    if (!documentRef || !isSupported()) {
+    if (disposed || !documentRef || !isSupported()) {
       return false;
     }
 
@@ -182,10 +213,14 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
 
     try {
       await exitMethod.call(documentRef);
-      update();
+      if (!disposed) {
+        update();
+      }
       return true;
     } catch {
-      update();
+      if (!disposed) {
+        update();
+      }
       return false;
     }
   };
@@ -194,17 +229,19 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
     return isFullscreen() ? exit() : enter();
   };
 
-  if (options.autoExit) {
-    tryOnDestroy(() => {
-      if (!documentRef) {
-        return;
-      }
-      const target = resolveTargetElement(options, documentRef);
-      if (target && getFullscreenElement(documentRef) === target) {
-        void exit();
-      }
-    });
-  }
+  tryOnDestroy(() => {
+    disposed = true;
+    isFullscreen(false);
+
+    if (!options.autoExit || !documentRef) {
+      return;
+    }
+
+    const target = resolveTargetElement(options, documentRef);
+    if (target) {
+      void exitTargetIfCurrent(target);
+    }
+  });
 
   return {
     isSupported,
