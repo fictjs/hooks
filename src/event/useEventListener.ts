@@ -38,7 +38,7 @@ export function useEventListener<E extends Event = Event>(
   const canRunBind = (generation: number) => ownsRefresh(generation) && active();
 
   const bind = (refreshId: number): (() => void) | undefined => {
-    const targets = resolveTargetList(target);
+    const targets = resolveTargetList(target, () => canRunBind(refreshId));
     if (!canRunBind(refreshId)) {
       return undefined;
     }

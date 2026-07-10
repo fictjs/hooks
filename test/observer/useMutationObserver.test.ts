@@ -382,6 +382,38 @@ describe('useMutationObserver', () => {
     expect(MockMutationObserver.instances).toHaveLength(1);
   });
 
+  it('stops resolving later targets after owner disposal', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    let laterReads = 0;
+    const root = createRoot(() =>
+      useMutationObserver([
+        () => {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return first;
+        },
+        () => {
+          laterReads += 1;
+          return second;
+        }
+      ])
+    );
+    dispose = root.dispose;
+    expect(laterReads).toBe(1);
+    disposeOnRead = true;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(laterReads).toBe(1);
+    expect(MockMutationObserver.instances).toHaveLength(1);
+  });
+
   it('skips the user callback when a records effect disposes the owner', () => {
     windowRef.MutationObserver = MockMutationObserver as never;
     const element = document.createElement('div');

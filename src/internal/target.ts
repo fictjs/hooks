@@ -34,10 +34,24 @@ export function resolveMaybeTarget<T>(target: MaybeTarget<T>): T | undefined {
   return resolveTarget(resolved);
 }
 
-export function resolveTargetList<T>(target: MaybeTarget<T> | Array<MaybeTarget<T>>): T[] {
-  return toArray(target)
-    .map((item) => resolveMaybeTarget(item))
-    .filter((item): item is T => item != null);
+export function resolveTargetList<T>(
+  target: MaybeTarget<T> | Array<MaybeTarget<T>>,
+  canContinue: () => boolean = () => true
+): T[] {
+  const resolvedTargets: T[] = [];
+  for (const item of toArray(target)) {
+    if (!canContinue()) {
+      break;
+    }
+    const resolved = resolveMaybeTarget(item);
+    if (!canContinue()) {
+      break;
+    }
+    if (resolved != null) {
+      resolvedTargets.push(resolved);
+    }
+  }
+  return resolvedTargets;
 }
 
 export function deferTargetResolution(callback: () => void): () => void {

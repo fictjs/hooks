@@ -61,7 +61,7 @@ export function useResizeObserver(
       return true;
     }
 
-    const targets = resolveTargetList(target);
+    const targets = resolveTargetList(target, () => canRunSetup(refreshId));
     if (!canRunSetup(refreshId)) {
       return true;
     }

@@ -290,6 +290,40 @@ describe('useEventListener', () => {
     expect(addListener).toHaveBeenCalledTimes(1);
   });
 
+  it('stops resolving later targets after owner disposal', () => {
+    const firstTarget = new EventTarget();
+    const secondTarget = new EventTarget();
+    let dispose = () => {};
+    let disposeOnRead = false;
+    let laterReads = 0;
+    const root = createRoot(() =>
+      useEventListener(
+        [
+          () => {
+            if (disposeOnRead) {
+              dispose();
+            }
+            return firstTarget;
+          },
+          () => {
+            laterReads += 1;
+            return secondTarget;
+          }
+        ],
+        'target-list-dispose',
+        vi.fn()
+      )
+    );
+    dispose = root.dispose;
+    expect(laterReads).toBe(1);
+    disposeOnRead = true;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(laterReads).toBe(1);
+  });
+
   it('rolls back a listener when registration disposes the owner', () => {
     const target = new EventTarget();
     const handler = vi.fn();
