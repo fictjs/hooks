@@ -685,6 +685,76 @@ describe('useWebSocket', () => {
     expect(root.value.status()).toBe('CLOSED');
   });
 
+  it('does not close twice when the CLOSING signal update disposes the owner', () => {
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === 'CLOSING') {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false
+        })
+      );
+      dispose = root.dispose;
+      root.value.open();
+      MockWebSocket.instances[0]!.open();
+      armed = true;
+
+      root.value.close();
+
+      expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+      expect(root.value.status()).toBe('CLOSED');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not roll back a replacement opened before an old close throws', () => {
+    const closeError = new Error('close failed after replacement');
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false
+      })
+    );
+    root.value.open();
+    const oldSocket = MockWebSocket.instances[0]!;
+    oldSocket.open();
+    oldSocket.close.mockImplementationOnce(() => {
+      oldSocket.readyState = MockWebSocket.CLOSED;
+      root.value.open();
+      throw closeError;
+    });
+
+    root.value.close();
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(root.value.status()).toBe('CONNECTING');
+    expect(root.value.error()).toBeNull();
+    MockWebSocket.instances[1]!.open();
+    expect(root.value.status()).toBe('OPEN');
+    root.dispose();
+    expect(MockWebSocket.instances[1]!.close).toHaveBeenCalledOnce();
+  });
+
   it('does not reconnect when a constructor error callback closes the connection', () => {
     vi.useFakeTimers();
     let closeFromError = () => {};
