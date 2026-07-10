@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useThrottleFn } from '../../src/timing/useThrottleFn';
 
@@ -144,6 +145,49 @@ describe('useThrottleFn', () => {
     expect(callback).toHaveBeenCalledTimes(3);
     expect(callback).toHaveBeenLastCalledWith('new-trailing');
     expect(controls.pending()).toBe(false);
+  });
+
+  it('honors cancellation from a synchronous pending notification', () => {
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    let timerId = 0;
+    const scheduled = new Map<number, () => void>();
+    let controls: ReturnType<typeof useThrottleFn>;
+    let cancelOnPending = false;
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      const id = ++timerId;
+      scheduled.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal('clearTimeout', (id: number) => scheduled.delete(id));
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (cancelOnPending && value === true) {
+          cancelOnPending = false;
+          controls.cancel();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      controls = createRoot(() =>
+        useThrottleFn(vi.fn(), 100, { leading: false, trailing: true })
+      ).value;
+      cancelOnPending = true;
+      controls.run();
+
+      expect(controls.pending()).toBe(false);
+      expect(scheduled.size).toBe(0);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('does not schedule or flush after owner disposal', () => {

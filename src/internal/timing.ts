@@ -379,26 +379,33 @@ export function createThrottledFn<T extends Procedure>(
   let lastArgs: Parameters<T> | undefined;
   const pending = createSignal(false);
   let disposed = false;
+  let operationGeneration = 0;
+
+  const ownsOperation = (operation: number) => operation === operationGeneration;
 
   const invoke = (args: Parameters<T>) => {
     fn(...args);
   };
 
-  const tick = (generation: number) => {
+  const tick = (generation: number, synchronousOperation?: number) => {
     if (disposed || generation !== timerGeneration || !timerScheduled) {
       return;
     }
+    const operation =
+      synchronousOperation !== undefined && ownsOperation(synchronousOperation)
+        ? synchronousOperation
+        : ++operationGeneration;
     timer = undefined;
     timerScheduled = false;
     if (trailing && lastArgs) {
       const args = lastArgs;
       lastArgs = undefined;
       pending(false);
-      if (disposed) {
+      if (disposed || !ownsOperation(operation)) {
         return;
       }
-      scheduleTick();
-      if (disposed) {
+      scheduleTick(operation);
+      if (disposed || !ownsOperation(operation)) {
         return;
       }
       invoke(args);
@@ -408,27 +415,45 @@ export function createThrottledFn<T extends Procedure>(
     pending(false);
   };
 
-  const scheduleTick = () => {
-    if (disposed) {
+  const scheduleTick = (operation: number) => {
+    if (disposed || !ownsOperation(operation)) {
       return;
     }
     timerScheduled = true;
     const generation = ++timerGeneration;
     let nextTimer: ReturnType<typeof setTimeout>;
+    let scheduling = true;
     try {
-      nextTimer = setTimeout(() => tick(generation), wait);
+      nextTimer = setTimeout(
+        () => tick(generation, scheduling ? operation : undefined),
+        wait
+      );
     } catch (error) {
       if (generation === timerGeneration) {
         timer = undefined;
         timerScheduled = false;
       }
       throw error;
+    } finally {
+      scheduling = false;
     }
     if (disposed) {
       try {
         clearTimeout(nextTimer);
       } catch {
         // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return;
+    }
+    if (!ownsOperation(operation)) {
+      if (generation === timerGeneration && timerScheduled) {
+        timerGeneration += 1;
+        timerScheduled = false;
+        try {
+          clearTimeout(nextTimer);
+        } catch {
+          // A superseding operation owns the live throttle state.
+        }
       }
       return;
     }
@@ -441,23 +466,25 @@ export function createThrottledFn<T extends Procedure>(
     if (disposed) {
       return;
     }
+    const operation = ++operationGeneration;
     if (!timerScheduled) {
       if (!leading && trailing) {
         lastArgs = args;
         pending(true);
-        if (disposed) {
-          lastArgs = undefined;
+        if (disposed || !ownsOperation(operation)) {
           return;
         }
       }
       try {
-        scheduleTick();
+        scheduleTick(operation);
       } catch (error) {
-        lastArgs = undefined;
-        pending(false);
+        if (ownsOperation(operation)) {
+          lastArgs = undefined;
+          pending(false);
+        }
         throw error;
       }
-      if (disposed) {
+      if (disposed || !ownsOperation(operation)) {
         return;
       }
       if (leading) {
@@ -496,16 +523,18 @@ export function createThrottledFn<T extends Procedure>(
 
   const cancel = () => {
     if (!disposed) {
+      operationGeneration += 1;
       cancelPending();
     }
   };
 
   const flush = () => {
     if (!disposed && lastArgs) {
+      const operation = ++operationGeneration;
       const args = lastArgs;
       lastArgs = undefined;
       pending(false);
-      if (!disposed) {
+      if (!disposed && ownsOperation(operation)) {
         invoke(args);
       }
     }
@@ -513,6 +542,7 @@ export function createThrottledFn<T extends Procedure>(
 
   tryOnDestroy(() => {
     disposed = true;
+    operationGeneration += 1;
     cancelPending();
   });
 
