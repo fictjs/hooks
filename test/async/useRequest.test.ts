@@ -792,6 +792,45 @@ describe('useRequest', () => {
     expect(service).toHaveBeenCalledTimes(2);
   });
 
+  it('does not register polling when setTimeout synchronously cancels the request', async () => {
+    const timers = new Map<number, () => void>();
+    let nextTimer = 0;
+    let cancelDuringRegistration = false;
+    const stateRef = {
+      current: undefined as ReturnType<typeof useRequest<number>> | undefined
+    };
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      const timer = ++nextTimer;
+      timers.set(timer, callback);
+      if (cancelDuringRegistration) {
+        cancelDuringRegistration = false;
+        stateRef.current!.cancel();
+      }
+      return timer;
+    });
+    vi.stubGlobal('clearTimeout', (timer: number) => {
+      timers.delete(timer);
+    });
+    const service = vi.fn(async () => 1);
+    const state = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 10
+      })
+    ).value;
+    stateRef.current = state;
+    cancelDuringRegistration = true;
+
+    await state.runAsync();
+    for (const callback of [...timers.values()]) callback();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(timers.size).toBe(0);
+    expect(state.loading()).toBe(false);
+  });
+
   it('clears a zero-valued polling timer on dispose', async () => {
     const originalSetTimeout = globalThis.setTimeout;
     const originalClearTimeout = globalThis.clearTimeout;

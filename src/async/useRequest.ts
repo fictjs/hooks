@@ -143,6 +143,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
   let callId = 0;
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
+  let pollingGeneration = 0;
   const retryDelayCancelers = new Set<() => void>();
   let disposed = false;
   let commitGeneration = 0;
@@ -243,22 +244,52 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const stopPolling = () => {
-    if (pollingTimer !== undefined) {
-      clearTimeout(pollingTimer);
-      pollingTimer = undefined;
+    const currentTimer = pollingTimer;
+    pollingTimer = undefined;
+    pollingGeneration += 1;
+    if (currentTimer !== undefined) {
+      clearTimeout(currentTimer);
     }
   };
 
-  const schedulePolling = (currentParams: TParams) => {
+  const schedulePolling = (currentParams: TParams, currentId: number) => {
     stopPolling();
-
-    if (disposed || !options.pollingInterval || options.pollingInterval <= 0) {
+    if (disposed || currentId !== callId) {
       return;
     }
 
-    pollingTimer = setTimeout(() => {
-      runDetached(currentParams);
-    }, options.pollingInterval);
+    const pollingInterval = options.pollingInterval;
+    if (disposed || currentId !== callId || !pollingInterval || pollingInterval <= 0) {
+      return;
+    }
+
+    const generation = ++pollingGeneration;
+    let nextTimer: ReturnType<typeof setTimeout>;
+    try {
+      nextTimer = setTimeout(() => {
+        if (disposed || currentId !== callId || generation !== pollingGeneration) {
+          return;
+        }
+        pollingTimer = undefined;
+        pollingGeneration += 1;
+        runDetached(currentParams);
+      }, pollingInterval);
+    } catch (error) {
+      if (generation === pollingGeneration) {
+        pollingGeneration += 1;
+      }
+      throw error;
+    }
+
+    if (disposed || currentId !== callId || generation !== pollingGeneration) {
+      try {
+        clearTimeout(nextTimer);
+      } catch {
+        // A terminal or superseding operation owns no live polling timer.
+      }
+      return;
+    }
+    pollingTimer = nextTimer;
   };
 
   const runWithRetry = async (currentParams: TParams, currentId: number): Promise<TData> => {
@@ -342,7 +373,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
           onError?.(err, currentParams);
         } finally {
           if (id === callId) {
-            schedulePolling(currentParams);
+            schedulePolling(currentParams, id);
           }
         }
         return data();
@@ -373,7 +404,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
         onSuccess?.(result, currentParams);
       } finally {
         if (id === callId) {
-          schedulePolling(currentParams);
+          schedulePolling(currentParams, id);
         }
       }
       return result;
