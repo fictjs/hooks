@@ -248,6 +248,41 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('settles immediately when an external signal aborts a pending parser', async () => {
+    const controller = new AbortController();
+    let resolveParse: ((value: string) => void) | undefined;
+    let parseStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      parseStarted = resolve;
+    });
+    const parse = vi.fn(async () => {
+      parseStarted?.();
+      return new Promise<string>((resolve) => {
+        resolveParse = resolve;
+      });
+    });
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: vi.fn(async () => new Response('response')) as never,
+        immediate: false,
+        initialData: 'initial',
+        parse
+      })
+    );
+
+    const pending = state.execute({ signal: controller.signal });
+    await started;
+    controller.abort();
+
+    await expect(pending).resolves.toBe('initial');
+    expect(state.aborted()).toBe(true);
+    expect(state.isLoading()).toBe(false);
+
+    resolveParse!('late');
+    await Promise.resolve();
+    expect(state.data()).toBe('initial');
+  });
+
   it('aborts active request on dispose', () => {
     let signal: AbortSignal | undefined;
     const mockFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
