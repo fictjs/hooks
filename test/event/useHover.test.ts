@@ -103,6 +103,7 @@ describe('useHover', () => {
     disposeOnRead = true;
 
     root.value.refresh();
+    root.value.refresh();
 
     expect(root.value.hovered()).toBe(true);
   });
