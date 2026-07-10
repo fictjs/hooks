@@ -28,6 +28,7 @@ export interface UseSizeReturn {
   update: () => void;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
 }
 
 function readRect(target: Element) {
@@ -215,33 +216,36 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     });
   };
 
-  createEffect(() => {
+  const refresh = () => {
     cancelDeferredTarget();
     cancelDeferredTarget = () => {};
     stopObserver();
+    resizeListener.stop();
+    scrollListener.stop();
+
+    if (!active()) {
+      return;
+    }
 
     const nextTarget = target ? resolveMaybeTarget(target) : undefined;
-    if (!active() || !nextTarget) {
-      resizeListener.stop();
-      scrollListener.stop();
-      if (active() && target) {
+    if (!nextTarget) {
+      if (target) {
         scheduleDeferredTarget();
       }
-      onCleanup(() => {
-        cancelDeferredTarget();
-        cancelDeferredTarget = () => {};
-        resizeListener.stop();
-        scrollListener.stop();
-        stopObserver();
-      });
       return;
     }
 
     startObserving(nextTarget);
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredTarget();
       cancelDeferredTarget = () => {};
+      resizeListener.stop();
+      scrollListener.stop();
       stopObserver();
     });
   });
@@ -257,7 +261,11 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     active,
     update,
     start() {
-      active(true);
+      if (!active()) {
+        active(true);
+      } else {
+        refresh();
+      }
     },
     stop() {
       active(false);
@@ -266,6 +274,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       resizeListener.stop();
       scrollListener.stop();
       stopObserver();
-    }
+    },
+    refresh
   };
 }

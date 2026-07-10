@@ -32,6 +32,7 @@ function useSize(
   update: () => void;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
 };
 ```
 
@@ -45,3 +46,4 @@ function useSize(
 - `ResizeObserver` is read from the provided/default `window`; Node/SSR globals are not used
   implicitly.
 - Works with plain elements, ref-like targets, and accessor targets.
+- Call `refresh()` after changing a non-reactive ref to rebuild its observer and event listeners.

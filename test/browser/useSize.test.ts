@@ -207,6 +207,27 @@ describe('useSize', () => {
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes observation after a non-reactive ref is assigned late', async () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    mockRect(element, { width: 140, height: 70 });
+    const ref = { current: null as Element | null };
+    const root = createRoot(() => useSize(ref));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    ref.current = element;
+    root.value.refresh();
+
+    expect(root.value.width()).toBe(140);
+    expect(root.value.height()).toBe(70);
+    expect(MockResizeObserver.instances).toHaveLength(1);
+    expect(MockResizeObserver.instances[0]!.observe).toHaveBeenCalledWith(element, {
+      box: 'border-box'
+    });
+    root.dispose();
+  });
+
   it('supports stop and start controls', async () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
 
