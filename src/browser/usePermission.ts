@@ -92,7 +92,12 @@ export function usePermission(
     state(nextStatus.state);
 
     const onChange = () => {
-      if (!disposed && isSamePermission(statusPermission, readPermission())) {
+      if (disposed) {
+        return;
+      }
+
+      const matchesCurrentPermission = isSamePermission(statusPermission, readPermission());
+      if (!disposed && matchesCurrentPermission) {
         state(nextStatus.state);
       }
     };

@@ -299,6 +299,36 @@ describe('usePermission', () => {
     expect(state.state()).toBe('granted');
   });
 
+  it('does not update state when the permission accessor disposes the owner', async () => {
+    const status = new MockPermissionStatus('camera', 'granted');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      usePermission(
+        () => {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return 'camera';
+        },
+        {
+          navigator: { permissions: { query: vi.fn(async () => status) } },
+          immediate: false
+        }
+      )
+    );
+    dispose = root.dispose;
+
+    await root.value.query();
+    expect(root.value.state()).toBe('granted');
+
+    disposeOnRead = true;
+    status.update('denied');
+
+    expect(root.value.state()).toBe('granted');
+    await expect(root.value.query()).resolves.toBeNull();
+  });
+
   it('does not bind listener when query resolves after dispose', async () => {
     let resolveQuery: ((status: PermissionStatus) => void) | undefined;
     const status = new MockPermissionStatus('camera', 'granted');
