@@ -697,6 +697,20 @@ describe('distribution runtime', () => {
   });
 
   it.each(['esm', 'cjs'])(
+    'keeps useFullscreen request preflight owned in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-fullscreen-preflight.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps useRequest terminal after data-triggered disposal in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-request-terminal.mjs');

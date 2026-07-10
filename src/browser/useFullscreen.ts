@@ -119,8 +119,11 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
 
   const isSupported = createSignal(isFullscreenSupported(documentRef));
   const isFullscreen = createSignal(false);
+  let requestOperationGeneration = 0;
   let disposed = false;
   let exitInFlight: { target: Element; promise: Promise<boolean> } | null = null;
+  const ownsRequestOperation = (operation: number) =>
+    !disposed && operation === requestOperationGeneration;
 
   function update(): void {
     if (disposed) {
@@ -187,17 +190,23 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
   });
 
   const enter = async (): Promise<boolean> => {
-    if (disposed || !documentRef || !isSupported()) {
+    const operation = ++requestOperationGeneration;
+    if (!ownsRequestOperation(operation) || !documentRef) {
+      return false;
+    }
+
+    const supported = isSupported();
+    if (!ownsRequestOperation(operation) || !supported) {
       return false;
     }
 
     const target = resolveTargetElement(options, documentRef) as FullscreenElement | undefined;
-    if (!target) {
+    if (!ownsRequestOperation(operation) || !target) {
       return false;
     }
 
     const request = resolveRequestMethod(target);
-    if (!request) {
+    if (!ownsRequestOperation(operation) || !request) {
       return false;
     }
 
@@ -258,6 +267,7 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
 
   tryOnDestroy(() => {
     disposed = true;
+    requestOperationGeneration += 1;
     isFullscreen(false);
 
     if (!options.autoExit || !documentRef) {

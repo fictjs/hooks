@@ -307,6 +307,94 @@ describe('useFullscreen', () => {
     expect(state.isFullscreen()).toBe(false);
   });
 
+  it.each(['target', 'request method'] as const)(
+    'does not request fullscreen when the %s getter disposes the owner',
+    async (phase) => {
+      const { documentMock, main } = createFullscreenMock();
+      const requestFullscreen = main.requestFullscreen;
+      let dispose = () => {};
+      let armed = false;
+      const target = () => {
+        if (armed && phase === 'target') {
+          dispose();
+        }
+        return main;
+      };
+      Object.defineProperty(main, 'requestFullscreen', {
+        configurable: true,
+        get() {
+          if (armed && phase === 'request method') {
+            dispose();
+          }
+          return requestFullscreen;
+        }
+      });
+      const root = createRoot(() =>
+        useFullscreen({
+          document: documentMock as unknown as Document,
+          target
+        })
+      );
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.enter()).resolves.toBe(false);
+
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(documentMock.fullscreenElement).toBeNull();
+      expect(root.value.isFullscreen()).toBe(false);
+    }
+  );
+
+  it.each(['target', 'request method'] as const)(
+    'does not continue a superseded fullscreen request after the %s getter',
+    async (phase) => {
+      const { documentMock, main } = createFullscreenMock();
+      const requestFullscreen = main.requestFullscreen;
+      const owner: { state?: ReturnType<typeof useFullscreen> } = {};
+      let nestedEnter: Promise<boolean> | undefined;
+      let armed = false;
+      const supersede = () => {
+        if (!armed) {
+          return;
+        }
+        armed = false;
+        nestedEnter = owner.state?.enter();
+      };
+      const target = () => {
+        if (phase === 'target') {
+          supersede();
+        }
+        return main;
+      };
+      Object.defineProperty(main, 'requestFullscreen', {
+        configurable: true,
+        get() {
+          if (phase === 'request method') {
+            supersede();
+          }
+          return requestFullscreen;
+        }
+      });
+      const root = createRoot(() =>
+        useFullscreen({
+          document: documentMock as unknown as Document,
+          target
+        })
+      );
+      owner.state = root.value;
+      armed = true;
+
+      const supersededEnter = root.value.enter();
+
+      await expect(supersededEnter).resolves.toBe(false);
+      await expect(nestedEnter).resolves.toBe(true);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      expect(documentMock.fullscreenElement).toBe(main);
+      root.dispose();
+    }
+  );
+
   it('exits a pending fullscreen entry that completes after dispose', async () => {
     const { documentMock, main } = createFullscreenMock();
     let completeRequest = () => {};
