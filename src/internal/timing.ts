@@ -157,13 +157,18 @@ export function createThrottledFn<T extends Procedure>(
 
   const run = (...args: Parameters<T>) => {
     if (!timer) {
+      timer = setTimeout(tick, wait);
       if (leading) {
-        invoke(args);
+        try {
+          invoke(args);
+        } catch (error) {
+          cancel();
+          throw error;
+        }
       } else if (trailing) {
         lastArgs = args;
         pending(true);
       }
-      timer = setTimeout(tick, wait);
       return;
     }
 

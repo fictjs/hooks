@@ -43,6 +43,73 @@ describe('useThrottleFn', () => {
     expect(callback).toHaveBeenCalledWith('v1');
   });
 
+  it('queues reentrant calls made by the leading callback', () => {
+    vi.useFakeTimers();
+    const controlsRef = {
+      current: undefined as ReturnType<typeof useThrottleFn<(value: string) => void>> | undefined
+    };
+    const callback = vi.fn((value: string) => {
+      if (value === 'outer') {
+        controlsRef.current!.run('inner');
+      }
+    });
+
+    const controls = createRoot(() => useThrottleFn(callback, 100)).value;
+    controlsRef.current = controls;
+
+    controls.run('outer');
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenLastCalledWith('outer');
+    expect(controls.pending()).toBe(true);
+
+    vi.advanceTimersByTime(100);
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenLastCalledWith('inner');
+  });
+
+  it('honors cancellation from the leading callback', () => {
+    vi.useFakeTimers();
+    const controlsRef = {
+      current: undefined as ReturnType<typeof useThrottleFn<(value: string) => void>> | undefined
+    };
+    const callback = vi.fn<(value: string) => void>(() => {
+      controlsRef.current!.cancel();
+    });
+
+    const controls = createRoot(() => useThrottleFn(callback, 100)).value;
+    controlsRef.current = controls;
+
+    controls.run('first');
+    controls.run('second');
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(controls.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('recovers when a leading callback throws', () => {
+    vi.useFakeTimers();
+    const callbackError = new Error('leading failed');
+    const callback = vi
+      .fn<(value: string) => void>()
+      .mockImplementationOnce(() => {
+        throw callbackError;
+      })
+      .mockImplementation(() => {});
+    const { value: controls } = createRoot(() => useThrottleFn(callback, 100));
+
+    expect(() => controls.run('first')).toThrow(callbackError);
+    expect(controls.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    controls.run('second');
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenLastCalledWith('second');
+  });
+
   it('supports cancel and flush', () => {
     vi.useFakeTimers();
     const callback = vi.fn();
