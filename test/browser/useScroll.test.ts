@@ -328,6 +328,147 @@ describe('useScroll', () => {
     expect(root.value.y()).toBe(2);
   });
 
+  it('does not update after reading scroll coordinates disposes the owner', () => {
+    const element = document.createElement('div');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    Object.defineProperties(element, {
+      scrollLeft: {
+        configurable: true,
+        get() {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return disposeOnRead ? 10 : 1;
+        }
+      },
+      scrollTop: { configurable: true, get: () => (disposeOnRead ? 20 : 2) }
+    });
+    const root = createRoot(() => useScroll({ target: element }));
+    dispose = root.dispose;
+
+    disposeOnRead = true;
+    element.dispatchEvent(new Event('scroll'));
+
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
+  it('stops refresh after shouldUpdate disposes the owner', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1, writable: true });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2, writable: true });
+    let dispose = () => {};
+    let disposeOnGuard = false;
+    const root = createRoot(() =>
+      useScroll({
+        target: element,
+        shouldUpdate() {
+          if (disposeOnGuard) {
+            dispose();
+          }
+          return true;
+        }
+      })
+    );
+    dispose = root.dispose;
+
+    element.scrollLeft = 10;
+    element.scrollTop = 20;
+    disposeOnGuard = true;
+    root.value.refresh();
+
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
+  it('stops refresh when its final target read disposes the owner', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1 });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2 });
+    let dispose = () => {};
+    let reads = 0;
+    let disposeAt = Number.POSITIVE_INFINITY;
+    const root = createRoot(() =>
+      useScroll({
+        target: () => {
+          reads += 1;
+          if (reads === disposeAt) {
+            dispose();
+          }
+          return element;
+        }
+      })
+    );
+    dispose = root.dispose;
+    reads = 0;
+    disposeAt = 3;
+
+    root.value.refresh();
+
+    expect(reads).toBe(3);
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
+  it('rolls back a deferred listener when registration disposes the owner', async () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 10 });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 20 });
+    const ref = { current: null as Element | null };
+    let dispose = () => {};
+    let registrations = 0;
+    const addListener = element.addEventListener.bind(element);
+    const addEventListener = vi.spyOn(element, 'addEventListener').mockImplementation((...args) => {
+      addListener(...args);
+      registrations += 1;
+      if (registrations === 2) {
+        dispose();
+      }
+    });
+    const removeEventListener = vi.spyOn(element, 'removeEventListener');
+    const root = createRoot(() => useScroll({ target: ref, initialX: 1, initialY: 2 }));
+    dispose = root.dispose;
+
+    ref.current = element;
+    await Promise.resolve();
+
+    expect(addEventListener).toHaveBeenCalledTimes(2);
+    expect(removeEventListener).toHaveBeenCalledTimes(2);
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
+  it('stops a deferred update when shouldUpdate disposes the owner', async () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 10 });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 20 });
+    const ref = { current: null as Element | null };
+    let dispose = () => {};
+    let disposeOnGuard = false;
+    const root = createRoot(() =>
+      useScroll({
+        target: ref,
+        initialX: 1,
+        initialY: 2,
+        shouldUpdate() {
+          if (disposeOnGuard) {
+            dispose();
+          }
+          return true;
+        }
+      })
+    );
+    dispose = root.dispose;
+
+    ref.current = element;
+    disposeOnGuard = true;
+    await Promise.resolve();
+
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
   it('stops coordinate writes when the x signal update disposes the owner', () => {
     const element = document.createElement('div');
     Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1, writable: true });
