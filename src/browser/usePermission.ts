@@ -70,6 +70,7 @@ export function usePermission(
       queryId += 1;
       cleanup();
       activePermission.current = nextPermission;
+      state(initialState);
     }
     return { permission: activePermission.current, changed };
   };
@@ -80,7 +81,10 @@ export function usePermission(
 
     const onChange = () => {
       if (!disposed) {
-        state(nextStatus.state);
+        const current = syncPermission();
+        if (!current.changed) {
+          state(nextStatus.state);
+        }
       }
     };
 

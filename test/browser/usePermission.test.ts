@@ -157,6 +157,32 @@ describe('usePermission', () => {
     expect(state.state()).toBe('granted');
   });
 
+  it('resets stale state when a non-immediate permission source changes', async () => {
+    const cameraStatus = new MockPermissionStatus('camera', 'granted');
+    const query = vi.fn(async () => cameraStatus);
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } },
+        immediate: false
+      })
+    );
+
+    await state.query();
+    expect(state.state()).toBe('granted');
+
+    permission('microphone');
+    cameraStatus.update('denied');
+
+    expect(state.state()).toBe('prompt');
+    await Promise.resolve();
+    expect(state.state()).toBe('prompt');
+    expect(query).toHaveBeenCalledTimes(1);
+
+    cameraStatus.update('granted');
+    expect(state.state()).toBe('prompt');
+  });
+
   it('cleans up change listener on dispose', async () => {
     const status = new MockPermissionStatus('camera', 'granted');
     const navigatorRef = {
