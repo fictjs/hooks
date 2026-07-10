@@ -134,16 +134,46 @@ export function useClickOutside(
   });
   const active = createMemo(() => downControls.active() && clickControls.active());
 
+  const stopAll = () => {
+    pointerDownOutside = false;
+    let cleanupFailed = false;
+    let cleanupError: unknown;
+    for (const controls of [downControls, clickControls]) {
+      try {
+        controls.stop();
+      } catch (error) {
+        if (!cleanupFailed) {
+          cleanupFailed = true;
+          cleanupError = error;
+        }
+      }
+    }
+    if (cleanupFailed) {
+      throw cleanupError;
+    }
+  };
+
   return {
     start() {
-      downControls.start();
-      clickControls.start();
+      try {
+        downControls.start();
+        clickControls.start();
+      } catch (error) {
+        pointerDownOutside = false;
+        try {
+          clickControls.stop();
+        } catch {
+          // Preserve the setup failure after best-effort rollback.
+        }
+        try {
+          downControls.stop();
+        } catch {
+          // Preserve the setup failure after best-effort rollback.
+        }
+        throw error;
+      }
     },
-    stop() {
-      pointerDownOutside = false;
-      downControls.stop();
-      clickControls.stop();
-    },
+    stop: stopAll,
     active,
     trigger(event) {
       const EventCtor = realmWindow?.Event ?? globalThis.Event;

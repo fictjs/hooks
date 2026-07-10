@@ -2,6 +2,39 @@ import { createRoot } from '@fictjs/runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useClickOutside } from '../../src/event/useClickOutside';
 
+function createListenerWindow(): {
+  windowRef: Window;
+  listeners: Map<string, Set<EventListener>>;
+  failures: { add?: string; remove?: string };
+} {
+  const listeners = new Map<string, Set<EventListener>>();
+  const failures: { add?: string; remove?: string } = {};
+  const windowRef = {
+    Event: window.Event,
+    MouseEvent: window.MouseEvent,
+    Node: window.Node,
+    addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      const registered = listeners.get(type) ?? new Set<EventListener>();
+      registered.add(listener as EventListener);
+      listeners.set(type, registered);
+      if (failures.add === type) {
+        throw new Error(`${type} add failed`);
+      }
+    },
+    removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      listeners.get(type)?.delete(listener as EventListener);
+      if (listeners.get(type)?.size === 0) {
+        listeners.delete(type);
+      }
+      if (failures.remove === type) {
+        failures.remove = undefined;
+        throw new Error(`${type} remove failed`);
+      }
+    }
+  } as unknown as Window;
+  return { windowRef, listeners, failures };
+}
+
 describe('useClickOutside', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -120,6 +153,35 @@ describe('useClickOutside', () => {
     outside.dispatchEvent(new Event('click', { bubbles: true }));
 
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back both listeners when start fails partway through', () => {
+    const target = document.createElement('div');
+    const { windowRef, listeners, failures } = createListenerWindow();
+    const controls = createRoot(() =>
+      useClickOutside(target, vi.fn(), { window: windowRef, document })
+    ).value;
+    controls.stop();
+    failures.add = 'click';
+
+    expect(() => controls.start()).toThrow('click add failed');
+
+    expect(controls.active()).toBe(false);
+    expect(listeners.size).toBe(0);
+  });
+
+  it('continues stopping after one listener cleanup fails', () => {
+    const target = document.createElement('div');
+    const { windowRef, listeners, failures } = createListenerWindow();
+    const controls = createRoot(() =>
+      useClickOutside(target, vi.fn(), { window: windowRef, document })
+    ).value;
+    failures.remove = 'pointerdown';
+
+    expect(() => controls.stop()).toThrow('pointerdown remove failed');
+
+    expect(controls.active()).toBe(false);
+    expect(listeners.size).toBe(0);
   });
 
   it('clears pending pointer state when stopped and restarted', () => {
