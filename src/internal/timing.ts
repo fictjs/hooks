@@ -82,8 +82,10 @@ export function createDebouncedFn<T extends Procedure>(
 
   const run = (...args: Parameters<T>) => {
     const shouldCallLeading = leading && !state.timer;
-    state.lastArgs = args;
-    pending(true);
+    if (trailing) {
+      state.lastArgs = args;
+      pending(true);
+    }
     scheduleTimers();
 
     if (shouldCallLeading) {

@@ -231,6 +231,32 @@ describe('useDebounceFn', () => {
     expect(callback).toHaveBeenCalledTimes(0);
   });
 
+  it('does not retain or flush calls when trailing is disabled', () => {
+    vi.useFakeTimers();
+    const leadingCallback = vi.fn();
+    const disabledCallback = vi.fn();
+    const leading = createRoot(() =>
+      useDebounceFn(leadingCallback, 100, { leading: true, trailing: false })
+    ).value;
+    const disabled = createRoot(() =>
+      useDebounceFn(disabledCallback, 100, { leading: false, trailing: false })
+    ).value;
+
+    leading.run('first');
+    leading.run('suppressed');
+    disabled.run('suppressed');
+
+    expect(leading.pending()).toBe(false);
+    expect(disabled.pending()).toBe(false);
+
+    leading.flush();
+    disabled.flush();
+
+    expect(leadingCallback).toHaveBeenCalledTimes(1);
+    expect(leadingCallback).toHaveBeenLastCalledWith('first');
+    expect(disabledCallback).not.toHaveBeenCalled();
+  });
+
   it('releases suppressed arguments when trailing is disabled', () => {
     const fixture = resolve('test/fixtures/debounce-argument-release.mjs');
 
