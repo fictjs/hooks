@@ -365,6 +365,83 @@ describe('useSize', () => {
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('does not restart resources or update state after dispose', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const root = createRoot(() => useSize(element));
+
+    root.dispose();
+    expect(root.value.active()).toBe(false);
+    const addEventListener = vi.spyOn(windowRef, 'addEventListener');
+    mockRect(element, { width: 200, height: 120 });
+
+    root.value.refresh();
+    root.value.start();
+    root.value.update();
+
+    expect(MockResizeObserver.instances).toHaveLength(1);
+    expect(addEventListener).not.toHaveBeenCalled();
+    expect(root.value.width()).toBe(100);
+    expect(root.value.height()).toBe(60);
+  });
+
+  it('does not continue setup when measurement disposes the root', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    const ref = { current: null as Element | null };
+    let disposeRoot = () => {};
+    const getBoundingClientRect = vi
+      .spyOn(element, 'getBoundingClientRect')
+      .mockImplementation(() => {
+        disposeRoot();
+        return {
+          width: 100,
+          height: 60,
+          top: 0,
+          left: 0,
+          right: 100,
+          bottom: 60,
+          x: 0,
+          y: 0,
+          toJSON() {
+            return {};
+          }
+        } as DOMRect;
+      });
+    const root = createRoot(() => useSize(ref));
+    disposeRoot = root.dispose;
+    const addEventListener = vi.spyOn(windowRef, 'addEventListener');
+
+    ref.current = element;
+    root.value.refresh();
+
+    expect(getBoundingClientRect).toHaveBeenCalledTimes(1);
+    expect(root.value.active()).toBe(false);
+    expect(root.value.width()).toBe(0);
+    expect(MockResizeObserver.instances).toHaveLength(0);
+    expect(addEventListener).not.toHaveBeenCalled();
+  });
+
+  it('does not reactivate a stopped instance after dispose', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const root = createRoot(() => useSize(element));
+
+    root.value.stop();
+    expect(root.value.active()).toBe(false);
+    root.dispose();
+
+    root.value.start();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockResizeObserver.instances).toHaveLength(1);
+  });
+
   it('disconnects a failed observer without replacing the observe error', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
     MockResizeObserver.observeError = new Error('observe failed');

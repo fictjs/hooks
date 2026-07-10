@@ -113,24 +113,63 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
   let disposed = false;
 
   const applyRect = (nextTarget: Element) => {
+    if (disposed) {
+      return;
+    }
     const rect = readRect(nextTarget);
+    if (disposed) {
+      return;
+    }
     width(rect.width);
+    if (disposed) {
+      return;
+    }
     height(rect.height);
+    if (disposed) {
+      return;
+    }
     top(rect.top);
+    if (disposed) {
+      return;
+    }
     left(rect.left);
+    if (disposed) {
+      return;
+    }
     x(rect.x);
+    if (disposed) {
+      return;
+    }
     y(rect.y);
   };
 
   const applyPosition = (nextTarget: Element) => {
+    if (disposed) {
+      return;
+    }
     const rect = readRect(nextTarget);
+    if (disposed) {
+      return;
+    }
     top(rect.top);
+    if (disposed) {
+      return;
+    }
     left(rect.left);
+    if (disposed) {
+      return;
+    }
     x(rect.x);
+    if (disposed) {
+      return;
+    }
     y(rect.y);
   };
 
   const update = () => {
+    if (disposed) {
+      return;
+    }
     const nextTarget = resolveMaybeTarget(target);
     if (!nextTarget) {
       return;
@@ -169,10 +208,25 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
   };
 
   const startObserving = (nextTarget: Element) => {
+    if (disposed) {
+      return;
+    }
     applyRect(nextTarget);
+    if (disposed) {
+      return;
+    }
     if (windowRef) {
       resizeListener.start();
+      if (disposed) {
+        resizeListener.stop();
+        return;
+      }
       scrollListener.start();
+      if (disposed) {
+        resizeListener.stop();
+        scrollListener.stop();
+        return;
+      }
     }
 
     const Observer = observerCtor;
@@ -182,6 +236,9 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     }
 
     isSupported(true);
+    if (disposed) {
+      return;
+    }
     const generation = ++observerGeneration;
     const nextObserver = new Observer((entries: ResizeObserverEntry[]) => {
       if (disposed || !active() || generation !== observerGeneration) {
@@ -190,9 +247,18 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       const entry = entries[0];
       if (entry) {
         const boxSize = readBoxSize(entry, box, nextTarget, windowRef);
+        if (disposed || !active() || generation !== observerGeneration) {
+          return;
+        }
         if (boxSize) {
           width(boxSize.width);
+          if (disposed || !active() || generation !== observerGeneration) {
+            return;
+          }
           height(boxSize.height);
+          if (disposed || !active() || generation !== observerGeneration) {
+            return;
+          }
           applyPosition(nextTarget);
           return;
         }
@@ -201,6 +267,15 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       }
       applyRect(nextTarget);
     });
+
+    if (disposed) {
+      try {
+        nextObserver.disconnect();
+      } catch {
+        // Disposal remains terminal even if the new observer cannot disconnect cleanly.
+      }
+      return;
+    }
 
     try {
       nextObserver.observe(nextTarget, { box });
@@ -215,41 +290,83 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       }
       throw error;
     }
+    if (disposed) {
+      try {
+        nextObserver.disconnect();
+      } catch {
+        // Disposal remains terminal even if the new observer cannot disconnect cleanly.
+      }
+      return;
+    }
     observer = nextObserver;
   };
 
   const scheduleDeferredTarget = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget();
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget = deferTargetResolution(() => {
       cancelDeferredTarget = () => {};
-      if (!active()) {
+      if (disposed || !active()) {
         return;
       }
 
       const nextTarget = target ? resolveMaybeTarget(target) : undefined;
+      if (disposed) {
+        return;
+      }
       if (!nextTarget) {
         resizeListener.stop();
+        if (disposed) {
+          return;
+        }
         scrollListener.stop();
         return;
       }
 
       stopObserver();
+      if (disposed) {
+        return;
+      }
       startObserving(nextTarget);
     });
   };
 
   const refresh = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget();
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget = () => {};
     stopObserver();
+    if (disposed) {
+      return;
+    }
     resizeListener.stop();
+    if (disposed) {
+      return;
+    }
     scrollListener.stop();
+
+    if (disposed) {
+      return;
+    }
 
     if (!active()) {
       return;
     }
 
     const nextTarget = target ? resolveMaybeTarget(target) : undefined;
+    if (disposed) {
+      return;
+    }
     if (!nextTarget) {
       if (target) {
         scheduleDeferredTarget();
@@ -275,6 +392,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
   tryOnDestroy(() => {
     disposed = true;
     observerGeneration += 1;
+    active(false);
   });
 
   return {
@@ -288,6 +406,9 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     active,
     update,
     start() {
+      if (disposed) {
+        return;
+      }
       if (!active()) {
         active(true);
       } else {
@@ -295,6 +416,9 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       }
     },
     stop() {
+      if (disposed) {
+        return;
+      }
       active(false);
       cancelDeferredTarget();
       cancelDeferredTarget = () => {};
