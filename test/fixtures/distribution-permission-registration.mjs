@@ -37,7 +37,7 @@ function createCompiledRoot(factory) {
   dispose = root.dispose;
 
   const result = await root.value.query();
-  if (result !== status || listeners.size !== 0 || root.value.state() !== 'granted') {
+  if (result !== null || listeners.size !== 0 || root.value.state() !== 'granted') {
     throw new Error('built usePermission leaked a listener registered after disposal');
   }
 }
@@ -134,7 +134,7 @@ function createCompiledRoot(factory) {
 
     const result = await state.query();
     firstStatus.update('denied');
-    if (result !== firstStatus || firstListeners.size !== 0 || state.state() !== 'granted') {
+    if (result !== null || firstListeners.size !== 0 || state.state() !== 'granted') {
       throw new Error('built usePermission bound a superseded status listener');
     }
 
