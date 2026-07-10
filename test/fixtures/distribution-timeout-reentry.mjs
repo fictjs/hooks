@@ -46,13 +46,16 @@ try {
   let root;
   try {
     root = createRoot(() =>
-      useTimeoutFn(() => {}, () => {
-        if (reenterOnDelay) {
-          reenterOnDelay = false;
-          controls.run();
+      useTimeoutFn(
+        () => {},
+        () => {
+          if (reenterOnDelay) {
+            reenterOnDelay = false;
+            controls.run();
+          }
+          return 100;
         }
-        return 100;
-      })
+      )
     );
   } finally {
     __fictPopContext();

@@ -432,8 +432,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
     const requestId = callId;
     const commitId = ++commitGeneration;
-    const ownsCommit = () =>
-      !disposed && requestId === callId && commitId === commitGeneration;
+    const ownsCommit = () => !disposed && requestId === callId && commitId === commitGeneration;
     const next =
       typeof value === 'function' ? (value as (prev: TData | undefined) => TData)(data()) : value;
     if (!ownsCommit()) {

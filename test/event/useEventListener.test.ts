@@ -160,14 +160,12 @@ describe('useEventListener', () => {
     const activeListeners = new Set<EventListenerOrEventListenerObject>();
     const addListener = target.addEventListener.bind(target);
     const removeListener = target.removeEventListener.bind(target);
-    const addListenerSpy = vi
-      .spyOn(target, 'addEventListener')
-      .mockImplementation((...args) => {
-        if (args[1]) {
-          activeListeners.add(args[1]);
-        }
-        addListener(...args);
-      });
+    const addListenerSpy = vi.spyOn(target, 'addEventListener').mockImplementation((...args) => {
+      if (args[1]) {
+        activeListeners.add(args[1]);
+      }
+      addListener(...args);
+    });
     let refreshOnRemove = false;
     let refresh = () => {};
     vi.spyOn(target, 'removeEventListener').mockImplementation((...args) => {

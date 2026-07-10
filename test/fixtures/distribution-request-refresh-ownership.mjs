@@ -28,13 +28,10 @@ __fictPushContext();
 let root;
 try {
   root = createRoot(() =>
-    useRequest(
-      async (value) => {
-        calls.push(value);
-        return value;
-      },
-      options
-    )
+    useRequest(async (value) => {
+      calls.push(value);
+      return value;
+    }, options)
   );
 } finally {
   __fictPopContext();

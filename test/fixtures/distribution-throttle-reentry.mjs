@@ -37,9 +37,7 @@ try {
   __fictPushContext();
   let root;
   try {
-    root = createRoot(() =>
-      useThrottleFn(() => {}, 100, { leading: false, trailing: true })
-    );
+    root = createRoot(() => useThrottleFn(() => {}, 100, { leading: false, trailing: true }));
   } finally {
     __fictPopContext();
   }

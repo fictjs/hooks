@@ -424,10 +424,7 @@ export function createThrottledFn<T extends Procedure>(
     let nextTimer: ReturnType<typeof setTimeout>;
     let scheduling = true;
     try {
-      nextTimer = setTimeout(
-        () => tick(generation, scheduling ? operation : undefined),
-        wait
-      );
+      nextTimer = setTimeout(() => tick(generation, scheduling ? operation : undefined), wait);
     } catch (error) {
       if (generation === timerGeneration) {
         timer = undefined;

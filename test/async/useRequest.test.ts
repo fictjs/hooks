@@ -264,9 +264,7 @@ describe('useRequest', () => {
     };
 
     try {
-      state = createRoot(() =>
-        useRequest(async (value: string) => value, { manual: true })
-      ).value;
+      state = createRoot(() => useRequest(async (value: string) => value, { manual: true })).value;
       armed = true;
 
       await state.runAsync('outer');
@@ -634,13 +632,10 @@ describe('useRequest', () => {
       }
     );
     const state = createRoot(() =>
-      useRequest(
-        async (value: string) => {
-          calls.push(value);
-          return value;
-        },
-        options
-      )
+      useRequest(async (value: string) => {
+        calls.push(value);
+        return value;
+      }, options)
     ).value;
     phase = 'outer';
 

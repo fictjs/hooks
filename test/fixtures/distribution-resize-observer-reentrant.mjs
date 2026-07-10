@@ -54,7 +54,10 @@ const [initialObserver, currentObserver] = ReentrantResizeObserver.instances;
 if (initialObserver.disconnectCalls !== 1 || currentObserver.disconnectCalls !== 0) {
   throw new Error('built useResizeObserver did not preserve reentrant cleanup ownership');
 }
-if (currentObserver.observations.length !== 1 || currentObserver.observations[0].target !== target) {
+if (
+  currentObserver.observations.length !== 1 ||
+  currentObserver.observations[0].target !== target
+) {
   throw new Error('built useResizeObserver did not retain the reentrant observation');
 }
 

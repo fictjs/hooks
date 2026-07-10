@@ -232,11 +232,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     try {
       currentSocket.close();
     } catch (nextError) {
-      if (
-        destroyed ||
-        replacementOperation !== operationEpoch ||
-        socket !== currentSocket
-      ) {
+      if (destroyed || replacementOperation !== operationEpoch || socket !== currentSocket) {
         return hasOwnedSocket();
       }
       manuallyClosed = previousManuallyClosed;
@@ -364,11 +360,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     try {
       initialStatus = toStatus(currentSocket.readyState, currentSocket);
     } catch (initialStateError) {
-      if (
-        destroyed ||
-        currentOperation !== operationEpoch ||
-        socket !== currentSocket
-      ) {
+      if (destroyed || currentOperation !== operationEpoch || socket !== currentSocket) {
         return hasOwnedSocket();
       }
       socket = null;
@@ -391,8 +383,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return false;
     }
     status(initialStatus);
-    const ownsSocketSetup = () =>
-      !destroyed && !manuallyClosed && socket === currentSocket;
+    const ownsSocketSetup = () => !destroyed && !manuallyClosed && socket === currentSocket;
     if (!ownsSocketSetup()) {
       return hasOwnedSocket();
     }
