@@ -48,39 +48,56 @@ export function useAsyncState<T, Args extends unknown[] = []>(
   const isLoading = createSignal(false);
   const error = createSignal<unknown>(null);
 
-  let callId = 0;
+  let operationGeneration = 0;
   let disposed = false;
+  const ownsOperation = (operation: number) => !disposed && operation === operationGeneration;
 
   const execute = async (...args: Args): Promise<T> => {
     if (disposed) {
       return state();
     }
 
-    const id = ++callId;
+    const operation = ++operationGeneration;
+    const resetOnExecute = options.resetOnExecute;
+    if (!ownsOperation(operation)) {
+      return state();
+    }
 
-    if (options.resetOnExecute) {
+    if (resetOnExecute) {
       state(initialState);
+      if (!ownsOperation(operation)) {
+        return state();
+      }
     }
 
     isLoading(true);
+    if (!ownsOperation(operation)) {
+      return state();
+    }
     error(null);
+    if (!ownsOperation(operation)) {
+      return state();
+    }
 
     try {
       const result = await executor(...args);
-      if (id === callId) {
+      if (ownsOperation(operation)) {
         state(result);
       }
       return result;
     } catch (err) {
-      if (id === callId) {
+      if (ownsOperation(operation)) {
         error(err);
-        if (!disposed && id === callId) {
-          options.onError?.(err);
+        if (ownsOperation(operation)) {
+          const onError = options.onError;
+          if (ownsOperation(operation)) {
+            onError?.(err);
+          }
         }
       }
       throw err;
     } finally {
-      if (id === callId) {
+      if (ownsOperation(operation)) {
         isLoading(false);
       }
     }
@@ -95,7 +112,7 @@ export function useAsyncState<T, Args extends unknown[] = []>(
 
   tryOnDestroy(() => {
     disposed = true;
-    callId += 1;
+    operationGeneration += 1;
     isLoading(false);
   });
 

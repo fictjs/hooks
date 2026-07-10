@@ -171,6 +171,100 @@ describe('useAsyncState', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('does not continue preflight when the loading write disposes the root', async () => {
+    const executor = vi.fn(async () => 'next');
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === true) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useAsyncState(executor, 'initial'));
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.execute()).resolves.toBe('initial');
+
+      expect(executor).not.toHaveBeenCalled();
+      expect(root.value.state()).toBe('initial');
+      expect(root.value.error()).toBeNull();
+      expect(root.value.isLoading()).toBe(false);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not continue a preflight superseded by a reset option getter', async () => {
+    const executor = vi.fn(async (tag: 'outer' | 'nested') => (tag === 'nested' ? 2 : 1));
+    let executeNested = () => Promise.resolve(0);
+    let nestedExecution: Promise<number> | undefined;
+    let nestedStarted = false;
+    const options: { resetOnExecute?: boolean } = {};
+    Object.defineProperty(options, 'resetOnExecute', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        if (!nestedStarted) {
+          nestedStarted = true;
+          nestedExecution = executeNested();
+        }
+        return true;
+      }
+    });
+    const root = createRoot(() => useAsyncState(executor, 0, options));
+    executeNested = () => root.value.execute('nested');
+
+    await expect(root.value.execute('outer')).resolves.toBe(0);
+    await expect(nestedExecution).resolves.toBe(2);
+
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor).toHaveBeenCalledWith('nested');
+    expect(root.value.state()).toBe(2);
+    expect(root.value.isLoading()).toBe(false);
+    root.dispose();
+  });
+
+  it('does not call an onError getter result after the getter disposes the root', async () => {
+    const executionError = new Error('execution failed');
+    const executor = vi.fn(async () => {
+      throw executionError;
+    });
+    const onError = vi.fn();
+    let dispose = () => {};
+    const options: { onError?: (error: unknown) => void } = {};
+    Object.defineProperty(options, 'onError', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        dispose();
+        return onError;
+      }
+    });
+    const root = createRoot(() => useAsyncState(executor, 'initial', options));
+    dispose = root.dispose;
+
+    await expect(root.value.execute()).rejects.toBe(executionError);
+
+    expect(root.value.error()).toBe(executionError);
+    expect(root.value.isLoading()).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('does not call onError when the error signal update disposes the root', async () => {
     const executionError = new Error('execution failed');
     const executor = vi.fn(async () => {

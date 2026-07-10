@@ -546,6 +546,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves useAsyncState preflight ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-async-state-preflight.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps reentrant useResizeObserver cleanup owned in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-resize-observer-reentrant.mjs');
