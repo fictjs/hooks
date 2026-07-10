@@ -1,5 +1,6 @@
 import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useMediaQuery } from '../../src/browser/useMediaQuery';
 
@@ -152,6 +153,116 @@ describe('useMediaQuery', () => {
     expect(listenerSets.get('first')?.size).toBe(0);
     expect(listenerSets.get('second')?.size).toBe(0);
   });
+
+  it.each(['matchMedia property', 'matchMedia call', 'matches'] as const)(
+    'stops setup when the %s disposes the owner',
+    async (phase) => {
+      const mediaQuery = createSignal('first');
+      const mql = new MockMediaQueryList('first', false);
+      const addEventListener = vi.spyOn(mql, 'addEventListener');
+      let dispose = () => {};
+      let armed = false;
+      let currentMatches = false;
+      Object.defineProperty(mql, 'matches', {
+        configurable: true,
+        get() {
+          if (armed && phase === 'matches') {
+            dispose();
+          }
+          return currentMatches;
+        },
+        set(value: boolean) {
+          currentMatches = value;
+        }
+      });
+      const matchMedia = vi.fn(() => {
+        if (armed && phase === 'matchMedia call') {
+          dispose();
+        }
+        return mql;
+      });
+      const windowRef = {} as Window;
+      Object.defineProperty(windowRef, 'matchMedia', {
+        configurable: true,
+        get() {
+          if (armed && phase === 'matchMedia property') {
+            dispose();
+          }
+          return matchMedia;
+        }
+      });
+      const root = createRoot(() => useMediaQuery(() => mediaQuery(), { window: windowRef }));
+      dispose = root.dispose;
+      armed = true;
+
+      mediaQuery('second');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(root.value.query()).toBe('second');
+      expect(root.value.matches()).toBe(false);
+      expect(addEventListener).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(['isSupported', 'matches'] as const)(
+    'stops setup when the %s write disposes the owner',
+    async (phase) => {
+      const mediaQuery = createSignal('first');
+      const mql = new MockMediaQueryList('first', false);
+      const addEventListener = vi.spyOn(mql, 'addEventListener');
+      const matchMedia = vi.fn(() => mql);
+      let supported = true;
+      const windowRef = {} as Window;
+      Object.defineProperty(windowRef, 'matchMedia', {
+        configurable: true,
+        get() {
+          return supported ? matchMedia : undefined;
+        }
+      });
+      let dispose = () => {};
+      let armed = false;
+      const globalWithHook = globalThis as typeof globalThis & {
+        __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+      };
+      const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+        registerSignal: vi.fn(),
+        updateSignal: (_id, value) => {
+          const shouldDispose = phase === 'isSupported' ? value === false : value === true;
+          if (armed && shouldDispose) {
+            armed = false;
+            dispose();
+          }
+        },
+        registerComputed: vi.fn(),
+        updateComputed: vi.fn(),
+        registerEffect: vi.fn(),
+        effectRun: vi.fn()
+      };
+
+      try {
+        const root = createRoot(() => useMediaQuery(() => mediaQuery(), { window: windowRef }));
+        dispose = root.dispose;
+        armed = true;
+        if (phase === 'isSupported') {
+          supported = false;
+        } else {
+          mql.matches = true;
+        }
+
+        mediaQuery('second');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(root.value.query()).toBe('second');
+        expect(root.value.matches()).toBe(phase === 'matches');
+        expect(addEventListener).toHaveBeenCalledTimes(1);
+      } finally {
+        globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+      }
+    }
+  );
 
   it('supports legacy media query listeners', () => {
     const mql = new LegacyMediaQueryList('(prefers-reduced-motion: reduce)', false);
