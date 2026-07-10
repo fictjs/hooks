@@ -123,6 +123,50 @@ describe('useRafFn', () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  it('stays inactive when starting a frame throws', () => {
+    const scheduleError = new Error('schedule failed');
+    const windowRef = {
+      requestAnimationFrame() {
+        throw scheduleError;
+      }
+    } as unknown as Window;
+    const { value: state } = createRoot(() =>
+      useRafFn(vi.fn(), { window: windowRef, immediate: false })
+    );
+
+    expect(() => state.start()).toThrow(scheduleError);
+    expect(state.active()).toBe(false);
+  });
+
+  it('recovers when scheduling the next frame throws', () => {
+    const scheduleError = new Error('schedule failed');
+    let requestCount = 0;
+    let scheduledCallback: FrameRequestCallback | undefined;
+    const windowRef = {
+      requestAnimationFrame(callback: FrameRequestCallback) {
+        requestCount += 1;
+        if (requestCount === 2) {
+          throw scheduleError;
+        }
+        scheduledCallback = callback;
+        return requestCount;
+      },
+      cancelAnimationFrame() {}
+    } as unknown as Window;
+    const callback = vi.fn();
+    const { value: state } = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    expect(() => scheduledCallback!(1)).toThrow(scheduleError);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(state.active()).toBe(false);
+
+    state.start();
+    scheduledCallback!(2);
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(state.active()).toBe(true);
+  });
+
   it('can restart after callback throws', () => {
     const { windowRef, tick } = createMockWindow();
     const callback = vi
