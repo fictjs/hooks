@@ -30,10 +30,9 @@ function addMediaQueryListener(
     };
   }
 
-  const legacy = mql as LegacyMediaQueryList;
-  legacy.addListener?.(listener);
+  (mql as unknown as LegacyMediaQueryList).addListener?.(listener);
   return () => {
-    legacy.removeListener?.(listener);
+    (mql as unknown as LegacyMediaQueryList).removeListener?.(listener);
   };
 }
 

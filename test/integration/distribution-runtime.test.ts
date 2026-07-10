@@ -14,6 +14,17 @@ describe('distribution runtime', () => {
     ).not.toThrow();
   });
 
+  it('executes legacy useMediaQuery cleanup from the built ESM entry', () => {
+    const fixture = resolve('test/fixtures/distribution-media-query.mjs');
+
+    expect(() =>
+      execFileSync(process.execPath, [fixture], {
+        cwd: process.cwd(),
+        stdio: 'pipe'
+      })
+    ).not.toThrow();
+  });
+
   it('executes usePermission from the built ESM entry', () => {
     const fixture = resolve('test/fixtures/distribution-permission.mjs');
 
