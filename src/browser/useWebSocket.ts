@@ -121,7 +121,11 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
   const reportError = (nextError: unknown) => {
     error(nextError);
-    options.onError?.(nextError);
+    try {
+      options.onError?.(nextError);
+    } catch {
+      // User callbacks must not interrupt socket recovery or control contracts.
+    }
   };
 
   const stopReconnectTimer = () => {

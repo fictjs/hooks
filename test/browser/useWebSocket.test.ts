@@ -147,9 +147,62 @@ describe('useWebSocket', () => {
     expect(onError).toHaveBeenCalledWith(connectError);
   });
 
+  it('keeps reconnecting when constructor and error callback both throw', () => {
+    vi.useFakeTimers();
+    const connectError = new Error('connect failed');
+    const onError = vi.fn(() => {
+      throw new Error('error callback failed');
+    });
+    const constructor = vi.fn(() => {
+      throw connectError;
+    });
+    const ThrowingWebSocket = function ThrowingWebSocket() {
+      constructor();
+    } as unknown as typeof WebSocket;
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ThrowingWebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        onError,
+        immediate: false
+      })
+    );
+
+    expect(() => state.open()).not.toThrow();
+    expect(state.reconnectCount()).toBe(1);
+    expect(constructor).toHaveBeenCalledTimes(1);
+
+    vi.runAllTimers();
+    expect(constructor).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(state.error()).toBe(connectError);
+  });
+
   it('reports send errors through onError', () => {
     const onError = vi.fn();
     const sendError = new Error('send failed');
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        onError
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.send.mockImplementationOnce(() => {
+      throw sendError;
+    });
+
+    expect(state.send('payload')).toBe(false);
+    expect(state.error()).toBe(sendError);
+    expect(onError).toHaveBeenCalledWith(sendError);
+  });
+
+  it('returns false when send and error callback both throw', () => {
+    const sendError = new Error('send failed');
+    const onError = vi.fn(() => {
+      throw new Error('error callback failed');
+    });
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {
         webSocket: MockWebSocket as unknown as typeof WebSocket,
