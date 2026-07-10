@@ -58,6 +58,57 @@ describe('useDebounceFn', () => {
     expect(controls.pending()).toBe(false);
   });
 
+  it('rolls back pending state when scheduling fails', () => {
+    const scheduleError = new Error('schedule failed');
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => {
+        throw scheduleError;
+      })
+    );
+    vi.stubGlobal('clearTimeout', vi.fn());
+    const callback = vi.fn();
+    const controls = createRoot(() => useDebounceFn(callback, 100)).value;
+
+    expect(() => controls.run('failed')).toThrow(scheduleError);
+    expect(controls.pending()).toBe(false);
+    controls.flush();
+    expect(callback).not.toHaveBeenCalled();
+
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => 1)
+    );
+    controls.run('recovered');
+    controls.flush();
+    expect(callback).toHaveBeenCalledWith('recovered');
+  });
+
+  it('finalizes all timer state when cleanup fails', () => {
+    const cleanupError = new Error('cleanup failed');
+    let timerId = 0;
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => ++timerId)
+    );
+    const clearTimeoutMock = vi.fn(() => {
+      throw cleanupError;
+    });
+    vi.stubGlobal('clearTimeout', clearTimeoutMock);
+    const controls = createRoot(() => useDebounceFn(vi.fn(), 100, { maxWait: 200 })).value;
+
+    controls.run('value');
+    expect(() => controls.cancel()).toThrow(cleanupError);
+
+    expect(clearTimeoutMock).toHaveBeenCalledTimes(2);
+    expect(clearTimeoutMock).toHaveBeenNthCalledWith(1, 1);
+    expect(clearTimeoutMock).toHaveBeenNthCalledWith(2, 2);
+    expect(controls.pending()).toBe(false);
+
+    vi.stubGlobal('clearTimeout', vi.fn());
+    expect(() => controls.run('recovered')).not.toThrow();
+  });
+
   it('debounces trailing calls by default', () => {
     vi.useFakeTimers();
     const callback = vi.fn();

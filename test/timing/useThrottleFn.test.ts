@@ -51,6 +51,62 @@ describe('useThrottleFn', () => {
     expect(controls.pending()).toBe(false);
   });
 
+  it('rolls back trailing state when scheduling fails', () => {
+    const scheduleError = new Error('schedule failed');
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => {
+        throw scheduleError;
+      })
+    );
+    vi.stubGlobal('clearTimeout', vi.fn());
+    const callback = vi.fn();
+    const controls = createRoot(() =>
+      useThrottleFn(callback, 100, { leading: false, trailing: true })
+    ).value;
+
+    expect(() => controls.run('failed')).toThrow(scheduleError);
+    expect(controls.pending()).toBe(false);
+    controls.flush();
+    expect(callback).not.toHaveBeenCalled();
+
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => 1)
+    );
+    controls.run('recovered');
+    expect(controls.pending()).toBe(true);
+  });
+
+  it('drops trailing state before a failing cleanup', () => {
+    const cleanupError = new Error('cleanup failed');
+    let scheduled: (() => void) | undefined;
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn((callback: () => void) => {
+        scheduled = callback;
+        return 1;
+      })
+    );
+    vi.stubGlobal(
+      'clearTimeout',
+      vi.fn(() => {
+        throw cleanupError;
+      })
+    );
+    const callback = vi.fn();
+    const controls = createRoot(() => useThrottleFn(callback, 100)).value;
+
+    controls.run('leading');
+    controls.run('trailing');
+    expect(() => controls.cancel()).toThrow(cleanupError);
+    expect(controls.pending()).toBe(false);
+
+    scheduled?.();
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith('leading');
+  });
+
   it('throttles calls with leading and trailing by default', () => {
     vi.useFakeTimers();
     const callback = vi.fn();

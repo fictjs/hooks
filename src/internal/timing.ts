@@ -37,16 +37,45 @@ export function createDebouncedFn<T extends Procedure>(
   };
   const pending = createSignal(false);
 
-  const clearTimers = () => {
-    if (state.timerScheduled) {
-      clearTimeout(state.timer as ReturnType<typeof setTimeout>);
-      state.timer = undefined;
-      state.timerScheduled = false;
+  const clearTimer = () => {
+    if (!state.timerScheduled) {
+      return;
     }
-    if (state.maxTimerScheduled) {
-      clearTimeout(state.maxTimer as ReturnType<typeof setTimeout>);
-      state.maxTimer = undefined;
-      state.maxTimerScheduled = false;
+    const timer = state.timer;
+    state.timer = undefined;
+    state.timerScheduled = false;
+    clearTimeout(timer as ReturnType<typeof setTimeout>);
+  };
+
+  const clearMaxTimer = () => {
+    if (!state.maxTimerScheduled) {
+      return;
+    }
+    const maxTimer = state.maxTimer;
+    state.maxTimer = undefined;
+    state.maxTimerScheduled = false;
+    clearTimeout(maxTimer as ReturnType<typeof setTimeout>);
+  };
+
+  const clearTimers = () => {
+    let cleanupFailed = false;
+    let cleanupError: unknown;
+    try {
+      clearTimer();
+    } catch (error) {
+      cleanupFailed = true;
+      cleanupError = error;
+    }
+    try {
+      clearMaxTimer();
+    } catch (error) {
+      if (!cleanupFailed) {
+        cleanupFailed = true;
+        cleanupError = error;
+      }
+    }
+    if (cleanupFailed) {
+      throw cleanupError;
     }
   };
 
@@ -68,24 +97,29 @@ export function createDebouncedFn<T extends Procedure>(
     let firedSynchronously = false;
 
     if (state.timerScheduled) {
-      clearTimeout(state.timer as ReturnType<typeof setTimeout>);
-      state.timer = undefined;
-      state.timerScheduled = false;
+      clearTimer();
     }
 
     state.timerScheduled = true;
-    const timer = setTimeout(() => {
-      firedSynchronously = true;
+    let timer: ReturnType<typeof setTimeout>;
+    try {
+      timer = setTimeout(() => {
+        firedSynchronously = true;
+        state.timer = undefined;
+        state.timerScheduled = false;
+        if (trailing) {
+          invoke();
+        } else {
+          state.lastArgs = undefined;
+          pending(false);
+          clearTimers();
+        }
+      }, wait);
+    } catch (error) {
       state.timer = undefined;
       state.timerScheduled = false;
-      if (trailing) {
-        invoke();
-      } else {
-        state.lastArgs = undefined;
-        pending(false);
-        clearTimers();
-      }
-    }, wait);
+      throw error;
+    }
     if (state.timerScheduled) {
       state.timer = timer;
     }
@@ -93,12 +127,19 @@ export function createDebouncedFn<T extends Procedure>(
     if (trailing && maxWait != null && maxWait >= 0 && !state.maxTimerScheduled) {
       const effectiveMaxWait = Math.max(maxWait, wait);
       state.maxTimerScheduled = true;
-      const maxTimer = setTimeout(() => {
-        firedSynchronously = true;
+      let maxTimer: ReturnType<typeof setTimeout>;
+      try {
+        maxTimer = setTimeout(() => {
+          firedSynchronously = true;
+          state.maxTimer = undefined;
+          state.maxTimerScheduled = false;
+          invoke();
+        }, effectiveMaxWait);
+      } catch (error) {
         state.maxTimer = undefined;
         state.maxTimerScheduled = false;
-        invoke();
-      }, effectiveMaxWait);
+        throw error;
+      }
       if (state.maxTimerScheduled) {
         state.maxTimer = maxTimer;
       }
@@ -113,7 +154,19 @@ export function createDebouncedFn<T extends Procedure>(
       state.lastArgs = args;
       pending(true);
     }
-    const firedSynchronously = scheduleTimers();
+    let firedSynchronously: boolean;
+    try {
+      firedSynchronously = scheduleTimers();
+    } catch (error) {
+      state.lastArgs = undefined;
+      pending(false);
+      try {
+        clearTimers();
+      } catch {
+        // Preserve the scheduling failure after best-effort rollback.
+      }
+      throw error;
+    }
 
     if (shouldCallLeading && !(trailing && firedSynchronously)) {
       state.lastArgs = undefined;
@@ -121,7 +174,11 @@ export function createDebouncedFn<T extends Procedure>(
       try {
         fn(...args);
       } catch (error) {
-        cancel();
+        try {
+          cancel();
+        } catch {
+          // Preserve the callback failure after best-effort cleanup.
+        }
         throw error;
       }
     }
@@ -188,7 +245,14 @@ export function createThrottledFn<T extends Procedure>(
 
   const scheduleTick = () => {
     timerScheduled = true;
-    const nextTimer = setTimeout(tick, wait);
+    let nextTimer: ReturnType<typeof setTimeout>;
+    try {
+      nextTimer = setTimeout(tick, wait);
+    } catch (error) {
+      timer = undefined;
+      timerScheduled = false;
+      throw error;
+    }
     if (timerScheduled) {
       timer = nextTimer;
     }
@@ -200,12 +264,22 @@ export function createThrottledFn<T extends Procedure>(
         lastArgs = args;
         pending(true);
       }
-      scheduleTick();
+      try {
+        scheduleTick();
+      } catch (error) {
+        lastArgs = undefined;
+        pending(false);
+        throw error;
+      }
       if (leading) {
         try {
           invoke(args);
         } catch (error) {
-          cancel();
+          try {
+            cancel();
+          } catch {
+            // Preserve the callback failure after best-effort cleanup.
+          }
           throw error;
         }
       }
@@ -219,13 +293,15 @@ export function createThrottledFn<T extends Procedure>(
   };
 
   const cancel = () => {
-    if (timerScheduled) {
-      clearTimeout(timer as ReturnType<typeof setTimeout>);
-      timer = undefined;
-      timerScheduled = false;
-    }
+    const currentTimer = timer;
+    const shouldClear = timerScheduled;
+    timer = undefined;
+    timerScheduled = false;
     lastArgs = undefined;
     pending(false);
+    if (shouldClear) {
+      clearTimeout(currentTimer as ReturnType<typeof setTimeout>);
+    }
   };
 
   const flush = () => {
