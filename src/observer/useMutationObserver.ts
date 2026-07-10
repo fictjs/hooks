@@ -147,6 +147,7 @@ export function useMutationObserver(
           generation !== observerGeneration ||
           cleanup !== cleanupObserver
         ) {
+          disconnectUnowned();
           return true;
         }
       }

@@ -139,6 +139,7 @@ export function useResizeObserver(
           generation !== observerGeneration ||
           cleanup !== cleanupObserver
         ) {
+          disconnectUnowned();
           return true;
         }
       }

@@ -534,6 +534,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'keeps observer registration transactional in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-observer-observe-transaction.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves resize observer restart ownership from signal notification in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-resize-observer-signal-reentry.mjs');

@@ -9,6 +9,7 @@ class MockMutationObserver {
   static disconnectError: Error | undefined;
   static onDisconnect: (() => void) | undefined;
   static triggerDuringObserve = false;
+  readonly observedTargets = new Set<Element>();
 
   readonly observe = vi.fn((target: Element) => {
     if (target === MockMutationObserver.errorTarget) {
@@ -17,8 +18,10 @@ class MockMutationObserver {
     if (MockMutationObserver.triggerDuringObserve) {
       this.trigger([{ type: 'childList', target } as unknown as MutationRecord]);
     }
+    this.observedTargets.add(target);
   });
   readonly disconnect = vi.fn(() => {
+    this.observedTargets.clear();
     MockMutationObserver.onDisconnect?.();
     if (MockMutationObserver.disconnectError) {
       throw MockMutationObserver.disconnectError;
@@ -190,7 +193,7 @@ describe('useMutationObserver', () => {
     }
   });
 
-  it('retains cleanup ownership when observe synchronously refreshes', () => {
+  it('rolls back a stale registration completed after observe synchronously refreshes', () => {
     windowRef.MutationObserver = MockMutationObserver as never;
     const first = document.createElement('div');
     const second = document.createElement('div');
@@ -218,7 +221,8 @@ describe('useMutationObserver', () => {
       first,
       expect.objectContaining({ subtree: true, childList: true })
     );
-    expect(MockMutationObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockMutationObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(2);
+    expect(MockMutationObserver.instances[1]!.observedTargets).toEqual(new Set());
     expect(MockMutationObserver.instances[2]!.observe).toHaveBeenCalledTimes(2);
     expect(MockMutationObserver.instances[2]!.observe).toHaveBeenNthCalledWith(
       1,
@@ -231,13 +235,12 @@ describe('useMutationObserver', () => {
       expect.objectContaining({ subtree: true, childList: true })
     );
     expect(MockMutationObserver.instances[2]!.disconnect).not.toHaveBeenCalled();
+    expect(MockMutationObserver.instances[2]!.observedTargets).toEqual(new Set([first, second]));
 
     state.stop();
-    expect(
-      MockMutationObserver.instances.every(
-        (instance) => instance.disconnect.mock.calls.length === 1
-      )
-    ).toBe(true);
+    expect(MockMutationObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockMutationObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(2);
+    expect(MockMutationObserver.instances[2]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('ignores callbacks from refreshed and disposed observers', () => {

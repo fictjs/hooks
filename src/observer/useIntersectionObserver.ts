@@ -154,6 +154,7 @@ export function useIntersectionObserver(
           generation !== observerGeneration ||
           cleanup !== cleanupObserver
         ) {
+          disconnectUnowned();
           return true;
         }
       }

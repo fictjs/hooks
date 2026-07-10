@@ -9,6 +9,7 @@ class MockIntersectionObserver {
   static disconnectError: Error | undefined;
   static onDisconnect: (() => void) | undefined;
   static triggerDuringObserve = false;
+  readonly observedTargets = new Set<Element>();
 
   readonly observe = vi.fn((target: Element) => {
     if (target === MockIntersectionObserver.errorTarget) {
@@ -17,9 +18,11 @@ class MockIntersectionObserver {
     if (MockIntersectionObserver.triggerDuringObserve) {
       this.trigger([{ isIntersecting: true, target } as unknown as IntersectionObserverEntry]);
     }
+    this.observedTargets.add(target);
   });
   readonly unobserve = vi.fn();
   readonly disconnect = vi.fn(() => {
+    this.observedTargets.clear();
     MockIntersectionObserver.onDisconnect?.();
     if (MockIntersectionObserver.disconnectError) {
       throw MockIntersectionObserver.disconnectError;
@@ -179,7 +182,7 @@ describe('useIntersectionObserver', () => {
     }
   });
 
-  it('retains cleanup ownership when observe synchronously refreshes', () => {
+  it('rolls back a stale registration completed after observe synchronously refreshes', () => {
     windowRef.IntersectionObserver = MockIntersectionObserver as never;
     const first = document.createElement('div');
     const second = document.createElement('div');
@@ -204,18 +207,20 @@ describe('useIntersectionObserver', () => {
     expect(MockIntersectionObserver.instances).toHaveLength(3);
     expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledTimes(1);
     expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(first);
-    expect(MockIntersectionObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockIntersectionObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(2);
+    expect(MockIntersectionObserver.instances[1]!.observedTargets).toEqual(new Set());
     expect(MockIntersectionObserver.instances[2]!.observe).toHaveBeenCalledTimes(2);
     expect(MockIntersectionObserver.instances[2]!.observe).toHaveBeenNthCalledWith(1, first);
     expect(MockIntersectionObserver.instances[2]!.observe).toHaveBeenNthCalledWith(2, second);
     expect(MockIntersectionObserver.instances[2]!.disconnect).not.toHaveBeenCalled();
+    expect(MockIntersectionObserver.instances[2]!.observedTargets).toEqual(
+      new Set([first, second])
+    );
 
     state.stop();
-    expect(
-      MockIntersectionObserver.instances.every(
-        (instance) => instance.disconnect.mock.calls.length === 1
-      )
-    ).toBe(true);
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockIntersectionObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(2);
+    expect(MockIntersectionObserver.instances[2]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('ignores callbacks from refreshed and disposed observers', () => {

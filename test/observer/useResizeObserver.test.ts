@@ -9,6 +9,7 @@ class MockResizeObserver {
   static disconnectError: Error | undefined;
   static onDisconnect: (() => void) | undefined;
   static triggerDuringObserve = false;
+  readonly observedTargets = new Set<Element>();
 
   readonly observe = vi.fn((target: Element) => {
     if (target === MockResizeObserver.errorTarget) {
@@ -17,9 +18,11 @@ class MockResizeObserver {
     if (MockResizeObserver.triggerDuringObserve) {
       this.trigger([{ target } as unknown as ResizeObserverEntry]);
     }
+    this.observedTargets.add(target);
   });
   readonly unobserve = vi.fn();
   readonly disconnect = vi.fn(() => {
+    this.observedTargets.clear();
     MockResizeObserver.onDisconnect?.();
     if (MockResizeObserver.disconnectError) {
       throw MockResizeObserver.disconnectError;
@@ -180,7 +183,7 @@ describe('useResizeObserver', () => {
     }
   });
 
-  it('retains cleanup ownership when observe synchronously refreshes', () => {
+  it('rolls back a stale registration completed after observe synchronously refreshes', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
     const first = document.createElement('div');
     const second = document.createElement('div');
@@ -205,16 +208,18 @@ describe('useResizeObserver', () => {
     expect(MockResizeObserver.instances).toHaveLength(3);
     expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledTimes(1);
     expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(first, undefined);
-    expect(MockResizeObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(2);
+    expect(MockResizeObserver.instances[1]!.observedTargets).toEqual(new Set());
     expect(MockResizeObserver.instances[2]!.observe).toHaveBeenCalledTimes(2);
     expect(MockResizeObserver.instances[2]!.observe).toHaveBeenNthCalledWith(1, first, undefined);
     expect(MockResizeObserver.instances[2]!.observe).toHaveBeenNthCalledWith(2, second, undefined);
     expect(MockResizeObserver.instances[2]!.disconnect).not.toHaveBeenCalled();
+    expect(MockResizeObserver.instances[2]!.observedTargets).toEqual(new Set([first, second]));
 
     state.stop();
-    expect(
-      MockResizeObserver.instances.every((instance) => instance.disconnect.mock.calls.length === 1)
-    ).toBe(true);
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(2);
+    expect(MockResizeObserver.instances[2]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('ignores callbacks from refreshed and disposed observers', () => {
