@@ -5,6 +5,7 @@ import { useIntersectionObserver } from '../../src/observer/useIntersectionObser
 class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = [];
   static errorTarget: Element | undefined;
+  static disconnectError: Error | undefined;
   static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
@@ -16,7 +17,11 @@ class MockIntersectionObserver {
     }
   });
   readonly unobserve = vi.fn();
-  readonly disconnect = vi.fn();
+  readonly disconnect = vi.fn(() => {
+    if (MockIntersectionObserver.disconnectError) {
+      throw MockIntersectionObserver.disconnectError;
+    }
+  });
 
   private callback: IntersectionObserverCallback;
 
@@ -40,6 +45,7 @@ describe('useIntersectionObserver', () => {
     globalThis.IntersectionObserver = originalGlobal;
     MockIntersectionObserver.instances = [];
     MockIntersectionObserver.errorTarget = undefined;
+    MockIntersectionObserver.disconnectError = undefined;
     MockIntersectionObserver.triggerDuringObserve = false;
   });
 
@@ -194,6 +200,32 @@ describe('useIntersectionObserver', () => {
     expect(instance.observe).toHaveBeenNthCalledWith(1, first);
     expect(instance.observe).toHaveBeenNthCalledWith(2, second);
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves observe errors when rollback disconnect fails', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    MockIntersectionObserver.errorTarget = second;
+    MockIntersectionObserver.disconnectError = new Error('disconnect failed');
+
+    expect(() => createRoot(() => useIntersectionObserver([first, second]))).toThrow(
+      'observe failed'
+    );
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes cleanup state before disconnect throws', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    const state = createRoot(() => useIntersectionObserver(element)).value;
+    MockIntersectionObserver.disconnectError = new Error('disconnect failed');
+
+    expect(() => state.refresh()).toThrow('disconnect failed');
+    expect(() => state.refresh()).not.toThrow();
+
+    expect(MockIntersectionObserver.instances).toHaveLength(2);
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('supports stop/start controls', async () => {

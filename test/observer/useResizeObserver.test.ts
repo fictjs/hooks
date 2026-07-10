@@ -5,6 +5,7 @@ import { useResizeObserver } from '../../src/observer/useResizeObserver';
 class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
   static errorTarget: Element | undefined;
+  static disconnectError: Error | undefined;
   static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
@@ -16,7 +17,11 @@ class MockResizeObserver {
     }
   });
   readonly unobserve = vi.fn();
-  readonly disconnect = vi.fn();
+  readonly disconnect = vi.fn(() => {
+    if (MockResizeObserver.disconnectError) {
+      throw MockResizeObserver.disconnectError;
+    }
+  });
 
   private callback: ResizeObserverCallback;
 
@@ -40,6 +45,7 @@ describe('useResizeObserver', () => {
     globalThis.ResizeObserver = originalGlobal;
     MockResizeObserver.instances = [];
     MockResizeObserver.errorTarget = undefined;
+    MockResizeObserver.disconnectError = undefined;
     MockResizeObserver.triggerDuringObserve = false;
   });
 
@@ -184,6 +190,30 @@ describe('useResizeObserver', () => {
     expect(instance.observe).toHaveBeenNthCalledWith(1, first, undefined);
     expect(instance.observe).toHaveBeenNthCalledWith(2, second, undefined);
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves observe errors when rollback disconnect fails', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    MockResizeObserver.errorTarget = second;
+    MockResizeObserver.disconnectError = new Error('disconnect failed');
+
+    expect(() => createRoot(() => useResizeObserver([first, second]))).toThrow('observe failed');
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes cleanup state before disconnect throws', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const state = createRoot(() => useResizeObserver(element)).value;
+    MockResizeObserver.disconnectError = new Error('disconnect failed');
+
+    expect(() => state.refresh()).toThrow('disconnect failed');
+    expect(() => state.refresh()).not.toThrow();
+
+    expect(MockResizeObserver.instances).toHaveLength(2);
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('stops observing with controls', () => {

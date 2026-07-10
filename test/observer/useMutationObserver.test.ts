@@ -5,6 +5,7 @@ import { useMutationObserver } from '../../src/observer/useMutationObserver';
 class MockMutationObserver {
   static instances: MockMutationObserver[] = [];
   static errorTarget: Element | undefined;
+  static disconnectError: Error | undefined;
   static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
@@ -15,7 +16,11 @@ class MockMutationObserver {
       this.trigger([{ type: 'childList', target } as unknown as MutationRecord]);
     }
   });
-  readonly disconnect = vi.fn();
+  readonly disconnect = vi.fn(() => {
+    if (MockMutationObserver.disconnectError) {
+      throw MockMutationObserver.disconnectError;
+    }
+  });
 
   private callback: MutationCallback;
 
@@ -39,6 +44,7 @@ describe('useMutationObserver', () => {
     globalThis.MutationObserver = originalGlobal;
     MockMutationObserver.instances = [];
     MockMutationObserver.errorTarget = undefined;
+    MockMutationObserver.disconnectError = undefined;
     MockMutationObserver.triggerDuringObserve = false;
   });
 
@@ -222,6 +228,30 @@ describe('useMutationObserver', () => {
       expect.objectContaining({ subtree: true, childList: true })
     );
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves observe errors when rollback disconnect fails', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    MockMutationObserver.errorTarget = second;
+    MockMutationObserver.disconnectError = new Error('disconnect failed');
+
+    expect(() => createRoot(() => useMutationObserver([first, second]))).toThrow('observe failed');
+    expect(MockMutationObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes cleanup state before disconnect throws', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const element = document.createElement('div');
+    const state = createRoot(() => useMutationObserver(element)).value;
+    MockMutationObserver.disconnectError = new Error('disconnect failed');
+
+    expect(() => state.refresh()).toThrow('disconnect failed');
+    expect(() => state.refresh()).not.toThrow();
+
+    expect(MockMutationObserver.instances).toHaveLength(2);
+    expect(MockMutationObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('stops observing with controls', () => {

@@ -76,14 +76,15 @@ export function useMutationObserver(
     isSupported(true);
     let cleanupObserver = () => {};
     cleanupObserver = () => {
+      const ownsSetup = cleanup === cleanupObserver;
       if (generation === observerGeneration) {
         observerGeneration += 1;
       }
-      observer.disconnect();
-      if (cleanup === cleanupObserver) {
+      if (ownsSetup) {
         setupReady = false;
         cleanup = () => {};
       }
+      observer.disconnect();
     };
     cleanup = cleanupObserver;
     setupReady = true;
@@ -96,7 +97,11 @@ export function useMutationObserver(
         }
       }
     } catch (error) {
-      cleanupObserver();
+      try {
+        cleanupObserver();
+      } catch {
+        // Preserve the observation failure after best-effort rollback.
+      }
       throw error;
     }
 
