@@ -1,6 +1,7 @@
 import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import {
   deferTargetResolution,
   resolveMaybeTarget,
@@ -45,38 +46,79 @@ export function useIntersectionObserver(
   let cancelDeferredSetup = () => {};
   let setupReady = false;
   let observerGeneration = 0;
+  let disposed = false;
+  const canObserve = () => !disposed && active();
 
   const setup = (): boolean => {
+    if (!canObserve()) {
+      return true;
+    }
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
+      if (!canObserve()) {
+        return true;
+      }
       setupReady = true;
       return true;
     }
 
     const targets = resolveTargetList(target);
+    if (!canObserve()) {
+      return true;
+    }
     if (targets.length === 0) {
       return false;
     }
 
     const rootElement = options.root ? resolveMaybeTarget(options.root) : undefined;
+    if (!canObserve()) {
+      return true;
+    }
+    const observerOptions: IntersectionObserverInit = {
+      root: rootElement ?? null,
+      rootMargin: options.rootMargin,
+      threshold: options.threshold
+    };
+    if (!canObserve()) {
+      return true;
+    }
     const generation = ++observerGeneration;
     const observer = new Observer(
       (nextEntries: IntersectionObserverEntry[], currentObserver: IntersectionObserver) => {
-        if (!active() || generation !== observerGeneration) {
+        if (!canObserve() || generation !== observerGeneration) {
           return;
         }
         entries(nextEntries);
+        if (!canObserve() || generation !== observerGeneration) {
+          return;
+        }
         callback?.(nextEntries, currentObserver);
       },
-      {
-        root: rootElement ?? null,
-        rootMargin: options.rootMargin,
-        threshold: options.threshold
-      }
+      observerOptions
     );
 
+    const disconnectUnowned = () => {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
+      try {
+        observer.disconnect();
+      } catch {
+        // A terminal or superseded setup has no owner to report cleanup failures to.
+      }
+    };
+
+    if (!canObserve() || generation !== observerGeneration) {
+      disconnectUnowned();
+      return true;
+    }
+
     isSupported(true);
+    if (!canObserve() || generation !== observerGeneration) {
+      disconnectUnowned();
+      return true;
+    }
     let cleanupObserver = () => {};
     cleanupObserver = () => {
       const ownsSetup = cleanup === cleanupObserver;
@@ -94,8 +136,11 @@ export function useIntersectionObserver(
 
     try {
       for (const element of targets) {
+        if (!canObserve() || generation !== observerGeneration || cleanup !== cleanupObserver) {
+          return true;
+        }
         observer.observe(element);
-        if (generation !== observerGeneration || cleanup !== cleanupObserver) {
+        if (!canObserve() || generation !== observerGeneration || cleanup !== cleanupObserver) {
           return true;
         }
       }
@@ -115,22 +160,28 @@ export function useIntersectionObserver(
     cancelDeferredSetup();
     cancelDeferredSetup = deferTargetResolution(() => {
       cancelDeferredSetup = () => {};
-      if (!active()) {
+      if (disposed || !active()) {
         return;
       }
       cleanup();
       setupReady = false;
+      if (!canObserve()) {
+        return;
+      }
       setup();
     });
   };
 
   const refresh = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
     cleanup();
     setupReady = false;
 
-    if (!active()) {
+    if (!canObserve()) {
       return;
     }
 
@@ -149,10 +200,22 @@ export function useIntersectionObserver(
     });
   });
 
+  tryOnDestroy(() => {
+    disposed = true;
+    active(false);
+    cancelDeferredSetup();
+    cancelDeferredSetup = () => {};
+    setupReady = false;
+    cleanup();
+  });
+
   return {
     entries,
     isSupported,
     start() {
+      if (disposed) {
+        return;
+      }
       if (!active()) {
         active(true);
       } else if (!setupReady) {
@@ -160,6 +223,9 @@ export function useIntersectionObserver(
       }
     },
     stop() {
+      if (disposed) {
+        return;
+      }
       active(false);
       cancelDeferredSetup();
       cancelDeferredSetup = () => {};

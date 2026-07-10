@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useResizeObserver } from '../../src/observer/useResizeObserver';
 
@@ -6,6 +7,7 @@ class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
   static errorTarget: Element | undefined;
   static disconnectError: Error | undefined;
+  static onDisconnect: (() => void) | undefined;
   static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
@@ -18,6 +20,7 @@ class MockResizeObserver {
   });
   readonly unobserve = vi.fn();
   readonly disconnect = vi.fn(() => {
+    MockResizeObserver.onDisconnect?.();
     if (MockResizeObserver.disconnectError) {
       throw MockResizeObserver.disconnectError;
     }
@@ -46,6 +49,7 @@ describe('useResizeObserver', () => {
     MockResizeObserver.instances = [];
     MockResizeObserver.errorTarget = undefined;
     MockResizeObserver.disconnectError = undefined;
+    MockResizeObserver.onDisconnect = undefined;
     MockResizeObserver.triggerDuringObserve = false;
   });
 
@@ -225,6 +229,92 @@ describe('useResizeObserver', () => {
 
     state.stop();
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart after owner disposal', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const root = createRoot(() => useResizeObserver(element));
+
+    root.dispose();
+    root.value.start();
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockResizeObserver.instances).toHaveLength(1);
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not continue refresh when disconnect disposes the owner', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const root = createRoot(() => useResizeObserver(element));
+    MockResizeObserver.onDisconnect = root.dispose;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockResizeObserver.instances).toHaveLength(1);
+    expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not construct an observer when target resolution disposes the owner', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useResizeObserver(() => {
+        if (disposeOnRead) {
+          dispose();
+        }
+        return element;
+      })
+    );
+    dispose = root.dispose;
+    disposeOnRead = true;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockResizeObserver.instances).toHaveLength(1);
+  });
+
+  it('skips the user callback when an entries effect disposes the owner', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const element = document.createElement('div');
+    const callback = vi.fn();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (Array.isArray(value) && value.length > 0) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useResizeObserver(element, callback));
+      dispose = root.dispose;
+
+      MockResizeObserver.instances[0]!.trigger([
+        { target: element } as unknown as ResizeObserverEntry
+      ]);
+
+      expect(root.value.active()).toBe(false);
+      expect(callback).not.toHaveBeenCalled();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('handles unsupported env', () => {

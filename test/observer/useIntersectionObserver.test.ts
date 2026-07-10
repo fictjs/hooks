@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIntersectionObserver } from '../../src/observer/useIntersectionObserver';
 
@@ -6,6 +7,7 @@ class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = [];
   static errorTarget: Element | undefined;
   static disconnectError: Error | undefined;
+  static onDisconnect: (() => void) | undefined;
   static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
@@ -18,6 +20,7 @@ class MockIntersectionObserver {
   });
   readonly unobserve = vi.fn();
   readonly disconnect = vi.fn(() => {
+    MockIntersectionObserver.onDisconnect?.();
     if (MockIntersectionObserver.disconnectError) {
       throw MockIntersectionObserver.disconnectError;
     }
@@ -46,6 +49,7 @@ describe('useIntersectionObserver', () => {
     MockIntersectionObserver.instances = [];
     MockIntersectionObserver.errorTarget = undefined;
     MockIntersectionObserver.disconnectError = undefined;
+    MockIntersectionObserver.onDisconnect = undefined;
     MockIntersectionObserver.triggerDuringObserve = false;
   });
 
@@ -242,6 +246,92 @@ describe('useIntersectionObserver', () => {
     state.start();
     await Promise.resolve();
     expect(MockIntersectionObserver.instances.length).toBe(2);
+  });
+
+  it('does not restart after owner disposal', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    const root = createRoot(() => useIntersectionObserver(element));
+
+    root.dispose();
+    root.value.start();
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockIntersectionObserver.instances).toHaveLength(1);
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not continue refresh when disconnect disposes the owner', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    const root = createRoot(() => useIntersectionObserver(element));
+    MockIntersectionObserver.onDisconnect = root.dispose;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockIntersectionObserver.instances).toHaveLength(1);
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not construct an observer when target resolution disposes the owner', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useIntersectionObserver(() => {
+        if (disposeOnRead) {
+          dispose();
+        }
+        return element;
+      })
+    );
+    dispose = root.dispose;
+    disposeOnRead = true;
+
+    root.value.refresh();
+
+    expect(root.value.active()).toBe(false);
+    expect(MockIntersectionObserver.instances).toHaveLength(1);
+  });
+
+  it('skips the user callback when an entries effect disposes the owner', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    const callback = vi.fn();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (Array.isArray(value) && value.length > 0) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useIntersectionObserver(element, callback));
+      dispose = root.dispose;
+
+      MockIntersectionObserver.instances[0]!.trigger([
+        { isIntersecting: true, target: element } as unknown as IntersectionObserverEntry
+      ]);
+
+      expect(root.value.active()).toBe(false);
+      expect(callback).not.toHaveBeenCalled();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('gracefully handles unsupported env', () => {
