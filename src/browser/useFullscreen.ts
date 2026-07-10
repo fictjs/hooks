@@ -221,6 +221,15 @@ export function useFullscreen(options: UseFullscreenOptions = {}): UseFullscreen
       return false;
     }
 
+    const fullscreenElement = getFullscreenElement(documentRef);
+    if (fullscreenElement) {
+      const exited = await exitTargetIfCurrent(fullscreenElement);
+      if (!disposed) {
+        update();
+      }
+      return exited;
+    }
+
     const exitMethod = resolveExitMethod(documentRef);
     if (!exitMethod) {
       return false;

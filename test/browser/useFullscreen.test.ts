@@ -334,6 +334,37 @@ describe('useFullscreen', () => {
     expect(documentMock.fullscreenElement).toBeNull();
   });
 
+  it('shares a pending public exit with disposal auto-exit', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    let completeExit = () => {};
+    documentMock.fullscreenElement = main;
+    documentMock.exitFullscreen = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completeExit = () => {
+            documentMock.fullscreenElement = null;
+            resolve();
+          };
+        })
+    );
+    const root = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main,
+        autoExit: true
+      })
+    );
+
+    const pendingExit = root.value.exit();
+    root.dispose();
+
+    expect(documentMock.exitFullscreen).toHaveBeenCalledTimes(1);
+
+    completeExit();
+    await expect(pendingExit).resolves.toBe(true);
+    expect(documentMock.fullscreenElement).toBeNull();
+  });
+
   it('leaves a pending fullscreen entry alone when auto-exit is disabled', async () => {
     const { documentMock, main } = createFullscreenMock();
     let completeRequest = () => {};
