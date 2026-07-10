@@ -12,6 +12,18 @@ export interface UseFocusWithinReturn {
   refresh: () => void;
 }
 
+function isTargetWithin(element: Element, target: EventTarget | null): boolean {
+  if (!target) {
+    return false;
+  }
+
+  try {
+    return element.contains(target as Node);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Track whether focus is currently inside a target element.
  *
@@ -36,8 +48,8 @@ export function useFocusWithin(
       return;
     }
 
-    const relatedTarget = (event as FocusEvent).relatedTarget as Node | null;
-    if (relatedTarget && targetElement.contains(relatedTarget)) {
+    const relatedTarget = (event as FocusEvent).relatedTarget;
+    if (isTargetWithin(targetElement, relatedTarget)) {
       return;
     }
     focused(false);
