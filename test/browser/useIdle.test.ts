@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIdle } from '../../src/browser/useIdle';
 
@@ -139,6 +140,68 @@ describe('useIdle', () => {
     windowRef.dispatchEvent(new Event('mousemove'));
     vi.advanceTimersByTime(2000);
     expect(state.idle()).toBe(false);
+  });
+
+  it('stops an activity operation when its idle write disposes the owner', () => {
+    vi.useFakeTimers();
+    const windowRef = new EventTarget() as Window;
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === false) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useIdle({ window: windowRef, document: null, immediate: false, initialState: true })
+      );
+      dispose = root.dispose;
+      armed = true;
+
+      root.value.resume();
+
+      expect(root.value.active()).toBe(false);
+      expect(root.value.idle()).toBe(false);
+      expect(root.value.lastActive()).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('invalidates a timer scheduled through a synchronous pause', () => {
+    const windowRef = new EventTarget() as Window;
+    const root = createRoot(() =>
+      useIdle({ window: windowRef, document: null, immediate: false, initialState: false })
+    );
+    let scheduled = () => {};
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementationOnce((callback) => {
+      scheduled = callback as () => void;
+      root.value.pause();
+      return 17 as unknown as ReturnType<typeof setTimeout>;
+    });
+
+    root.value.resume();
+    scheduled();
+
+    expect(setTimeoutSpy).toHaveBeenCalledOnce();
+    expect(root.value.active()).toBe(false);
+    expect(root.value.idle()).toBe(false);
+    root.dispose();
   });
 
   it('returns unsupported state when window is missing', () => {

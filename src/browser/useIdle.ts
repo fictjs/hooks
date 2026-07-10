@@ -61,44 +61,98 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
   } as typeof activeSignal;
 
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let operation = 0;
+  let disposed = false;
+
+  const isCurrentOperation = (currentOperation: number) =>
+    !disposed && currentOperation === operation;
 
   const clearTimer = () => {
     if (timer == null) {
       return;
     }
-    clearTimeout(timer);
+    const currentTimer = timer;
     timer = null;
+    clearTimeout(currentTimer);
   };
 
-  const scheduleIdle = () => {
+  const scheduleIdle = (currentOperation: number) => {
     clearTimer();
-    if (!active() || !isSupported()) {
+    if (!isCurrentOperation(currentOperation) || !activeSignal() || !isSupported()) {
       return;
     }
-    timer = setTimeout(() => {
+
+    let fired = false;
+    let nextTimer: ReturnType<typeof setTimeout> | null = null;
+    nextTimer = setTimeout(() => {
+      fired = true;
+      if (nextTimer != null && timer === nextTimer) {
+        timer = null;
+      }
+      if (!isCurrentOperation(currentOperation) || !activeSignal()) {
+        return;
+      }
       idle(true);
     }, timeout);
+    if (fired) {
+      return;
+    }
+    if (!isCurrentOperation(currentOperation) || !activeSignal()) {
+      clearTimeout(nextTimer);
+      return;
+    }
+    timer = nextTimer;
   };
 
-  const markActive = () => {
+  const markActive = (currentOperation: number) => {
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
     idle(false);
-    lastActive(Date.now());
-    scheduleIdle();
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
+    const timestamp = Date.now();
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
+    lastActive(timestamp);
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
+    scheduleIdle(currentOperation);
   };
 
-  const activityListener = useEventListener(windowRef, events, markActive, {
-    passive: true,
-    immediate: false
-  });
+  const activityListener = useEventListener(
+    windowRef,
+    events,
+    () => {
+      if (disposed || !activeSignal()) {
+        return;
+      }
+      const currentOperation = ++operation;
+      markActive(currentOperation);
+    },
+    {
+      passive: true,
+      immediate: false
+    }
+  );
 
   const visibilityListener = useEventListener(
     documentRef,
     'visibilitychange',
     () => {
-      if (!documentRef || documentRef.visibilityState !== 'visible') {
+      if (disposed || !activeSignal() || !documentRef) {
         return;
       }
-      markActive();
+      const currentOperation = operation;
+      const visibilityState = documentRef.visibilityState;
+      if (!isCurrentOperation(currentOperation) || visibilityState !== 'visible') {
+        return;
+      }
+      const activityOperation = ++operation;
+      markActive(activityOperation);
     },
     {
       passive: true,
@@ -107,35 +161,64 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
   );
 
   const pause = () => {
-    if (!activeSignal()) {
+    if (disposed) {
       return;
     }
 
-    activeSignal(false);
+    const currentOperation = ++operation;
+    if (activeSignal()) {
+      activeSignal(false);
+      if (!isCurrentOperation(currentOperation)) {
+        return;
+      }
+    }
     activityListener.stop();
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
     visibilityListener.stop();
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
     clearTimer();
   };
 
   const resume = () => {
-    if (!windowRef || activeSignal()) {
+    if (disposed || !windowRef || activeSignal()) {
       if (!windowRef) {
         isSupported(false);
       }
       return;
     }
 
+    const currentOperation = ++operation;
     isSupported(true);
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
     activeSignal(true);
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
     activityListener.start();
+    if (!isCurrentOperation(currentOperation)) {
+      return;
+    }
     if (listenForVisibilityChange) {
       visibilityListener.start();
+      if (!isCurrentOperation(currentOperation)) {
+        return;
+      }
     }
-    markActive();
+    markActive(currentOperation);
   };
 
   const reset = () => {
-    markActive();
+    if (disposed) {
+      return;
+    }
+    const currentOperation = ++operation;
+    markActive(currentOperation);
   };
 
   if (options.immediate ?? true) {
@@ -143,7 +226,12 @@ export function useIdle(options: UseIdleOptions = {}): UseIdleReturn {
   }
 
   tryOnDestroy(() => {
-    pause();
+    disposed = true;
+    operation += 1;
+    activeSignal(false);
+    activityListener.stop();
+    visibilityListener.stop();
+    clearTimer();
   });
 
   return {

@@ -334,4 +334,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps useIdle activity and timer operations terminal in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-idle-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });
