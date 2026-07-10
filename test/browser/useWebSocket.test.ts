@@ -670,6 +670,7 @@ describe('useWebSocket', () => {
   it('preserves replacement cleanup when listener removal reentrantly opens', () => {
     let open = () => false;
     let armed = true;
+    const onClose = vi.fn();
     const ConfiguringWebSocket = function ConfiguringWebSocket(
       url: string | URL,
       protocols?: string | string[]
@@ -688,7 +689,8 @@ describe('useWebSocket', () => {
     const root = createRoot(() =>
       useWebSocket('ws://fict.test', {
         webSocket: ConfiguringWebSocket,
-        immediate: false
+        immediate: false,
+        onClose
       })
     );
     open = root.value.open;
@@ -699,6 +701,8 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(2);
     expect(MockWebSocket.instances[0]!.removeEventListener).toHaveBeenCalledTimes(4);
     expect(MockWebSocket.instances[1]!.removeEventListener).not.toHaveBeenCalled();
+    expect(root.value.status()).toBe('CONNECTING');
+    expect(onClose).not.toHaveBeenCalled();
 
     root.dispose();
     expect(MockWebSocket.instances[1]!.removeEventListener).toHaveBeenCalledTimes(4);

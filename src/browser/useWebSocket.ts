@@ -406,12 +406,16 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       if (destroyed || socket !== currentSocket) {
         return;
       }
+      const closeOperation = operationEpoch;
 
       socket = null;
       socketUrlKey = null;
       cleanupSocket();
+      if (destroyed || socket !== null || closeOperation !== operationEpoch) {
+        return;
+      }
       status('CLOSED');
-      if (destroyed || socket !== null) {
+      if (destroyed || socket !== null || closeOperation !== operationEpoch) {
         return;
       }
       try {
