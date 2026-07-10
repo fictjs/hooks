@@ -386,6 +386,31 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('does not call the fetcher when the input accessor disposes the root', async () => {
+    const mockFetch = vi.fn(async () => new Response('unexpected'));
+    let dispose = () => {};
+    const root = createRoot(() =>
+      useFetch(
+        () => {
+          dispose();
+          return 'https://example.com';
+        },
+        {
+          fetch: mockFetch as never,
+          immediate: false,
+          initialData: 'initial'
+        }
+      )
+    );
+    dispose = root.dispose;
+
+    await expect(root.value.execute()).resolves.toBe('initial');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(root.value.aborted()).toBe(true);
+    expect(root.value.isLoading()).toBe(false);
+  });
+
   it('stores error for failed responses', async () => {
     const onError = vi.fn();
     const mockFetch = vi.fn(async () => new Response('fail', { status: 500 }));

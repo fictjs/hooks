@@ -213,8 +213,13 @@ export function useFetch<T = unknown>(
         return data();
       }
 
+      const resolvedInput = toValue(input as MaybeAccessor<RequestInfo | URL>);
+      if (disposed || id !== requestId || requestSignal?.aborted) {
+        return data();
+      }
+
       const response = await raceAbort(
-        fetcher(toValue(input as MaybeAccessor<RequestInfo | URL>), {
+        fetcher(resolvedInput, {
           ...options.init,
           ...init,
           signal: mergedSignal.signal
