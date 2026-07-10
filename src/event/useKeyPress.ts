@@ -149,27 +149,43 @@ export function useKeyPress(
   const events = toArray(options.events ?? 'keydown');
   const exactMatch = options.exactMatch ?? false;
   const target = options.target === undefined ? defaultWindow : options.target;
-  const passive = options.preventDefault ? false : options.passive;
+  const preventDefault = options.preventDefault ?? false;
+  const passive = preventDefault ? false : options.passive;
+  const ignoreRepeat = options.ignoreRepeat ?? false;
   const ignoreComposing = options.ignoreComposing ?? true;
+  let operation = 0;
+  let isActiveOperation: (currentOperation: number) => boolean = () => false;
 
-  return useEventListener(
+  const controls = useEventListener(
     target,
     events,
     (event) => {
+      const currentOperation = operation;
+      const isCurrent = () => isActiveOperation(currentOperation);
+      if (!isCurrent()) {
+        return;
+      }
+
       const keyboardEvent = event as KeyboardEvent;
-      if (
-        (options.ignoreRepeat && keyboardEvent.repeat) ||
-        (ignoreComposing && keyboardEvent.isComposing)
-      ) {
+      const repeated = ignoreRepeat && keyboardEvent.repeat;
+      if (!isCurrent() || repeated) {
+        return;
+      }
+      const composing = ignoreComposing && keyboardEvent.isComposing;
+      if (!isCurrent() || composing) {
         return;
       }
 
-      if (!matchesFilter(keyboardEvent, filter, exactMatch)) {
+      const matched = matchesFilter(keyboardEvent, filter, exactMatch);
+      if (!isCurrent() || !matched) {
         return;
       }
 
-      if (options.preventDefault) {
+      if (preventDefault) {
         keyboardEvent.preventDefault();
+        if (!isCurrent()) {
+          return;
+        }
       }
 
       handler(keyboardEvent);
@@ -180,4 +196,23 @@ export function useKeyPress(
       immediate: options.immediate
     }
   );
+  isActiveOperation = (currentOperation) => currentOperation === operation && controls.active();
+
+  const start = controls.start;
+  const stop = controls.stop;
+  const refresh = controls.refresh;
+  controls.start = () => {
+    operation += 1;
+    start();
+  };
+  controls.stop = () => {
+    operation += 1;
+    stop();
+  };
+  controls.refresh = () => {
+    operation += 1;
+    refresh();
+  };
+
+  return controls;
 }

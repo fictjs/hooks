@@ -84,6 +84,49 @@ describe('useKeyPress', () => {
     root.dispose();
   });
 
+  it('does not handle an event when the predicate stops the controls', () => {
+    const handler = vi.fn();
+    const controlsRef: { current?: ReturnType<typeof useKeyPress> } = {};
+    const root = createRoot(() =>
+      useKeyPress(
+        () => {
+          controlsRef.current?.stop();
+          return true;
+        },
+        handler,
+        { preventDefault: true }
+      )
+    );
+    controlsRef.current = root.value;
+    const event = new KeyboardEvent('keydown', { key: 'x', cancelable: true });
+
+    window.dispatchEvent(event);
+
+    expect(root.value.active()).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    root.dispose();
+  });
+
+  it('invalidates an event when the predicate stops and restarts the controls', () => {
+    const handler = vi.fn();
+    const controlsRef: { current?: ReturnType<typeof useKeyPress> } = {};
+    const root = createRoot(() =>
+      useKeyPress(() => {
+        controlsRef.current?.stop();
+        controlsRef.current?.start();
+        return true;
+      }, handler)
+    );
+    controlsRef.current = root.value;
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+
+    expect(root.value.active()).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
+    root.dispose();
+  });
+
   it('exposes start and stop controls', () => {
     const handler = vi.fn();
     const { value: controls, dispose } = createRoot(() => useKeyPress('z', handler));

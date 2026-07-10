@@ -158,4 +158,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'invalidates useKeyPress callbacks after filter stop and restart in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-key-press-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });
