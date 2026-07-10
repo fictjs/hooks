@@ -469,6 +469,49 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(3);
   });
 
+  it('does not schedule a reconnect after the count signal update disposes the owner', () => {
+    vi.useFakeTimers();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 1) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false,
+          autoReconnect: { retries: 1, delay: 10 }
+        })
+      );
+      dispose = root.dispose;
+      root.value.open();
+
+      MockWebSocket.instances[0]!.serverClose();
+
+      expect(root.value.reconnectCount()).toBe(0);
+      expect(root.value.status()).toBe('CLOSED');
+      expect(vi.getTimerCount()).toBe(0);
+      vi.runAllTimers();
+      expect(MockWebSocket.instances).toHaveLength(1);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('auto reconnects when onClose throws', () => {
     vi.useFakeTimers();
     const callbackError = new Error('close callback failed');

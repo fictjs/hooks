@@ -159,6 +159,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
     reconnectAttempts += 1;
     reconnectCount(reconnectAttempts);
+    if (destroyed || manuallyClosed || socket !== null) {
+      return;
+    }
 
     const delayValue = reconnectOptions.delay ?? 1000;
     const delay = typeof delayValue === 'function' ? delayValue(reconnectAttempts) : delayValue;
