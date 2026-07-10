@@ -124,6 +124,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
   const reportError = (nextError: unknown) => {
     error(nextError);
+    if (destroyed) {
+      return;
+    }
     try {
       options.onError?.(nextError);
     } catch {

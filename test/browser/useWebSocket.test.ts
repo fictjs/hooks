@@ -108,6 +108,46 @@ describe('useWebSocket', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it('does not call onError after the error signal update disposes the owner', () => {
+    const onError = vi.fn();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value instanceof Event && value.type === 'error') {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false,
+          onError
+        })
+      );
+      dispose = root.dispose;
+      root.value.open();
+
+      MockWebSocket.instances[0]!.fail();
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(root.value.status()).toBe('CLOSED');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('serializes outgoing payload with send', () => {
     const { value: state } = createRoot(() =>
       useWebSocket<{ ok: boolean }, { ok: boolean }>('ws://fict.test', {
