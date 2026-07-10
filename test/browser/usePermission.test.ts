@@ -357,6 +357,31 @@ describe('usePermission', () => {
     expect(addEventListener).toHaveBeenCalledTimes(0);
   });
 
+  it('does not bind a listener when reading the status disposes the owner', async () => {
+    const status = new MockPermissionStatus('camera', 'granted');
+    const addEventListener = vi.spyOn(status, 'addEventListener');
+    let dispose = () => {};
+    Object.defineProperty(status, 'state', {
+      configurable: true,
+      get: () => {
+        dispose();
+        return 'granted';
+      }
+    });
+    const root = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query: vi.fn(async () => status) } },
+        immediate: false
+      })
+    );
+    dispose = root.dispose;
+
+    await expect(root.value.query()).resolves.toBe(status);
+
+    expect(root.value.state()).toBe('granted');
+    expect(addEventListener).not.toHaveBeenCalled();
+  });
+
   it('does not query or bind a status after dispose', async () => {
     const status = new MockPermissionStatus('camera', 'granted');
     const addEventListener = vi.spyOn(status, 'addEventListener');

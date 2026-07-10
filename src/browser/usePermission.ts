@@ -90,6 +90,9 @@ export function usePermission(
   const bindStatus = (nextStatus: PermissionStatus, statusPermission: PermissionDescriptor) => {
     cleanup();
     state(nextStatus.state);
+    if (disposed) {
+      return;
+    }
 
     const onChange = () => {
       if (disposed) {
