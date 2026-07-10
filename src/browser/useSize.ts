@@ -268,37 +268,43 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       applyRect(nextTarget);
     });
 
-    if (disposed) {
+    const disconnectNextObserver = () => {
       try {
         nextObserver.disconnect();
       } catch {
-        // Disposal remains terminal even if the new observer cannot disconnect cleanly.
+        // Setup/disposal failures must not be replaced by disconnect failures.
       }
+    };
+
+    if (disposed || generation !== observerGeneration) {
+      disconnectNextObserver();
       return;
     }
 
+    observer = nextObserver;
     try {
       nextObserver.observe(nextTarget, { box });
     } catch (error) {
-      if (generation === observerGeneration) {
-        observerGeneration += 1;
-      }
-      try {
-        nextObserver.disconnect();
-      } catch {
-        // Preserve the original observe error.
+      if (observer === nextObserver) {
+        observer = null;
+        if (generation === observerGeneration) {
+          observerGeneration += 1;
+        }
+        disconnectNextObserver();
       }
       throw error;
     }
-    if (disposed) {
-      try {
-        nextObserver.disconnect();
-      } catch {
-        // Disposal remains terminal even if the new observer cannot disconnect cleanly.
-      }
+
+    if (observer !== nextObserver) {
       return;
     }
-    observer = nextObserver;
+    if (disposed || !active() || generation !== observerGeneration) {
+      observer = null;
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
+      disconnectNextObserver();
+    }
   };
 
   const scheduleDeferredTarget = () => {

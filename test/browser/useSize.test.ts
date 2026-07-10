@@ -7,8 +7,12 @@ class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
   static observeError: unknown;
   static disconnectError: unknown;
+  static onObserve: ((observer: MockResizeObserver) => void) | undefined;
 
   readonly observe = vi.fn(() => {
+    const onObserve = MockResizeObserver.onObserve;
+    MockResizeObserver.onObserve = undefined;
+    onObserve?.(this);
     if (MockResizeObserver.observeError) {
       throw MockResizeObserver.observeError;
     }
@@ -68,6 +72,7 @@ describe('useSize', () => {
     MockResizeObserver.instances = [];
     MockResizeObserver.observeError = undefined;
     MockResizeObserver.disconnectError = undefined;
+    MockResizeObserver.onObserve = undefined;
     vi.restoreAllMocks();
   });
 
@@ -456,6 +461,47 @@ describe('useSize', () => {
     expect(root.value.width()).toBe(0);
     expect(MockResizeObserver.instances).toHaveLength(0);
     expect(addEventListener).not.toHaveBeenCalled();
+  });
+
+  it('keeps ownership when observe synchronously refreshes setup', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const root = createRoot(() => useSize(element));
+    const initialObserver = MockResizeObserver.instances[0]!;
+
+    MockResizeObserver.onObserve = () => {
+      root.value.refresh();
+    };
+    root.value.refresh();
+
+    const replacedObserver = MockResizeObserver.instances[1]!;
+    const currentObserver = MockResizeObserver.instances[2]!;
+    expect(MockResizeObserver.instances).toHaveLength(3);
+    expect(initialObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(replacedObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(currentObserver.disconnect).not.toHaveBeenCalled();
+
+    currentObserver.trigger([
+      {
+        target: element,
+        borderBoxSize: [{ inlineSize: 90, blockSize: 45 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+    replacedObserver.trigger([
+      {
+        target: element,
+        borderBoxSize: [{ inlineSize: 500, blockSize: 250 }]
+      } as unknown as ResizeObserverEntry
+    ]);
+    expect(root.value.width()).toBe(90);
+    expect(root.value.height()).toBe(45);
+
+    root.dispose();
+    expect(initialObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(replacedObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(currentObserver.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('does not reactivate a stopped instance after dispose', () => {
