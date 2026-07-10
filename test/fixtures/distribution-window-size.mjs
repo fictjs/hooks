@@ -1,6 +1,9 @@
-import { createRoot } from '@fictjs/runtime';
-import { __fictPopContext, __fictPushContext } from '@fictjs/runtime/internal';
-import { useWindowSize } from '../../dist/index.js';
+import { loadDistribution } from './load-distribution.mjs';
+
+const { hooks, internal, runtime } = await loadDistribution();
+const { useWindowSize } = hooks;
+const { __fictPopContext, __fictPushContext } = internal;
+const { createRoot } = runtime;
 
 __fictPushContext();
 let root;
