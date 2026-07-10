@@ -6,7 +6,7 @@ const { __fictPopContext, __fictPushContext } = internal;
 const { createRoot } = runtime;
 
 function createWindowTarget() {
-  const target = new EventTarget();
+  const target = new globalThis.EventTarget();
   target.pageXOffset = 0;
   target.pageYOffset = 0;
   return target;
@@ -46,7 +46,7 @@ for (const useHook of [
   refreshNested = true;
   target.pageXOffset = 10;
   target.pageYOffset = 20;
-  target.dispatchEvent(new Event('scroll'));
+  target.dispatchEvent(new globalThis.Event('scroll'));
 
   if (root.value.x() !== 30 || root.value.y() !== 40) {
     throw new Error('built scroll hook let a stale operation overwrite a nested refresh');
