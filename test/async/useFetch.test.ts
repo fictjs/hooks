@@ -428,4 +428,44 @@ describe('useFetch', () => {
     expect((state.error() as Error).message).toContain('500');
     expect(onError).toHaveBeenCalledTimes(1);
   });
+
+  it('consumes onError failures from immediate execution', async () => {
+    const requestError = new Error('request failed');
+    const callbackError = new Error('callback failed');
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        fetch: vi.fn(async () => {
+          throw requestError;
+        }) as never,
+        onError() {
+          throw callbackError;
+        }
+      })
+    );
+
+    await vi.waitFor(() => expect(state.isLoading()).toBe(false));
+
+    expect(state.error()).toBe(requestError);
+  });
+
+  it('exposes onError failures to explicit execute callers', async () => {
+    const requestError = new Error('request failed');
+    const callbackError = new Error('callback failed');
+    const { value: state } = createRoot(() =>
+      useFetch('https://example.com', {
+        immediate: false,
+        fetch: vi.fn(async () => {
+          throw requestError;
+        }) as never,
+        onError() {
+          throw callbackError;
+        }
+      })
+    );
+
+    await expect(state.execute()).rejects.toBe(callbackError);
+
+    expect(state.error()).toBe(requestError);
+    expect(state.isLoading()).toBe(false);
+  });
 });

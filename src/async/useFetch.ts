@@ -290,7 +290,9 @@ export function useFetch<T = unknown>(
   };
 
   if (options.immediate ?? true) {
-    void execute();
+    void execute().catch(() => {
+      // Immediate execution has no caller to receive lifecycle callback failures.
+    });
   }
 
   tryOnDestroy(() => {
