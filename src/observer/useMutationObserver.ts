@@ -39,17 +39,22 @@ export function useMutationObserver(
   let cancelDeferredSetup = () => {};
   let setupReady = false;
   let observerGeneration = 0;
+  let refreshGeneration = 0;
+  let controlGeneration = 0;
   let disposed = false;
   const canObserve = () => !disposed && active();
+  const ownsControl = (generation: number) => !disposed && generation === controlGeneration;
+  const ownsRefresh = (generation: number) => !disposed && generation === refreshGeneration;
+  const canRunSetup = (generation: number) => ownsRefresh(generation) && active();
 
-  const setup = (): boolean => {
-    if (!canObserve()) {
+  const setup = (refreshId: number): boolean => {
+    if (!canRunSetup(refreshId)) {
       return true;
     }
     const Observer = observerCtor;
     if (!Observer) {
       isSupported(false);
-      if (!canObserve()) {
+      if (!canRunSetup(refreshId)) {
         return true;
       }
       setupReady = true;
@@ -57,7 +62,7 @@ export function useMutationObserver(
     }
 
     const targets = resolveTargetList(target);
-    if (!canObserve()) {
+    if (!canRunSetup(refreshId)) {
       return true;
     }
     if (targets.length === 0) {
@@ -73,7 +78,7 @@ export function useMutationObserver(
       attributeOldValue: options.attributeOldValue,
       characterDataOldValue: options.characterDataOldValue
     };
-    if (!canObserve()) {
+    if (!canRunSetup(refreshId)) {
       return true;
     }
 
@@ -102,13 +107,13 @@ export function useMutationObserver(
       }
     };
 
-    if (!canObserve() || generation !== observerGeneration) {
+    if (!canRunSetup(refreshId) || generation !== observerGeneration) {
       disconnectUnowned();
       return true;
     }
 
     isSupported(true);
-    if (!canObserve() || generation !== observerGeneration) {
+    if (!canRunSetup(refreshId) || generation !== observerGeneration) {
       disconnectUnowned();
       return true;
     }
@@ -129,11 +134,19 @@ export function useMutationObserver(
 
     try {
       for (const element of targets) {
-        if (!canObserve() || generation !== observerGeneration || cleanup !== cleanupObserver) {
+        if (
+          !canRunSetup(refreshId) ||
+          generation !== observerGeneration ||
+          cleanup !== cleanupObserver
+        ) {
           return true;
         }
         observer.observe(element, observeOptions);
-        if (!canObserve() || generation !== observerGeneration || cleanup !== cleanupObserver) {
+        if (
+          !canRunSetup(refreshId) ||
+          generation !== observerGeneration ||
+          cleanup !== cleanupObserver
+        ) {
           return true;
         }
       }
@@ -149,19 +162,22 @@ export function useMutationObserver(
     return true;
   };
 
-  const scheduleDeferredSetup = () => {
+  const scheduleDeferredSetup = (refreshId: number) => {
     cancelDeferredSetup();
+    if (!canRunSetup(refreshId)) {
+      return;
+    }
     cancelDeferredSetup = deferTargetResolution(() => {
       cancelDeferredSetup = () => {};
-      if (disposed || !active()) {
+      if (!canRunSetup(refreshId)) {
         return;
       }
       cleanup();
-      setupReady = false;
-      if (!canObserve()) {
+      if (!canRunSetup(refreshId)) {
         return;
       }
-      setup();
+      setupReady = false;
+      setup(refreshId);
     });
   };
 
@@ -169,17 +185,24 @@ export function useMutationObserver(
     if (disposed) {
       return;
     }
+    const refreshId = ++refreshGeneration;
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
+    if (!ownsRefresh(refreshId)) {
+      return;
+    }
     cleanup();
+    if (!ownsRefresh(refreshId)) {
+      return;
+    }
     setupReady = false;
 
     if (!canObserve()) {
       return;
     }
 
-    if (!setup()) {
-      scheduleDeferredSetup();
+    if (!setup(refreshId) && canRunSetup(refreshId)) {
+      scheduleDeferredSetup(refreshId);
     }
   };
 
@@ -195,6 +218,7 @@ export function useMutationObserver(
 
   tryOnDestroy(() => {
     disposed = true;
+    controlGeneration += 1;
     active(false);
     cancelDeferredSetup();
     cancelDeferredSetup = () => {};
@@ -210,17 +234,25 @@ export function useMutationObserver(
       if (disposed) {
         return;
       }
+      const controlId = ++controlGeneration;
       if (!active()) {
         active(true);
       } else if (!setupReady) {
         refresh();
+      }
+      if (!ownsControl(controlId)) {
+        return;
       }
     },
     stop() {
       if (disposed) {
         return;
       }
+      const controlId = ++controlGeneration;
       active(false);
+      if (!ownsControl(controlId)) {
+        return;
+      }
       cancelDeferredSetup();
       cancelDeferredSetup = () => {};
       cleanup();
