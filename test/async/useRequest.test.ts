@@ -278,6 +278,82 @@ describe('useRequest', () => {
     }
   });
 
+  it('keeps cache aligned with a nested mutate from the data signal notification', () => {
+    const cacheProvider = new Map();
+    let state: ReturnType<typeof useRequest<number>>;
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === 1) {
+          armed = false;
+          state.mutate(2);
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      state = createRoot(() =>
+        useRequest(async () => 0, {
+          manual: true,
+          cacheKey: 'nested-mutate',
+          cacheProvider
+        })
+      ).value;
+      armed = true;
+
+      state.mutate(1);
+
+      expect(state.data()).toBe(2);
+      expect(cacheProvider.get('nested-mutate')?.data).toBe(2);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('does not run a stale success callback after cache provider reentry', async () => {
+    let nested: Promise<string | undefined> | undefined;
+    let armed = false;
+    const callbacks: string[] = [];
+    class ReentrantCache extends Map {
+      override set(key: unknown, value: unknown): this {
+        super.set(key, value);
+        if (armed) {
+          armed = false;
+          nested = state.runAsync('inner');
+        }
+        return this;
+      }
+    }
+    const cacheProvider = new ReentrantCache();
+    const state = createRoot(() =>
+      useRequest(async (value: string) => value, {
+        manual: true,
+        cacheKey: 'cache-reentry',
+        cacheProvider,
+        onSuccess(value) {
+          callbacks.push(value);
+        }
+      })
+    ).value;
+    armed = true;
+
+    await state.runAsync('outer');
+    await nested;
+
+    expect(callbacks).toEqual(['inner']);
+    expect(state.data()).toBe('inner');
+    expect(cacheProvider.get('cache-reentry')?.data).toBe('inner');
+  });
+
   it('retries failed requests', async () => {
     const service = vi
       .fn<(...args: [number]) => Promise<number>>()

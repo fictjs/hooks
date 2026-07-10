@@ -73,26 +73,48 @@ export function clearRequestCache(cacheKey?: string): void {
   requestCache.delete(cacheKey);
 }
 
-function pruneExpiredCache<T>(cache: Map<string, UseRequestCacheEntry<T>>, now = Date.now()): void {
+function pruneExpiredCache<T>(
+  cache: Map<string, UseRequestCacheEntry<T>>,
+  now = Date.now(),
+  ownsOperation: () => boolean = () => true
+): boolean {
   for (const [key, entry] of cache) {
+    if (!ownsOperation()) {
+      return false;
+    }
+
     if (entry.expiresAt <= now) {
       cache.delete(key);
+      if (!ownsOperation()) {
+        return false;
+      }
     }
   }
+
+  return ownsOperation();
 }
 
-function pruneCacheSize<T>(cache: Map<string, UseRequestCacheEntry<T>>, maxSize: number): void {
+function pruneCacheSize<T>(
+  cache: Map<string, UseRequestCacheEntry<T>>,
+  maxSize: number,
+  ownsOperation: () => boolean = () => true
+): boolean {
   if (maxSize < 0) {
-    return;
+    return ownsOperation();
   }
 
-  while (cache.size > maxSize) {
+  while (ownsOperation() && cache.size > maxSize) {
     const oldestKey = cache.keys().next().value as string | undefined;
+    if (!ownsOperation()) {
+      return false;
+    }
     if (oldestKey == null) {
-      return;
+      return ownsOperation();
     }
     cache.delete(oldestKey);
   }
+
+  return ownsOperation();
 }
 
 /**
@@ -118,6 +140,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
   const retryDelayCancelers = new Set<() => void>();
   let disposed = false;
+  let commitGeneration = 0;
 
   const waitForRetry = (ms: number): Promise<void> => {
     return new Promise((resolve) => {
@@ -163,27 +186,46 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     data(entry.data);
   };
 
-  const saveCache = (value: TData) => {
-    if (!options.cacheKey) {
-      return;
+  const saveCache = (value: TData, ownsOperation: () => boolean = () => true): boolean => {
+    if (!ownsOperation()) {
+      return false;
+    }
+
+    const cacheKey = options.cacheKey;
+    if (!ownsOperation() || !cacheKey) {
+      return ownsOperation();
     }
 
     const cacheTime = options.cacheTime ?? DEFAULT_CACHE_TIME;
+    if (!ownsOperation()) {
+      return false;
+    }
     const cacheSize = options.cacheSize ?? DEFAULT_CACHE_SIZE;
+    if (!ownsOperation()) {
+      return false;
+    }
     if (cacheTime <= 0 || cacheSize <= 0) {
-      cache.delete(options.cacheKey);
-      return;
+      cache.delete(cacheKey);
+      return ownsOperation();
     }
 
     const now = Date.now();
-    pruneExpiredCache(cache, now);
-    cache.delete(options.cacheKey);
-    cache.set(options.cacheKey, {
+    if (!ownsOperation() || !pruneExpiredCache(cache, now, ownsOperation)) {
+      return false;
+    }
+    cache.delete(cacheKey);
+    if (!ownsOperation()) {
+      return false;
+    }
+    cache.set(cacheKey, {
       data: value,
       timestamp: now,
       expiresAt: Number.isFinite(cacheTime) ? now + cacheTime : Infinity
     });
-    pruneCacheSize(cache, cacheSize);
+    if (!ownsOperation()) {
+      return false;
+    }
+    return pruneCacheSize(cache, cacheSize, ownsOperation);
   };
 
   const stopPolling = () => {
@@ -297,14 +339,24 @@ export function useRequest<TData, TParams extends unknown[] = []>(
         return data();
       }
 
+      const commitId = ++commitGeneration;
+      const ownsCommit = () => !disposed && id === callId && commitId === commitGeneration;
       data(result);
-      if (disposed || id !== callId) {
+      if (!ownsCommit()) {
         return data();
       }
 
-      saveCache(result);
+      if (!saveCache(result, ownsCommit)) {
+        return data();
+      }
+
+      const onSuccess = options.onSuccess;
+      if (!ownsCommit()) {
+        return data();
+      }
+
       try {
-        options.onSuccess?.(result, currentParams);
+        onSuccess?.(result, currentParams);
       } finally {
         if (id === callId) {
           schedulePolling(currentParams);
@@ -354,14 +406,22 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       return;
     }
 
+    const requestId = callId;
+    const commitId = ++commitGeneration;
+    const ownsCommit = () =>
+      !disposed && requestId === callId && commitId === commitGeneration;
     const next =
       typeof value === 'function' ? (value as (prev: TData | undefined) => TData)(data()) : value;
-    if (disposed) {
+    if (!ownsCommit()) {
       return;
     }
 
     data(next);
-    saveCache(next);
+    if (!ownsCommit()) {
+      return;
+    }
+
+    saveCache(next, ownsCommit);
   };
 
   applyCache();
