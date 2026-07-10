@@ -139,9 +139,9 @@ export function useFetch<T = unknown>(
     activeRequestId = null;
     const currentController = controller;
     controller = undefined;
-    currentController?.abort();
     aborted(true);
     isLoading(false);
+    currentController?.abort();
   };
 
   const execute = async (init?: RequestInit): Promise<T | null> => {

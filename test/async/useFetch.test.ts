@@ -52,6 +52,47 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('does not overwrite a request started by an abort listener', async () => {
+    const stateRef = { current: undefined as ReturnType<typeof useFetch<string>> | undefined };
+    let reentrantRequest: Promise<string | null> | undefined;
+    const mockFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (mockFetch.mock.calls.length === 1) {
+        init?.signal?.addEventListener(
+          'abort',
+          () => {
+            reentrantRequest = stateRef.current!.execute();
+          },
+          { once: true }
+        );
+        return new Promise<Response>(() => {});
+      }
+      return Promise.resolve(new Response('latest'));
+    });
+
+    const root = createRoot(() =>
+      useFetch<string>('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false
+      })
+    );
+    const state = root.value;
+    stateRef.current = state;
+
+    const firstRequest = state.execute();
+    state.abort();
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(state.aborted()).toBe(false);
+    expect(state.isLoading()).toBe(true);
+
+    await reentrantRequest;
+    await firstRequest;
+
+    expect(state.data()).toBe('latest');
+    expect(state.aborted()).toBe(false);
+    expect(state.isLoading()).toBe(false);
+  });
+
   it('respects external abort signals', async () => {
     const controller = new AbortController();
     const mockFetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
