@@ -109,13 +109,14 @@ pnpm demo:build
 
 Before publish, these checks must pass:
 
-1. `pnpm lint`
-2. `pnpm typecheck`
-3. `pnpm test:types`
-4. `pnpm test:coverage`
-5. `pnpm build`
-6. `pnpm verify:metadata`
-7. `pnpm test:attw`
+1. `pnpm audit:dev`
+2. `pnpm lint`
+3. `pnpm typecheck`
+4. `pnpm test:types`
+5. `pnpm test:coverage`
+6. `pnpm build`
+7. `pnpm verify:metadata`
+8. `pnpm test:attw`
 
 `prepublishOnly` already enforces this pipeline.
 
