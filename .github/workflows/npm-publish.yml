@@ -40,6 +40,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:types
+      - run: pnpm test:types:ts53
       - run: pnpm test:coverage
       - run: pnpm build
       - run: pnpm verify:metadata

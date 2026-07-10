@@ -61,6 +61,7 @@
     "pack:dry": "pnpm run build && pnpm run verify:metadata",
     "typecheck": "tsc --noEmit",
     "test:types": "pnpm run build && tsc -p test-dts/tsconfig.json --noEmit",
+    "test:types:ts53": "pnpm run build && npm exec --yes --package=typescript@5.3.3 -- tsc -p test-dts/tsconfig.ts53.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -71,7 +72,7 @@
     "test:watch": "pnpm run build && vitest",
     "prepare": "husky",
     "commit": "git-cz",
-    "prepublishOnly": "pnpm run audit:dev && pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test:coverage && pnpm run build && pnpm run verify:metadata && pnpm run test:attw"
+    "prepublishOnly": "pnpm run audit:dev && pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test:types:ts53 && pnpm run test:coverage && pnpm run build && pnpm run verify:metadata && pnpm run test:attw"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [

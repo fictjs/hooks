@@ -113,10 +113,11 @@ Before publish, these checks must pass:
 2. `pnpm lint`
 3. `pnpm typecheck`
 4. `pnpm test:types`
-5. `pnpm test:coverage`
-6. `pnpm build`
-7. `pnpm verify:metadata`
-8. `pnpm test:attw`
+5. `pnpm test:types:ts53`
+6. `pnpm test:coverage`
+7. `pnpm build`
+8. `pnpm verify:metadata`
+9. `pnpm test:attw`
 
 `prepublishOnly` already enforces this pipeline.
 

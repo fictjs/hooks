@@ -33,6 +33,7 @@ jobs:
           pnpm lint
           pnpm typecheck
           pnpm test:types
+          pnpm test:types:ts53
           pnpm test:coverage
           pnpm build
           pnpm verify:metadata

@@ -1,5 +1,6 @@
 import { createSignal } from '@fictjs/runtime/advanced';
 import { tryOnDestroy } from '../internal/lifecycle';
+import type { NoInferCompat } from '../internal/types';
 
 interface UseAsyncStateBaseOptions {
   resetOnExecute?: boolean;
@@ -39,7 +40,9 @@ export interface UseAsyncStateReturn<T, Args extends unknown[]> {
 export function useAsyncState<T, Args extends unknown[] = []>(
   executor: (...args: Args) => Promise<T>,
   initialState: T,
-  options: UseAsyncStateOptions<NoInfer<Args>> = {} as UseAsyncStateOptions<NoInfer<Args>>
+  options: UseAsyncStateOptions<NoInferCompat<Args>> = {} as UseAsyncStateOptions<
+    NoInferCompat<Args>
+  >
 ): UseAsyncStateReturn<T, Args> {
   const state = createSignal(initialState);
   const isLoading = createSignal(false);

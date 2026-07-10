@@ -1,6 +1,7 @@
 import { createSignal } from '@fictjs/runtime/advanced';
 import { isClient } from '../internal/env';
 import { tryOnDestroy } from '../internal/lifecycle';
+import type { NoInferCompat } from '../internal/types';
 
 export interface UseRequestCacheEntry<T> {
   data: T;
@@ -101,7 +102,7 @@ function pruneCacheSize<T>(cache: Map<string, UseRequestCacheEntry<T>>, maxSize:
  */
 export function useRequest<TData, TParams extends unknown[] = []>(
   service: (...params: TParams) => Promise<TData>,
-  ...optionsTuple: UseRequestOptionsTuple<TData, NoInfer<TParams>>
+  ...optionsTuple: UseRequestOptionsTuple<TData, NoInferCompat<TParams>>
 ): UseRequestReturn<TData, TParams> {
   const options = (optionsTuple[0] ?? {}) as UseRequestOptions<TData, TParams>;
   const data = createSignal<TData | undefined>(undefined);
