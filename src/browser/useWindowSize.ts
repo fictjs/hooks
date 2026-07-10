@@ -1,6 +1,7 @@
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from '../internal/env';
 import { useEventListener } from '../event/useEventListener';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 export interface UseWindowSizeOptions {
   window?: Window | null;
@@ -23,16 +24,36 @@ export function useWindowSize(options: UseWindowSizeOptions = {}): UseWindowSize
 
   const width = createSignal(windowRef?.innerWidth ?? options.initialWidth ?? 0);
   const height = createSignal(windowRef?.innerHeight ?? options.initialHeight ?? 0);
+  let updateGeneration = 0;
+  let disposed = false;
 
   function update(): void {
-    if (!windowRef) {
+    if (disposed || !windowRef) {
       return;
     }
-    width(windowRef.innerWidth);
-    height(windowRef.innerHeight);
+    const currentGeneration = ++updateGeneration;
+    const canCommit = () => !disposed && currentGeneration === updateGeneration;
+    const nextWidth = windowRef.innerWidth;
+    if (!canCommit()) {
+      return;
+    }
+    width(nextWidth);
+    if (!canCommit()) {
+      return;
+    }
+    const nextHeight = windowRef.innerHeight;
+    if (!canCommit()) {
+      return;
+    }
+    height(nextHeight);
   }
 
   useEventListener(windowRef, 'resize', update, { passive: true });
+
+  tryOnDestroy(() => {
+    disposed = true;
+    updateGeneration += 1;
+  });
 
   if (windowRef) {
     update();

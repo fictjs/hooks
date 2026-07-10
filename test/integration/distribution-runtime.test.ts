@@ -226,6 +226,20 @@ describe('distribution runtime', () => {
     ).not.toThrow();
   });
 
+  it.each(['esm', 'cjs'])(
+    'keeps useWindowSize resize updates terminal in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-window-size-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
   it.each(['esm', 'cjs'])('executes useFullscreen from the built %s entry', (format) => {
     const fixture = resolve('test/fixtures/distribution-fullscreen.mjs');
 
