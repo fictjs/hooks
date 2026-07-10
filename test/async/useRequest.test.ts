@@ -768,6 +768,51 @@ describe('useRequest', () => {
     expect(state.loading()).toBe(false);
   });
 
+  it('preserves a nested run started while clearing a retry delay', async () => {
+    let markRetryTimerRegistered = () => {};
+    const retryTimerRegistered = new Promise<void>((resolve) => {
+      markRetryTimerRegistered = resolve;
+    });
+    let nested: Promise<string | undefined> | undefined;
+    let reenterOnClear = false;
+    const stateRef = {
+      current: undefined as ReturnType<typeof useRequest<string, [string]>> | undefined
+    };
+    vi.stubGlobal('setTimeout', () => {
+      markRetryTimerRegistered();
+      return 1;
+    });
+    vi.stubGlobal('clearTimeout', () => {
+      if (reenterOnClear) {
+        reenterOnClear = false;
+        nested = stateRef.current!.runAsync('inner');
+      }
+    });
+    const calls: string[] = [];
+    const state = createRoot(() =>
+      useRequest(
+        async (value: string) => {
+          calls.push(value);
+          if (value === 'retry') throw new Error('retry');
+          return value;
+        },
+        { manual: true, retryCount: 1, retryInterval: 10 }
+      )
+    ).value;
+    stateRef.current = state;
+    const retrying = state.runAsync('retry');
+    await retryTimerRegistered;
+    reenterOnClear = true;
+
+    await state.runAsync('outer');
+    await nested;
+    await retrying;
+
+    expect(calls).toEqual(['retry', 'inner']);
+    expect(state.data()).toBe('inner');
+    expect(state.params()).toEqual(['inner']);
+  });
+
   it('polls repeatedly and stops polling on dispose', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');

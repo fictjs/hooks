@@ -324,8 +324,12 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       return data();
     }
 
-    stopRetryDelays();
     const id = ++callId;
+    stopRetryDelays();
+    if (disposed || id !== callId) {
+      return data();
+    }
+
     let finalData: TData | undefined;
     let finalError: unknown = null;
 

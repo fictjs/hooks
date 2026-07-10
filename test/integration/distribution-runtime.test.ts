@@ -88,6 +88,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves request retry cleanup ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-request-retry-cleanup-ownership.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'supports synchronous request retry timers in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-request-retry-timer.mjs');
