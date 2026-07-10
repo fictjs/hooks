@@ -529,6 +529,55 @@ describe('useWebSocket', () => {
     expect(currentSocket.close).toHaveBeenCalledOnce();
   });
 
+  it.each(['readyState', 'CONNECTING', 'OPEN'] as const)(
+    'rolls back when the initial socket %s getter throws',
+    (property) => {
+      const initialStateError = new Error(`${property} failed`);
+      const onError = vi.fn();
+      let constructions = 0;
+      const ThrowingStateWebSocket = function ThrowingStateWebSocket(
+        url: string | URL,
+        protocols?: string | string[]
+      ) {
+        constructions += 1;
+        const currentSocket = new MockWebSocket(url, protocols);
+        if (constructions === 1) {
+          if (property === 'OPEN') {
+            currentSocket.readyState = MockWebSocket.OPEN;
+          }
+          Object.defineProperty(currentSocket, property, {
+            configurable: true,
+            get() {
+              throw initialStateError;
+            }
+          });
+        }
+        return currentSocket;
+      } as unknown as typeof WebSocket;
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: ThrowingStateWebSocket,
+          immediate: false,
+          onError
+        })
+      );
+
+      expect(root.value.open()).toBe(false);
+
+      expect(root.value.error()).toBe(initialStateError);
+      expect(onError).toHaveBeenCalledWith(initialStateError);
+      expect(root.value.status()).toBe('CLOSED');
+      expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+
+      expect(root.value.open()).toBe(true);
+      expect(MockWebSocket.instances).toHaveLength(2);
+      expect(root.value.error()).toBeNull();
+      expect(root.value.status()).toBe('CONNECTING');
+      root.dispose();
+      expect(MockWebSocket.instances[1]!.close).toHaveBeenCalledOnce();
+    }
+  );
+
   it('stops setup when the binaryType setter disposes the owner', () => {
     let dispose = () => {};
     const addEventListener = vi.fn();
