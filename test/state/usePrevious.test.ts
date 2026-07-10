@@ -24,4 +24,26 @@ describe('usePrevious', () => {
     const { value: previous } = createRoot(() => usePrevious('static'));
     expect(previous()).toBeUndefined();
   });
+
+  it('does not update after reading the source disposes the owner', async () => {
+    const source = createSignal(1);
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      usePrevious(() => {
+        const current = source();
+        if (disposeOnRead) {
+          dispose();
+        }
+        return current;
+      })
+    );
+    dispose = root.dispose;
+
+    disposeOnRead = true;
+    source(2);
+    await Promise.resolve();
+
+    expect(root.value()).toBeUndefined();
+  });
 });

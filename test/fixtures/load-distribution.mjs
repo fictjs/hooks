@@ -6,6 +6,7 @@ export async function loadDistribution() {
     return {
       hooks: require('../../dist/index.cjs'),
       runtime: require('@fictjs/runtime'),
+      advanced: require('@fictjs/runtime/advanced'),
       internal: require('@fictjs/runtime/internal')
     };
   }
@@ -13,6 +14,7 @@ export async function loadDistribution() {
   return {
     hooks: await import('../../dist/index.js'),
     runtime: await import('@fictjs/runtime'),
+    advanced: await import('@fictjs/runtime/advanced'),
     internal: await import('@fictjs/runtime/internal')
   };
 }
