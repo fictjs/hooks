@@ -406,6 +406,28 @@ describe('useRequest', () => {
     expect(service).toHaveBeenCalledTimes(2);
   });
 
+  it('does not restart requests or polling after dispose', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => 'ok');
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20
+      })
+    );
+
+    root.dispose();
+
+    await expect(root.value.runAsync()).resolves.toBeUndefined();
+    root.value.run();
+    await expect(root.value.refresh()).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(service).not.toHaveBeenCalled();
+    expect(root.value.loading()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('consumes callback failures from detached polling runs', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 12);

@@ -116,6 +116,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   let callId = 0;
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
   const retryDelayCancelers = new Set<() => void>();
+  let disposed = false;
 
   const waitForRetry = (ms: number): Promise<void> => {
     return new Promise((resolve) => {
@@ -194,7 +195,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   const schedulePolling = (currentParams: TParams) => {
     stopPolling();
 
-    if (!options.pollingInterval || options.pollingInterval <= 0) {
+    if (disposed || !options.pollingInterval || options.pollingInterval <= 0) {
       return;
     }
 
@@ -231,6 +232,10 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const runAsync = async (...currentParams: TParams): Promise<TData | undefined> => {
+    if (disposed) {
+      return data();
+    }
+
     stopRetryDelays();
     const id = ++callId;
     let finalData: TData | undefined;
@@ -321,7 +326,10 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     runDetached(initialParams);
   }
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancel();
+  });
 
   return {
     data,
