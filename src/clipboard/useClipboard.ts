@@ -104,18 +104,39 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
   let generation = 0;
   let disposed = false;
 
-  const resetCopiedLater = () => {
+  const resetCopiedLater = (canCommit: () => boolean) => {
+    if (!canCommit()) {
+      return;
+    }
     if (!windowRef) {
       copied(false);
       return;
     }
     if (timer !== undefined) {
-      windowRef.clearTimeout(timer);
+      const currentTimer = timer;
+      timer = undefined;
+      windowRef.clearTimeout(currentTimer);
+      if (!canCommit()) {
+        return;
+      }
     }
-    timer = windowRef.setTimeout(() => {
+    let firedSynchronously = false;
+    const nextTimer = windowRef.setTimeout(() => {
+      firedSynchronously = true;
+      if (!canCommit()) {
+        return;
+      }
       copied(false);
       timer = undefined;
     }, copiedDuring);
+    if (firedSynchronously) {
+      return;
+    }
+    if (!canCommit()) {
+      windowRef.clearTimeout(nextTimer);
+      return;
+    }
+    timer = nextTimer;
   };
 
   const copy = async (value: string): Promise<boolean> => {
@@ -154,7 +175,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
         if (canCommit()) {
           copied(true);
           if (canCommit()) {
-            resetCopiedLater();
+            resetCopiedLater(canCommit);
           }
         }
         return true;
@@ -171,7 +192,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       if (canCommit()) {
         copied(ok);
         if (ok && canCommit()) {
-          resetCopiedLater();
+          resetCopiedLater(canCommit);
         }
       }
       return ok;

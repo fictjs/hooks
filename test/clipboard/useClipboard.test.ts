@@ -427,6 +427,78 @@ describe('useClipboard', () => {
     }
   });
 
+  it('rolls back a timer when registration disposes the owner', async () => {
+    const activeTimers = new Set<number>();
+    let timerId = 0;
+    let dispose = () => {};
+    let disposeOnSet = false;
+    const windowRef = {
+      setTimeout() {
+        const id = ++timerId;
+        activeTimers.add(id);
+        if (disposeOnSet) {
+          disposeOnSet = false;
+          dispose();
+        }
+        return id;
+      },
+      clearTimeout(id: number) {
+        activeTimers.delete(id);
+      }
+    } as unknown as Window;
+    const root = createRoot(() =>
+      useClipboard({
+        navigator: { clipboard: { writeText: async () => {} } },
+        window: windowRef,
+        document: null
+      })
+    );
+    dispose = root.dispose;
+
+    disposeOnSet = true;
+    await expect(root.value.copy('terminal-timer')).resolves.toBe(true);
+
+    expect(activeTimers.size).toBe(0);
+    await expect(root.value.copy('after-dispose')).resolves.toBe(false);
+  });
+
+  it('does not register a replacement timer when clearing disposes the owner', async () => {
+    const activeTimers = new Set<number>();
+    let timerId = 0;
+    let dispose = () => {};
+    let disposeOnClear = false;
+    const windowRef = {
+      setTimeout() {
+        const id = ++timerId;
+        activeTimers.add(id);
+        return id;
+      },
+      clearTimeout(id: number) {
+        activeTimers.delete(id);
+        if (disposeOnClear) {
+          disposeOnClear = false;
+          dispose();
+        }
+      }
+    } as unknown as Window;
+    const root = createRoot(() =>
+      useClipboard({
+        navigator: { clipboard: { writeText: async () => {} } },
+        window: windowRef,
+        document: null
+      })
+    );
+    dispose = root.dispose;
+
+    await root.value.copy('first');
+    expect(activeTimers.size).toBe(1);
+    disposeOnClear = true;
+    await expect(root.value.copy('second')).resolves.toBe(true);
+
+    expect(activeTimers.size).toBe(0);
+    await expect(root.value.copy('after-dispose')).resolves.toBe(false);
+  });
+
   it('creates and clears copied timers in the injected window realm', async () => {
     const setTimeoutRef = vi.fn(() => 42);
     const clearTimeoutRef = vi.fn();
