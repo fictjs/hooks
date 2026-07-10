@@ -1010,6 +1010,64 @@ describe('useWebSocket', () => {
     }
   });
 
+  it.each(['close', 'dispose'] as const)(
+    'does not schedule reconnect when the delay callback calls %s',
+    (operation) => {
+      vi.useFakeTimers();
+      let runOperation = () => {};
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false,
+          autoReconnect: {
+            retries: 1,
+            delay() {
+              runOperation();
+              return 0;
+            }
+          }
+        })
+      );
+      runOperation = operation === 'close' ? root.value.close : root.dispose;
+      root.value.open();
+
+      MockWebSocket.instances[0]!.serverClose();
+
+      expect(vi.getTimerCount()).toBe(0);
+      expect(root.value.reconnectCount()).toBe(0);
+      vi.runAllTimers();
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(root.value.status()).toBe('CLOSED');
+    }
+  );
+
+  it('does not retain a timer handle when setTimeout fires synchronously', () => {
+    const setTimeoutRef = vi.fn((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        callback();
+      }
+      return 42;
+    });
+    const clearTimeoutRef = vi.fn();
+    vi.stubGlobal('setTimeout', setTimeoutRef);
+    vi.stubGlobal('clearTimeout', clearTimeoutRef);
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false,
+        autoReconnect: { retries: 2, delay: 0 }
+      })
+    );
+    root.value.open();
+
+    MockWebSocket.instances[0]!.serverClose();
+    expect(MockWebSocket.instances).toHaveLength(2);
+    MockWebSocket.instances[1]!.serverClose();
+    expect(MockWebSocket.instances).toHaveLength(3);
+    expect(clearTimeoutRef).not.toHaveBeenCalledWith(42);
+    root.dispose();
+  });
+
   it('auto reconnects when onClose throws', () => {
     vi.useFakeTimers();
     const callbackError = new Error('close callback failed');

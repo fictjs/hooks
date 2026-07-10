@@ -115,6 +115,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   let socketUrlKey: string | null = null;
   let manuallyClosed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectTimerEpoch = 0;
   let reconnectAttempts = 0;
   let cleanupSocket = () => {};
   let destroyed = false;
@@ -135,11 +136,13 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const stopReconnectTimer = () => {
-    if (reconnectTimer == null) {
+    const currentTimer = reconnectTimer;
+    reconnectTimer = null;
+    reconnectTimerEpoch += 1;
+    if (currentTimer == null) {
       return;
     }
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
+    clearTimeout(currentTimer);
   };
 
   const resetReconnectAttempts = () => {
@@ -152,6 +155,13 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return;
     }
 
+    const scheduleOperation = operationEpoch;
+    stopReconnectTimer();
+    if (destroyed || manuallyClosed || socket !== null || scheduleOperation !== operationEpoch) {
+      return;
+    }
+    const scheduleEpoch = ++reconnectTimerEpoch;
+
     const retries = reconnectOptions.retries ?? Infinity;
     if (reconnectAttempts >= retries) {
       return;
@@ -159,20 +169,59 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
     reconnectAttempts += 1;
     reconnectCount(reconnectAttempts);
-    if (destroyed || manuallyClosed || socket !== null) {
+    if (
+      destroyed ||
+      manuallyClosed ||
+      socket !== null ||
+      scheduleOperation !== operationEpoch ||
+      scheduleEpoch !== reconnectTimerEpoch
+    ) {
       return;
     }
 
     const delayValue = reconnectOptions.delay ?? 1000;
     const delay = typeof delayValue === 'function' ? delayValue(reconnectAttempts) : delayValue;
-    stopReconnectTimer();
-    reconnectTimer = setTimeout(
-      () => {
-        reconnectTimer = null;
-        open();
-      },
-      Math.max(0, delay)
-    );
+    if (
+      destroyed ||
+      manuallyClosed ||
+      socket !== null ||
+      scheduleOperation !== operationEpoch ||
+      scheduleEpoch !== reconnectTimerEpoch
+    ) {
+      return;
+    }
+
+    let firedSynchronously = false;
+    const handleReconnect = () => {
+      if (
+        destroyed ||
+        manuallyClosed ||
+        socket !== null ||
+        scheduleOperation !== operationEpoch ||
+        scheduleEpoch !== reconnectTimerEpoch
+      ) {
+        return;
+      }
+      firedSynchronously = true;
+      reconnectTimer = null;
+      reconnectTimerEpoch += 1;
+      open();
+    };
+    const timer = setTimeout(handleReconnect, Math.max(0, delay));
+    if (firedSynchronously) {
+      return;
+    }
+    if (
+      destroyed ||
+      manuallyClosed ||
+      socket !== null ||
+      scheduleOperation !== operationEpoch ||
+      scheduleEpoch !== reconnectTimerEpoch
+    ) {
+      clearTimeout(timer);
+      return;
+    }
+    reconnectTimer = timer;
   };
 
   const closeSocketForReplacement = (currentSocket: WebSocketLike): boolean => {
