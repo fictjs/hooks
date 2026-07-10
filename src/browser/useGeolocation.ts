@@ -81,7 +81,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
     }
 
     const currentGeneration = ++generation;
-    watchId = geolocationRef.watchPosition(
+    const nextWatchId = geolocationRef.watchPosition(
       (position) => {
         if (currentGeneration !== generation) {
           return;
@@ -111,6 +111,13 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
       }
     );
 
+    if (disposed || currentGeneration !== generation) {
+      geolocationRef.clearWatch(nextWatchId);
+      active(false);
+      return;
+    }
+
+    watchId = nextWatchId;
     active(true);
   };
 

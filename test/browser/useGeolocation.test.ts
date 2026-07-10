@@ -239,6 +239,32 @@ describe('useGeolocation', () => {
     expect(root.value.active()).toBe(false);
   });
 
+  it('clears a watcher returned after watch setup disposes the owner', () => {
+    let disposeOwner = () => {};
+    const geolocation = {
+      watchPosition: vi.fn(() => {
+        disposeOwner();
+        return 7;
+      }),
+      clearWatch: vi.fn()
+    };
+    const root = createRoot(() =>
+      useGeolocation({
+        navigator: { geolocation },
+        immediate: false
+      })
+    );
+    disposeOwner = root.dispose;
+
+    root.value.resume();
+
+    expect(geolocation.clearWatch).toHaveBeenCalledOnce();
+    expect(geolocation.clearWatch).toHaveBeenCalledWith(7);
+    expect(root.value.active()).toBe(false);
+    root.value.resume();
+    expect(geolocation.watchPosition).toHaveBeenCalledOnce();
+  });
+
   it('ignores queued watcher callbacks after dispose', () => {
     const geolocation = new MockGeolocation();
     const navigatorRef = { geolocation } as unknown as Navigator;
