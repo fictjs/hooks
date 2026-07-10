@@ -5,10 +5,14 @@ import { useMutationObserver } from '../../src/observer/useMutationObserver';
 class MockMutationObserver {
   static instances: MockMutationObserver[] = [];
   static errorTarget: Element | undefined;
+  static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
     if (target === MockMutationObserver.errorTarget) {
       throw new Error('observe failed');
+    }
+    if (MockMutationObserver.triggerDuringObserve) {
+      this.trigger([{ type: 'childList', target } as unknown as MutationRecord]);
     }
   });
   readonly disconnect = vi.fn();
@@ -35,6 +39,7 @@ describe('useMutationObserver', () => {
     globalThis.MutationObserver = originalGlobal;
     MockMutationObserver.instances = [];
     MockMutationObserver.errorTarget = undefined;
+    MockMutationObserver.triggerDuringObserve = false;
   });
 
   it('observes targets and updates records', () => {
@@ -109,6 +114,56 @@ describe('useMutationObserver', () => {
       second,
       expect.objectContaining({ subtree: true, childList: true })
     );
+  });
+
+  it('retains cleanup ownership when observe synchronously refreshes', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const stateRef = {
+      current: undefined as ReturnType<typeof useMutationObserver> | undefined
+    };
+    let refreshed = false;
+    const root = createRoot(() =>
+      useMutationObserver([first, second], () => {
+        if (!refreshed) {
+          refreshed = true;
+          stateRef.current!.refresh();
+        }
+      })
+    );
+    const state = root.value;
+    stateRef.current = state;
+
+    MockMutationObserver.triggerDuringObserve = true;
+    state.refresh();
+
+    expect(MockMutationObserver.instances).toHaveLength(3);
+    expect(MockMutationObserver.instances[1]!.observe).toHaveBeenCalledTimes(1);
+    expect(MockMutationObserver.instances[1]!.observe).toHaveBeenCalledWith(
+      first,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+    expect(MockMutationObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockMutationObserver.instances[2]!.observe).toHaveBeenCalledTimes(2);
+    expect(MockMutationObserver.instances[2]!.observe).toHaveBeenNthCalledWith(
+      1,
+      first,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+    expect(MockMutationObserver.instances[2]!.observe).toHaveBeenNthCalledWith(
+      2,
+      second,
+      expect.objectContaining({ subtree: true, childList: true })
+    );
+    expect(MockMutationObserver.instances[2]!.disconnect).not.toHaveBeenCalled();
+
+    state.stop();
+    expect(
+      MockMutationObserver.instances.every(
+        (instance) => instance.disconnect.mock.calls.length === 1
+      )
+    ).toBe(true);
   });
 
   it('ignores callbacks from refreshed and disposed observers', () => {

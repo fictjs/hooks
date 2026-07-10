@@ -5,10 +5,14 @@ import { useResizeObserver } from '../../src/observer/useResizeObserver';
 class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
   static errorTarget: Element | undefined;
+  static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
     if (target === MockResizeObserver.errorTarget) {
       throw new Error('observe failed');
+    }
+    if (MockResizeObserver.triggerDuringObserve) {
+      this.trigger([{ target } as unknown as ResizeObserverEntry]);
     }
   });
   readonly unobserve = vi.fn();
@@ -36,6 +40,7 @@ describe('useResizeObserver', () => {
     globalThis.ResizeObserver = originalGlobal;
     MockResizeObserver.instances = [];
     MockResizeObserver.errorTarget = undefined;
+    MockResizeObserver.triggerDuringObserve = false;
   });
 
   it('observes targets and updates entries', () => {
@@ -98,6 +103,43 @@ describe('useResizeObserver', () => {
     expect(MockResizeObserver.instances).toHaveLength(2);
     expect(MockResizeObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
     expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(second, undefined);
+  });
+
+  it('retains cleanup ownership when observe synchronously refreshes', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const stateRef = {
+      current: undefined as ReturnType<typeof useResizeObserver> | undefined
+    };
+    let refreshed = false;
+    const root = createRoot(() =>
+      useResizeObserver([first, second], () => {
+        if (!refreshed) {
+          refreshed = true;
+          stateRef.current!.refresh();
+        }
+      })
+    );
+    const state = root.value;
+    stateRef.current = state;
+
+    MockResizeObserver.triggerDuringObserve = true;
+    state.refresh();
+
+    expect(MockResizeObserver.instances).toHaveLength(3);
+    expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(first, undefined);
+    expect(MockResizeObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances[2]!.observe).toHaveBeenCalledTimes(2);
+    expect(MockResizeObserver.instances[2]!.observe).toHaveBeenNthCalledWith(1, first, undefined);
+    expect(MockResizeObserver.instances[2]!.observe).toHaveBeenNthCalledWith(2, second, undefined);
+    expect(MockResizeObserver.instances[2]!.disconnect).not.toHaveBeenCalled();
+
+    state.stop();
+    expect(
+      MockResizeObserver.instances.every((instance) => instance.disconnect.mock.calls.length === 1)
+    ).toBe(true);
   });
 
   it('ignores callbacks from refreshed and disposed observers', () => {

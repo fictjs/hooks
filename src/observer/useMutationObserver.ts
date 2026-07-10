@@ -74,27 +74,31 @@ export function useMutationObserver(
     };
 
     isSupported(true);
+    let cleanupObserver = () => {};
+    cleanupObserver = () => {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
+      observer.disconnect();
+      if (cleanup === cleanupObserver) {
+        setupReady = false;
+        cleanup = () => {};
+      }
+    };
+    cleanup = cleanupObserver;
+    setupReady = true;
+
     try {
       for (const element of targets) {
         observer.observe(element, observeOptions);
+        if (generation !== observerGeneration || cleanup !== cleanupObserver) {
+          return true;
+        }
       }
     } catch (error) {
-      if (generation === observerGeneration) {
-        observerGeneration += 1;
-      }
-      observer.disconnect();
+      cleanupObserver();
       throw error;
     }
-
-    cleanup = () => {
-      if (generation === observerGeneration) {
-        observerGeneration += 1;
-      }
-      observer.disconnect();
-      setupReady = false;
-      cleanup = () => {};
-    };
-    setupReady = true;
 
     return true;
   };

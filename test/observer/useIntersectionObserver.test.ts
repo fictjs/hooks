@@ -5,10 +5,14 @@ import { useIntersectionObserver } from '../../src/observer/useIntersectionObser
 class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = [];
   static errorTarget: Element | undefined;
+  static triggerDuringObserve = false;
 
   readonly observe = vi.fn((target: Element) => {
     if (target === MockIntersectionObserver.errorTarget) {
       throw new Error('observe failed');
+    }
+    if (MockIntersectionObserver.triggerDuringObserve) {
+      this.trigger([{ isIntersecting: true, target } as unknown as IntersectionObserverEntry]);
     }
   });
   readonly unobserve = vi.fn();
@@ -36,6 +40,7 @@ describe('useIntersectionObserver', () => {
     globalThis.IntersectionObserver = originalGlobal;
     MockIntersectionObserver.instances = [];
     MockIntersectionObserver.errorTarget = undefined;
+    MockIntersectionObserver.triggerDuringObserve = false;
   });
 
   it('observes targets and updates entries', () => {
@@ -98,6 +103,45 @@ describe('useIntersectionObserver', () => {
     expect(MockIntersectionObserver.instances).toHaveLength(2);
     expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledTimes(1);
     expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(second);
+  });
+
+  it('retains cleanup ownership when observe synchronously refreshes', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const stateRef = {
+      current: undefined as ReturnType<typeof useIntersectionObserver> | undefined
+    };
+    let refreshed = false;
+    const root = createRoot(() =>
+      useIntersectionObserver([first, second], () => {
+        if (!refreshed) {
+          refreshed = true;
+          stateRef.current!.refresh();
+        }
+      })
+    );
+    const state = root.value;
+    stateRef.current = state;
+
+    MockIntersectionObserver.triggerDuringObserve = true;
+    state.refresh();
+
+    expect(MockIntersectionObserver.instances).toHaveLength(3);
+    expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledTimes(1);
+    expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(first);
+    expect(MockIntersectionObserver.instances[1]!.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockIntersectionObserver.instances[2]!.observe).toHaveBeenCalledTimes(2);
+    expect(MockIntersectionObserver.instances[2]!.observe).toHaveBeenNthCalledWith(1, first);
+    expect(MockIntersectionObserver.instances[2]!.observe).toHaveBeenNthCalledWith(2, second);
+    expect(MockIntersectionObserver.instances[2]!.disconnect).not.toHaveBeenCalled();
+
+    state.stop();
+    expect(
+      MockIntersectionObserver.instances.every(
+        (instance) => instance.disconnect.mock.calls.length === 1
+      )
+    ).toBe(true);
   });
 
   it('ignores callbacks from refreshed and disposed observers', () => {
