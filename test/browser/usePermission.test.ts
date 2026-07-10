@@ -20,6 +20,24 @@ class MockPermissionStatus extends EventTarget implements PermissionStatus {
   }
 }
 
+class GetterPermissionDescriptor implements PermissionDescriptor {
+  readonly #name: PermissionName;
+  readonly #sysex: boolean;
+
+  constructor(name: PermissionName, sysex = false) {
+    this.#name = name;
+    this.#sysex = sysex;
+  }
+
+  get name(): PermissionName {
+    return this.#name;
+  }
+
+  get sysex(): boolean {
+    return this.#sysex;
+  }
+}
+
 describe('usePermission', () => {
   it('returns unsupported state without permissions api', async () => {
     const { value: state } = createRoot(() =>
@@ -155,6 +173,54 @@ describe('usePermission', () => {
     expect(query).toHaveBeenCalledWith({ name: 'microphone' });
     await expect(result).resolves.toBe(status);
     expect(state.state()).toBe('granted');
+  });
+
+  it('reacts to permission names exposed through inherited getters', async () => {
+    const query = vi.fn(async (input: PermissionDescriptor) => {
+      return new MockPermissionStatus(input.name, 'granted');
+    });
+    const permission = createSignal<PermissionDescriptor>(new GetterPermissionDescriptor('camera'));
+    createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } }
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(query).toHaveBeenCalledTimes(1);
+
+    const microphone = new GetterPermissionDescriptor('microphone');
+    permission(microphone);
+    await Promise.resolve();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith(microphone);
+  });
+
+  it('reacts to standard descriptor options exposed through inherited getters', async () => {
+    const query = vi.fn(async (input: PermissionDescriptor) => {
+      return new MockPermissionStatus(input.name, 'granted');
+    });
+    const permission = createSignal<PermissionDescriptor>(
+      new GetterPermissionDescriptor('midi', false)
+    );
+    createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } }
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(query).toHaveBeenCalledTimes(1);
+
+    const midiWithSysex = new GetterPermissionDescriptor('midi', true);
+    permission(midiWithSysex);
+    await Promise.resolve();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith(midiWithSysex);
   });
 
   it('resets stale state when a non-immediate permission source changes', async () => {

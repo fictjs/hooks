@@ -24,6 +24,18 @@ export interface UsePermissionReturn {
   query: () => Promise<PermissionStatus | null>;
 }
 
+const permissionDescriptorKeys = [
+  'name',
+  'allowWithoutGesture',
+  'allowWithoutSanitization',
+  'deviceId',
+  'panTiltZoom',
+  'requestedOrigin',
+  'sysex',
+  'type',
+  'userVisibleOnly'
+] as const;
+
 function normalizePermission(input: PermissionInput): PermissionDescriptor {
   if (typeof input === 'string') {
     return { name: input as PermissionName };
@@ -32,7 +44,7 @@ function normalizePermission(input: PermissionInput): PermissionDescriptor {
 }
 
 function isSamePermission(a: PermissionDescriptor, b: PermissionDescriptor): boolean {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const keys = new Set([...permissionDescriptorKeys, ...Object.keys(a), ...Object.keys(b)]);
   return [...keys].every((key) =>
     Object.is(Reflect.get(a as object, key), Reflect.get(b as object, key))
   );
