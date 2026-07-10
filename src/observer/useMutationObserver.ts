@@ -37,6 +37,7 @@ export function useMutationObserver(
   let cleanup = () => {};
   let cancelDeferredSetup = () => {};
   let setupReady = false;
+  let observerGeneration = 0;
 
   const setup = (): boolean => {
     const Observer = observerCtor;
@@ -51,8 +52,12 @@ export function useMutationObserver(
       return false;
     }
 
+    const generation = ++observerGeneration;
     const observer = new Observer(
       (nextRecords: MutationRecord[], currentObserver: MutationObserver) => {
+        if (!active() || generation !== observerGeneration) {
+          return;
+        }
         records(nextRecords);
         callback?.(nextRecords, currentObserver);
       }
@@ -74,11 +79,17 @@ export function useMutationObserver(
         observer.observe(element, observeOptions);
       }
     } catch (error) {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
       observer.disconnect();
       throw error;
     }
 
     cleanup = () => {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
       observer.disconnect();
       setupReady = false;
       cleanup = () => {};

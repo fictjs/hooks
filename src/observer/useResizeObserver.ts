@@ -37,6 +37,7 @@ export function useResizeObserver(
   let cleanup = () => {};
   let cancelDeferredSetup = () => {};
   let setupReady = false;
+  let observerGeneration = 0;
 
   const setup = (): boolean => {
     const Observer = observerCtor;
@@ -51,8 +52,12 @@ export function useResizeObserver(
       return false;
     }
 
+    const generation = ++observerGeneration;
     const observer = new Observer(
       (nextEntries: ResizeObserverEntry[], currentObserver: ResizeObserver) => {
+        if (!active() || generation !== observerGeneration) {
+          return;
+        }
         entries(nextEntries);
         callback?.(nextEntries, currentObserver);
       }
@@ -64,11 +69,17 @@ export function useResizeObserver(
         observer.observe(element, options.box ? { box: options.box } : undefined);
       }
     } catch (error) {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
       observer.disconnect();
       throw error;
     }
 
     cleanup = () => {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
       observer.disconnect();
       setupReady = false;
       cleanup = () => {};

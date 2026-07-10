@@ -44,6 +44,7 @@ export function useIntersectionObserver(
   let cleanup = () => {};
   let cancelDeferredSetup = () => {};
   let setupReady = false;
+  let observerGeneration = 0;
 
   const setup = (): boolean => {
     const Observer = observerCtor;
@@ -59,8 +60,12 @@ export function useIntersectionObserver(
     }
 
     const rootElement = options.root ? resolveMaybeTarget(options.root) : undefined;
+    const generation = ++observerGeneration;
     const observer = new Observer(
       (nextEntries: IntersectionObserverEntry[], currentObserver: IntersectionObserver) => {
+        if (!active() || generation !== observerGeneration) {
+          return;
+        }
         entries(nextEntries);
         callback?.(nextEntries, currentObserver);
       },
@@ -77,11 +82,17 @@ export function useIntersectionObserver(
         observer.observe(element);
       }
     } catch (error) {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
       observer.disconnect();
       throw error;
     }
 
     cleanup = () => {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
       observer.disconnect();
       setupReady = false;
       cleanup = () => {};

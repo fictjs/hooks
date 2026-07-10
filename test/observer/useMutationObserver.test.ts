@@ -111,6 +111,42 @@ describe('useMutationObserver', () => {
     );
   });
 
+  it('ignores callbacks from refreshed and disposed observers', () => {
+    windowRef.MutationObserver = MockMutationObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const callback = vi.fn();
+    const { value: state, dispose } = createRoot(() => useMutationObserver(ref, callback));
+    const staleObserver = MockMutationObserver.instances[0]!;
+
+    ref.current = second;
+    state.refresh();
+    const currentObserver = MockMutationObserver.instances[1]!;
+    const staleRecord = {
+      type: 'childList',
+      target: first
+    } as unknown as MutationRecord;
+    staleObserver.trigger([staleRecord]);
+
+    expect(state.records()).toEqual([]);
+    expect(callback).not.toHaveBeenCalled();
+
+    const currentRecord = {
+      type: 'childList',
+      target: second
+    } as unknown as MutationRecord;
+    currentObserver.trigger([currentRecord]);
+    expect(state.records()).toEqual([currentRecord]);
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    dispose();
+    currentObserver.trigger([staleRecord]);
+
+    expect(state.records()).toEqual([currentRecord]);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   it('disconnects when observing a later target throws', () => {
     windowRef.MutationObserver = MockMutationObserver as never;
     const first = document.createElement('div');

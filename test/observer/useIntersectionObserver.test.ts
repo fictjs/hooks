@@ -100,6 +100,42 @@ describe('useIntersectionObserver', () => {
     expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(second);
   });
 
+  it('ignores callbacks from refreshed and disposed observers', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const callback = vi.fn();
+    const { value: state, dispose } = createRoot(() => useIntersectionObserver(ref, callback));
+    const staleObserver = MockIntersectionObserver.instances[0]!;
+
+    ref.current = second;
+    state.refresh();
+    const currentObserver = MockIntersectionObserver.instances[1]!;
+    const staleEntry = {
+      isIntersecting: true,
+      target: first
+    } as unknown as IntersectionObserverEntry;
+    staleObserver.trigger([staleEntry]);
+
+    expect(state.entries()).toEqual([]);
+    expect(callback).not.toHaveBeenCalled();
+
+    const currentEntry = {
+      isIntersecting: true,
+      target: second
+    } as unknown as IntersectionObserverEntry;
+    currentObserver.trigger([currentEntry]);
+    expect(state.entries()).toEqual([currentEntry]);
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    dispose();
+    currentObserver.trigger([staleEntry]);
+
+    expect(state.entries()).toEqual([currentEntry]);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   it('disconnects when observing a later target throws', () => {
     windowRef.IntersectionObserver = MockIntersectionObserver as never;
     const first = document.createElement('div');

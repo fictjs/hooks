@@ -100,6 +100,36 @@ describe('useResizeObserver', () => {
     expect(MockResizeObserver.instances[1]!.observe).toHaveBeenCalledWith(second, undefined);
   });
 
+  it('ignores callbacks from refreshed and disposed observers', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const callback = vi.fn();
+    const { value: state, dispose } = createRoot(() => useResizeObserver(ref, callback));
+    const staleObserver = MockResizeObserver.instances[0]!;
+
+    ref.current = second;
+    state.refresh();
+    const currentObserver = MockResizeObserver.instances[1]!;
+    const staleEntry = { target: first } as unknown as ResizeObserverEntry;
+    staleObserver.trigger([staleEntry]);
+
+    expect(state.entries()).toEqual([]);
+    expect(callback).not.toHaveBeenCalled();
+
+    const currentEntry = { target: second } as unknown as ResizeObserverEntry;
+    currentObserver.trigger([currentEntry]);
+    expect(state.entries()).toEqual([currentEntry]);
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    dispose();
+    currentObserver.trigger([staleEntry]);
+
+    expect(state.entries()).toEqual([currentEntry]);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   it('disconnects when observing a later target throws', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
     const first = document.createElement('div');
