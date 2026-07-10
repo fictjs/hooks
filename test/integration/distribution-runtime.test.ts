@@ -4,6 +4,20 @@ import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
   it.each(['esm', 'cjs'])(
+    'preserves nested scroll refresh ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-scroll-reentry.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps useDocumentVisibility terminal after getter disposal in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-visibility-terminal.mjs');

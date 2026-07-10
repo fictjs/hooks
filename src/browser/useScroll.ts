@@ -98,6 +98,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   const previous = { current: { ...fallback } };
   let cancelDeferredUpdate = () => {};
   let disposed = false;
+  let updateGeneration = 0;
 
   const resolveScrollTarget = (): Element | Document | Window | undefined => {
     if (options.target === null) {
@@ -113,16 +114,18 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     if (disposed) {
       return;
     }
+    const operation = ++updateGeneration;
+    const canCommit = () => !disposed && operation === updateGeneration;
     const nextTarget = resolveScrollTarget();
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     const next = readScrollPosition(nextTarget, windowRef, fallback);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     const shouldUpdate = options.shouldUpdate?.(next, previous.current) ?? true;
-    if (disposed || !shouldUpdate) {
+    if (!canCommit() || !shouldUpdate) {
       return;
     }
     if (next.x === previous.current.x && next.y === previous.current.y) {
@@ -130,7 +133,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     }
     previous.current = next;
     x(next.x);
-    if (disposed) {
+    if (!canCommit()) {
       return;
     }
     y(next.y);
@@ -207,6 +210,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
 
   tryOnDestroy(() => {
     disposed = true;
+    updateGeneration += 1;
     cancelDeferredUpdate();
     cancelDeferredUpdate = () => {};
   });

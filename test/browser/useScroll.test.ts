@@ -235,6 +235,37 @@ describe('useScroll', () => {
     expect(state.y()).toBe(2);
   });
 
+  it('does not let a stale update overwrite a nested refresh', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 0, writable: true });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 0, writable: true });
+    let refresh = () => {};
+    let refreshNested = false;
+    const controls = createRoot(() =>
+      useScroll({
+        target: element,
+        shouldUpdate(next) {
+          if (refreshNested && next.x === 10) {
+            refreshNested = false;
+            element.scrollLeft = 30;
+            element.scrollTop = 40;
+            refresh();
+          }
+          return true;
+        }
+      })
+    ).value;
+    refresh = controls.refresh;
+
+    refreshNested = true;
+    element.scrollLeft = 10;
+    element.scrollTop = 20;
+    element.dispatchEvent(new Event('scroll'));
+
+    expect(controls.x()).toBe(30);
+    expect(controls.y()).toBe(40);
+  });
+
   it('passes explicit passive and capture options to the listener', () => {
     const element = document.createElement('div');
     const addEventListener = vi.spyOn(element, 'addEventListener');
