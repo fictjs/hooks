@@ -52,6 +52,31 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('settles a manually aborted request without AbortController support', async () => {
+    vi.stubGlobal('AbortController', undefined);
+    vi.stubGlobal('AbortSignal', undefined);
+
+    try {
+      const mockFetch = vi.fn(() => new Promise<Response>(() => {}));
+      const { value: state } = createRoot(() =>
+        useFetch('https://example.com', {
+          fetch: mockFetch as never,
+          immediate: false,
+          initialData: 'initial'
+        })
+      );
+
+      const pending = state.execute();
+      state.abort();
+
+      await expect(pending).resolves.toBe('initial');
+      expect(state.aborted()).toBe(true);
+      expect(state.isLoading()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('does not overwrite a request started by an abort listener', async () => {
     const stateRef = { current: undefined as ReturnType<typeof useFetch<string>> | undefined };
     let reentrantRequest: Promise<string | null> | undefined;

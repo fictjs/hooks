@@ -128,6 +128,7 @@ export function useFetch<T = unknown>(
   let requestId = 0;
   let activeRequestId: number | null = null;
   let controller: AbortController | undefined;
+  let cancelActiveRequest: (() => void) | undefined;
   let disposed = false;
 
   const abort = () => {
@@ -138,9 +139,12 @@ export function useFetch<T = unknown>(
     requestId += 1;
     activeRequestId = null;
     const currentController = controller;
+    const currentCancelRequest = cancelActiveRequest;
     controller = undefined;
+    cancelActiveRequest = undefined;
     aborted(true);
     isLoading(false);
+    currentCancelRequest?.();
     currentController?.abort();
   };
 
@@ -162,6 +166,11 @@ export function useFetch<T = unknown>(
     let cleanupSignal = () => {};
     let cleanupAbortListener = () => {};
     let requestSignal: AbortSignal | undefined;
+    let resolveCanceledRequest = () => {};
+    const canceledRequest = new Promise<typeof FETCH_ABORTED>((resolve) => {
+      resolveCanceledRequest = () => resolve(FETCH_ABORTED);
+    });
+    cancelActiveRequest = resolveCanceledRequest;
 
     try {
       const mergedSignal = mergeAbortSignals(
@@ -194,9 +203,11 @@ export function useFetch<T = unknown>(
           })
         : undefined;
       const raceAbort = <Value>(promise: Promise<Value>) =>
-        abortPromise
-          ? Promise.race<Value | typeof FETCH_ABORTED>([promise, abortPromise])
-          : promise;
+        Promise.race<Value | typeof FETCH_ABORTED>([
+          promise,
+          canceledRequest,
+          ...(abortPromise ? [abortPromise] : [])
+        ]);
 
       if (requestSignal?.aborted) {
         return data();
@@ -260,6 +271,9 @@ export function useFetch<T = unknown>(
       cleanupSignal();
       if (controller === currentController) {
         controller = undefined;
+      }
+      if (cancelActiveRequest === resolveCanceledRequest) {
+        cancelActiveRequest = undefined;
       }
       if (activeRequestId === id) {
         activeRequestId = null;
