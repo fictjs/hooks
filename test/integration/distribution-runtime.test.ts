@@ -4,6 +4,20 @@ import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
   it.each(['esm', 'cjs'])(
+    'keeps focus and hover state terminal after disposal in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-focus-hover-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves request signal and callback ownership in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-request-signal-ownership.mjs');

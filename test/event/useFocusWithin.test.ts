@@ -158,4 +158,70 @@ describe('useFocusWithin', () => {
 
     expect(state.focused()).toBe(true);
   });
+
+  it('does not reset after a refreshed target accessor disposes the owner', () => {
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useFocusWithin(() => {
+        if (disposeOnRead) {
+          dispose();
+          return second;
+        }
+        return first;
+      })
+    );
+    dispose = root.dispose;
+    first.dispatchEvent(new FocusEvent('focusin'));
+    expect(root.value.focused()).toBe(true);
+    disposeOnRead = true;
+
+    root.value.refresh();
+
+    expect(root.value.focused()).toBe(true);
+  });
+
+  it('does not update after reading relatedTarget disposes the owner', () => {
+    const target = document.createElement('div');
+    const child = document.createElement('input');
+    const outside = document.createElement('button');
+    target.appendChild(child);
+    let dispose = () => {};
+    const root = createRoot(() => useFocusWithin(target));
+    dispose = root.dispose;
+    child.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    const event = new Event('focusout', { bubbles: true }) as FocusEvent;
+    Object.defineProperty(event, 'relatedTarget', {
+      configurable: true,
+      get() {
+        dispose();
+        return outside;
+      }
+    });
+
+    child.dispatchEvent(event);
+
+    expect(root.value.focused()).toBe(true);
+  });
+
+  it('does not update after a containment check disposes the owner', () => {
+    const target = document.createElement('div');
+    const child = document.createElement('input');
+    const outside = document.createElement('button');
+    target.appendChild(child);
+    let dispose = () => {};
+    const root = createRoot(() => useFocusWithin(target));
+    dispose = root.dispose;
+    child.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    target.contains = () => {
+      dispose();
+      return false;
+    };
+
+    child.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: outside }));
+
+    expect(root.value.focused()).toBe(true);
+  });
 });

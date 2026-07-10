@@ -82,4 +82,28 @@ describe('useHover', () => {
 
     expect(state.hovered()).toBe(true);
   });
+
+  it('does not reset after a refreshed target accessor disposes the owner', () => {
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useHover(() => {
+        if (disposeOnRead) {
+          dispose();
+          return second;
+        }
+        return first;
+      })
+    );
+    dispose = root.dispose;
+    first.dispatchEvent(new Event('pointerenter'));
+    expect(root.value.hovered()).toBe(true);
+    disposeOnRead = true;
+
+    root.value.refresh();
+
+    expect(root.value.hovered()).toBe(true);
+  });
 });

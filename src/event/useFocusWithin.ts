@@ -1,5 +1,6 @@
 import { createEffect } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { resolveMaybeTarget, type MaybeElement } from '../internal/target';
 import { useEventListener } from './useEventListener';
 
@@ -12,13 +13,18 @@ export interface UseFocusWithinReturn {
   refresh: () => void;
 }
 
-function isTargetWithin(element: Element, target: EventTarget | null): boolean {
-  if (!target) {
+function isTargetWithin(
+  element: Element,
+  target: EventTarget | null,
+  ownsOperation: () => boolean
+): boolean {
+  if (!ownsOperation() || !target) {
     return false;
   }
 
   try {
-    return element.contains(target as Node);
+    const within = element.contains(target as Node);
+    return ownsOperation() && within;
   } catch {
     return false;
   }
@@ -36,40 +42,83 @@ export function useFocusWithin(
   const initialValue = options.initialValue ?? false;
   const focused = createSignal(initialValue);
   let previousTarget: Element | undefined;
+  let operationGeneration = 0;
+  let disposed = false;
+  const ownsOperation = (operation: number) => !disposed && operation === operationGeneration;
 
   const focusInListener = useEventListener(target, 'focusin', () => {
+    if (disposed) {
+      return;
+    }
+    const operation = ++operationGeneration;
+    if (!ownsOperation(operation)) {
+      return;
+    }
     focused(true);
   });
 
   const focusOutListener = useEventListener(target, 'focusout', (event) => {
+    if (disposed) {
+      return;
+    }
+    const operation = ++operationGeneration;
+    const isCurrent = () => ownsOperation(operation);
     const targetElement = resolveMaybeTarget(target);
+    if (!isCurrent()) {
+      return;
+    }
     if (!targetElement) {
       focused(false);
       return;
     }
 
     const relatedTarget = (event as FocusEvent).relatedTarget;
-    if (isTargetWithin(targetElement, relatedTarget)) {
+    if (!isCurrent()) {
+      return;
+    }
+    const within = isTargetWithin(targetElement, relatedTarget, isCurrent);
+    if (!isCurrent() || within) {
       return;
     }
     focused(false);
   });
 
-  const syncTarget = () => {
+  const syncTarget = (operation = ++operationGeneration) => {
+    if (!ownsOperation(operation)) {
+      return;
+    }
     const currentTarget = resolveMaybeTarget(target);
+    if (!ownsOperation(operation)) {
+      return;
+    }
     if (currentTarget !== previousTarget) {
       previousTarget = currentTarget;
       focused(initialValue);
     }
   };
 
-  createEffect(syncTarget);
+  tryOnDestroy(() => {
+    disposed = true;
+    operationGeneration += 1;
+  });
+
+  createEffect(() => syncTarget());
 
   return {
     focused,
     refresh() {
-      syncTarget();
+      if (disposed) {
+        return;
+      }
+      const operation = ++operationGeneration;
+      syncTarget(operation);
+      if (!ownsOperation(operation)) {
+        return;
+      }
       focusInListener.refresh();
+      if (!ownsOperation(operation)) {
+        return;
+      }
       focusOutListener.refresh();
     }
   };
