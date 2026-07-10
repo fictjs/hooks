@@ -112,8 +112,8 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
     );
 
     if (disposed || currentGeneration !== generation) {
-      geolocationRef.clearWatch(nextWatchId);
       active(false);
+      geolocationRef.clearWatch(nextWatchId);
       return;
     }
 

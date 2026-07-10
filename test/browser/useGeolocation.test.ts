@@ -265,6 +265,48 @@ describe('useGeolocation', () => {
     expect(geolocation.watchPosition).toHaveBeenCalledOnce();
   });
 
+  it('preserves a watcher resumed during stale watcher cleanup', () => {
+    let pauseDuringSetup = () => {};
+    let resumeDuringClear = () => {};
+    let nextWatchId = 0;
+    const liveWatchIds = new Set<number>();
+    const geolocation = {
+      watchPosition: vi.fn(() => {
+        const watchId = ++nextWatchId;
+        if (watchId === 1) {
+          pauseDuringSetup();
+        }
+        liveWatchIds.add(watchId);
+        return watchId;
+      }),
+      clearWatch: vi.fn((watchId: number) => {
+        liveWatchIds.delete(watchId);
+        if (watchId === 1) {
+          resumeDuringClear();
+        }
+      })
+    };
+    const root = createRoot(() =>
+      useGeolocation({
+        navigator: { geolocation },
+        immediate: false
+      })
+    );
+    pauseDuringSetup = root.value.pause;
+    resumeDuringClear = root.value.resume;
+
+    root.value.resume();
+
+    expect(geolocation.watchPosition).toHaveBeenCalledTimes(2);
+    expect(geolocation.clearWatch).toHaveBeenCalledWith(1);
+    expect([...liveWatchIds]).toEqual([2]);
+    expect(root.value.active()).toBe(true);
+
+    root.value.pause();
+    expect([...liveWatchIds]).toEqual([]);
+    expect(root.value.active()).toBe(false);
+  });
+
   it('ignores queued watcher callbacks after dispose', () => {
     const geolocation = new MockGeolocation();
     const navigatorRef = { geolocation } as unknown as Navigator;
