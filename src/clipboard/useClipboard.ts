@@ -137,6 +137,11 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
         }
         copied(false);
       }, copiedDuring);
+    } catch {
+      if (canCommit()) {
+        copied(false);
+      }
+      return;
     } finally {
       scheduling = false;
     }

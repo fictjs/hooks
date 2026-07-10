@@ -524,6 +524,35 @@ describe('useClipboard', () => {
     expect(clearTimeout).not.toHaveBeenCalled();
   });
 
+  it('preserves successful copies when timer registration throws', async () => {
+    const windowRef = {
+      setTimeout() {
+        throw new Error('timer registration failed');
+      },
+      clearTimeout: vi.fn()
+    } as unknown as Window;
+    const fallbackDocument = createClipboardDocument(() => true);
+    const nativeRoot = createRoot(() =>
+      useClipboard({
+        navigator: { clipboard: { writeText: async () => {} } },
+        document: null,
+        window: windowRef
+      })
+    );
+    const fallbackRoot = createRoot(() =>
+      useClipboard({ navigator: null, document: fallbackDocument, window: windowRef })
+    );
+
+    await expect(nativeRoot.value.copy('native')).resolves.toBe(true);
+    await expect(fallbackRoot.value.copy('fallback')).resolves.toBe(true);
+
+    expect(nativeRoot.value.copied()).toBe(false);
+    expect(fallbackRoot.value.copied()).toBe(false);
+    expect(fallbackDocument.body.querySelector('textarea')).toBeNull();
+    nativeRoot.dispose();
+    fallbackRoot.dispose();
+  });
+
   it('ignores a stale copied timer callback after a newer copy', async () => {
     const callbacks = new Map<number, () => void>();
     let timerId = 0;
