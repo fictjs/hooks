@@ -107,6 +107,41 @@ function mergeAbortSignals(...signals: Array<AbortSignal | null | undefined>): M
   };
 }
 
+function copyRequestInitProperties(
+  target: RequestInit,
+  source: RequestInit | null | undefined,
+  canContinue: () => boolean
+): boolean {
+  if (source == null) {
+    return canContinue();
+  }
+
+  const keys = Reflect.ownKeys(source);
+  if (!canContinue()) {
+    return false;
+  }
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (!canContinue()) {
+      return false;
+    }
+    if (!descriptor?.enumerable) {
+      continue;
+    }
+    const value = Reflect.get(source, key);
+    if (!canContinue()) {
+      return false;
+    }
+    Object.defineProperty(target, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true
+    });
+  }
+  return true;
+}
+
 /**
  * Fetch helper with loading/error/abort state.
  *
@@ -125,27 +160,42 @@ export function useFetch<T = unknown>(
   const fetcher = options.fetch ?? fetch;
   const parse = options.parse ?? defaultParse<T>;
 
-  let requestId = 0;
-  let activeRequestId: number | null = null;
+  let operationGeneration = 0;
+  let activeRequestOperation: number | null = null;
   let controller: AbortController | undefined;
   let cancelActiveRequest: (() => void) | undefined;
   let disposed = false;
+  const ownsOperation = (operation: number) => !disposed && operation === operationGeneration;
+  const ownsRequest = (operation: number) =>
+    ownsOperation(operation) && activeRequestOperation === operation;
 
-  const abort = () => {
-    if (activeRequestId == null) {
+  const abortActiveRequest = (operation: number, terminal = false) => {
+    if (activeRequestOperation == null) {
+      if (terminal && isLoading()) {
+        isLoading(false);
+      }
       return;
     }
 
-    requestId += 1;
-    activeRequestId = null;
+    activeRequestOperation = null;
     const currentController = controller;
     const currentCancelRequest = cancelActiveRequest;
     controller = undefined;
     cancelActiveRequest = undefined;
     aborted(true);
-    isLoading(false);
+    if (terminal || ownsOperation(operation)) {
+      isLoading(false);
+    }
     currentCancelRequest?.();
     currentController?.abort();
+  };
+
+  const abort = () => {
+    if (activeRequestOperation == null) {
+      return;
+    }
+    const operation = ++operationGeneration;
+    abortActiveRequest(operation);
   };
 
   const execute = async (init?: RequestInit): Promise<T | null> => {
@@ -153,15 +203,31 @@ export function useFetch<T = unknown>(
       return data();
     }
 
-    abort();
-    const id = ++requestId;
-    activeRequestId = id;
+    const operation = ++operationGeneration;
+    abortActiveRequest(operation);
+    if (!ownsOperation(operation)) {
+      return data();
+    }
+    activeRequestOperation = operation;
     error(null);
+    if (!ownsRequest(operation)) {
+      return data();
+    }
     isLoading(true);
+    if (!ownsRequest(operation)) {
+      return data();
+    }
     aborted(false);
+    if (!ownsRequest(operation)) {
+      return data();
+    }
 
     const currentController =
       typeof AbortController !== 'undefined' ? new AbortController() : undefined;
+    if (!ownsRequest(operation)) {
+      currentController?.abort();
+      return data();
+    }
     controller = currentController;
     let cleanupSignal = () => {};
     let cleanupAbortListener = () => {};
@@ -173,24 +239,46 @@ export function useFetch<T = unknown>(
     cancelActiveRequest = resolveCanceledRequest;
 
     try {
-      const mergedSignal = mergeAbortSignals(
-        options.init?.signal,
-        init?.signal,
-        currentController?.signal
-      );
+      const optionInit = options.init;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      const optionSignal = optionInit?.signal;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      const executeSignal = init?.signal;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      const controllerSignal = currentController?.signal;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      const mergedSignal = mergeAbortSignals(optionSignal, executeSignal, controllerSignal);
       cleanupSignal = mergedSignal.cleanup;
       requestSignal = mergedSignal.signal;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
       const abortPromise = requestSignal
         ? new Promise<typeof FETCH_ABORTED>((resolve) => {
             const handleAbort = () => {
-              if (id === requestId) {
+              if (ownsRequest(operation)) {
                 aborted(true);
-                isLoading(false);
+                if (ownsRequest(operation)) {
+                  isLoading(false);
+                }
               }
               resolve(FETCH_ABORTED);
             };
 
-            if (requestSignal!.aborted) {
+            const signalAborted = requestSignal!.aborted;
+            if (!ownsRequest(operation)) {
+              resolve(FETCH_ABORTED);
+              return;
+            }
+            if (signalAborted) {
               handleAbort();
               return;
             }
@@ -209,71 +297,121 @@ export function useFetch<T = unknown>(
           ...(abortPromise ? [abortPromise] : [])
         ]);
 
-      if (disposed || id !== requestId || requestSignal?.aborted) {
+      const signalAbortedBeforeInput = requestSignal?.aborted ?? false;
+      if (!ownsRequest(operation) || signalAbortedBeforeInput) {
         return data();
       }
 
       const resolvedInput = toValue(input as MaybeAccessor<RequestInfo | URL>);
-      if (disposed || id !== requestId || requestSignal?.aborted) {
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      const signalAbortedBeforeFetch = requestSignal?.aborted ?? false;
+      if (!ownsRequest(operation) || signalAbortedBeforeFetch) {
         return data();
       }
 
-      const response = await raceAbort(
-        fetcher(resolvedInput, {
-          ...options.init,
-          ...init,
-          signal: mergedSignal.signal
-        })
-      );
+      const requestInit: RequestInit = {};
+      const canBuildRequest = () => ownsRequest(operation);
+      if (
+        !copyRequestInitProperties(requestInit, optionInit, canBuildRequest) ||
+        !copyRequestInitProperties(requestInit, init, canBuildRequest)
+      ) {
+        return data();
+      }
+      Object.defineProperty(requestInit, 'signal', {
+        configurable: true,
+        enumerable: true,
+        value: requestSignal,
+        writable: true
+      });
+      const signalAbortedAfterInit = requestSignal?.aborted ?? false;
+      if (!ownsRequest(operation) || signalAbortedAfterInit) {
+        return data();
+      }
+
+      const response = await raceAbort(fetcher(resolvedInput, requestInit));
 
       if (response === FETCH_ABORTED) {
         return data();
       }
 
-      if (id !== requestId) {
+      if (!ownsRequest(operation)) {
         return data();
       }
 
-      if (mergedSignal.signal?.aborted) {
+      const signalAbortedAfterFetch = requestSignal?.aborted ?? false;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      if (signalAbortedAfterFetch) {
         aborted(true);
         return data();
       }
 
-      status(response.status);
+      const responseStatus = response.status;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      status(responseStatus);
+      if (!ownsRequest(operation)) {
+        return data();
+      }
 
-      if (!response.ok) {
-        throw new Error(`Fetch failed with status ${response.status}`);
+      const responseOk = response.ok;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      if (!responseOk) {
+        throw new Error(`Fetch failed with status ${responseStatus}`);
       }
 
       const parsed = await raceAbort(parse(response));
       if (parsed === FETCH_ABORTED) {
         return data();
       }
-      if (id !== requestId) {
+      if (!ownsRequest(operation)) {
         return data();
       }
-      if (mergedSignal.signal?.aborted) {
+      const signalAbortedAfterParse = requestSignal?.aborted ?? false;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      if (signalAbortedAfterParse) {
         aborted(true);
         return data();
       }
       data(parsed);
       return parsed;
     } catch (err) {
-      if (id !== requestId) {
+      if (!ownsRequest(operation)) {
         return data();
       }
 
-      if (requestSignal?.aborted || isAbortError(err)) {
+      const signalAborted = requestSignal?.aborted ?? false;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      const abortError = isAbortError(err);
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+      if (signalAborted || abortError) {
         aborted(true);
         return data();
       }
 
       error(err);
-      if (disposed || id !== requestId) {
+      if (!ownsRequest(operation)) {
         return data();
       }
 
-      options.onError?.(err);
+      const onError = options.onError;
+      if (!ownsRequest(operation)) {
+        return data();
+      }
+
+      onError?.(err);
       return data();
     } finally {
       cleanupAbortListener();
@@ -284,10 +422,10 @@ export function useFetch<T = unknown>(
       if (cancelActiveRequest === resolveCanceledRequest) {
         cancelActiveRequest = undefined;
       }
-      if (activeRequestId === id) {
-        activeRequestId = null;
+      if (activeRequestOperation === operation) {
+        activeRequestOperation = null;
       }
-      if (id === requestId) {
+      if (ownsOperation(operation)) {
         isLoading(false);
       }
     }
@@ -300,8 +438,9 @@ export function useFetch<T = unknown>(
   }
 
   tryOnDestroy(() => {
+    const operation = ++operationGeneration;
     disposed = true;
-    abort();
+    abortActiveRequest(operation, true);
   });
 
   return {

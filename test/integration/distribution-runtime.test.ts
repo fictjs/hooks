@@ -532,6 +532,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves useFetch operation ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-fetch-operation.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps useAsyncState terminal after error-triggered disposal in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-async-state-terminal.mjs');

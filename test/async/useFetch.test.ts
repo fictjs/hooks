@@ -167,6 +167,59 @@ describe('useFetch', () => {
     expect(state.isLoading()).toBe(false);
   });
 
+  it('does not overwrite a request started by the aborted signal write', async () => {
+    let executeNested = () => Promise.resolve<string | null>(null);
+    let nestedRequest: Promise<string | null> | undefined;
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === true) {
+          armed = false;
+          nestedRequest = executeNested();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+    const mockFetch = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>(() => {}))
+      .mockResolvedValueOnce(new Response('latest'));
+
+    try {
+      const root = createRoot(() =>
+        useFetch<string>('https://example.com', {
+          fetch: mockFetch as never,
+          immediate: false,
+          initialData: 'initial'
+        })
+      );
+      executeNested = root.value.execute;
+      const firstRequest = root.value.execute();
+      armed = true;
+
+      root.value.abort();
+
+      expect(root.value.aborted()).toBe(false);
+      expect(root.value.isLoading()).toBe(true);
+      await expect(nestedRequest).resolves.toBe('latest');
+      await expect(firstRequest).resolves.toBe('initial');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(root.value.data()).toBe('latest');
+      expect(root.value.isLoading()).toBe(false);
+      root.dispose();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('respects external abort signals', async () => {
     const controller = new AbortController();
     const mockFetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -460,6 +513,87 @@ describe('useFetch', () => {
     expect(root.value.isLoading()).toBe(false);
   });
 
+  it('does not call the fetcher when an enumerable init getter disposes the root', async () => {
+    const mockFetch = vi.fn(async () => new Response('unexpected'));
+    const readLaterProperty = vi.fn(() => 'no-store' as RequestCache);
+    let dispose = () => {};
+    const init = Object.defineProperty({} as RequestInit, 'headers', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        dispose();
+        return { accept: 'text/plain' };
+      }
+    });
+    Object.defineProperty(init, 'cache', {
+      configurable: true,
+      enumerable: true,
+      get: readLaterProperty
+    });
+    const root = createRoot(() =>
+      useFetch<string>('https://example.com', {
+        fetch: mockFetch as never,
+        immediate: false,
+        initialData: 'initial'
+      })
+    );
+    dispose = root.dispose;
+
+    await expect(root.value.execute(init)).resolves.toBe('initial');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(readLaterProperty).not.toHaveBeenCalled();
+    expect(root.value.data()).toBe('initial');
+    expect(root.value.aborted()).toBe(true);
+    expect(root.value.isLoading()).toBe(false);
+  });
+
+  it('does not parse when the status write disposes the root', async () => {
+    const parse = vi.fn(async () => 'parsed');
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === 201) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useFetch<string>('https://example.com', {
+          fetch: vi.fn(async () => new Response('response', { status: 201 })) as never,
+          immediate: false,
+          initialData: 'initial',
+          parse
+        })
+      );
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.execute()).resolves.toBe('initial');
+
+      expect(root.value.status()).toBe(201);
+      expect(root.value.data()).toBe('initial');
+      expect(root.value.aborted()).toBe(true);
+      expect(root.value.isLoading()).toBe(false);
+      expect(parse).not.toHaveBeenCalled();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('stores error for failed responses', async () => {
     const onError = vi.fn();
     const mockFetch = vi.fn(async () => new Response('fail', { status: 500 }));
@@ -528,6 +662,41 @@ describe('useFetch', () => {
     } finally {
       globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
     }
+  });
+
+  it('does not call an onError getter result after the getter disposes the root', async () => {
+    const requestError = new Error('request failed');
+    const onError = vi.fn();
+    let dispose = () => {};
+    const options = {
+      fetch: vi.fn(async () => {
+        throw requestError;
+      }) as never,
+      immediate: false,
+      initialData: 'initial'
+    } as {
+      fetch: typeof fetch;
+      immediate: boolean;
+      initialData: string;
+      onError?: (error: unknown) => void;
+    };
+    Object.defineProperty(options, 'onError', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        dispose();
+        return onError;
+      }
+    });
+    const root = createRoot(() => useFetch<string>('https://example.com', options));
+    dispose = root.dispose;
+
+    await expect(root.value.execute()).resolves.toBe('initial');
+
+    expect(root.value.error()).toBe(requestError);
+    expect(root.value.aborted()).toBe(true);
+    expect(root.value.isLoading()).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it('consumes onError failures from immediate execution', async () => {
