@@ -122,6 +122,10 @@ type HookName =
 type _RootValueExports = Assert<Equal<keyof typeof api, HookName | 'clearRequestCache'>>;
 type _AllHookExports = Assert<Equal<Extract<keyof typeof api, `use${string}`>, HookName>>;
 
+api.useScroll({ target: null }).refresh();
+api.useSize(null).refresh();
+api.useWindowScroll({ window: null }).refresh();
+
 type _RootTypeExports = [
   GeolocationCoordsState,
   KeyEventName,
