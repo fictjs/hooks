@@ -88,6 +88,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves useWebSocket deserialize ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-websocket-deserialize-ownership.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves clipboard reset timer ownership in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-clipboard-reset-reentry.mjs');

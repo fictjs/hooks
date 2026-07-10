@@ -165,6 +165,60 @@ describe('useWebSocket', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it('does not commit data after deserialize reconnects', () => {
+    let reconnect = () => false;
+    let armed = false;
+    const onMessage = vi.fn();
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false,
+        deserialize() {
+          if (armed) {
+            armed = false;
+            reconnect();
+          }
+          return 'stale-message';
+        },
+        onMessage
+      })
+    );
+    reconnect = root.value.reconnect;
+    root.value.open();
+    const oldSocket = MockWebSocket.instances[0]!;
+    armed = true;
+
+    oldSocket.message('payload');
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(root.value.data()).toBeNull();
+    expect(onMessage).not.toHaveBeenCalled();
+    expect(oldSocket.close).toHaveBeenCalledOnce();
+    root.dispose();
+  });
+
+  it('does not commit data after deserialize disposes the owner', () => {
+    let dispose = () => {};
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false,
+        deserialize() {
+          dispose();
+          return 'terminal-message';
+        }
+      })
+    );
+    dispose = root.dispose;
+    root.value.open();
+
+    MockWebSocket.instances[0]!.message('payload');
+
+    expect(root.value.data()).toBeNull();
+    expect(root.value.status()).toBe('CLOSED');
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+  });
+
   it('does not call onMessage after the data signal update disposes the owner', () => {
     const onMessage = vi.fn();
     let dispose = () => {};

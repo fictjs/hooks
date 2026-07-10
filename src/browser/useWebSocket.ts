@@ -331,13 +331,18 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       const messageEvent = event as MessageEvent;
       try {
         const nextData = deserialize(messageEvent);
+        if (destroyed || socket !== currentSocket) {
+          return;
+        }
         data(nextData);
         if (destroyed || socket !== currentSocket) {
           return;
         }
         options.onMessage?.(nextData, messageEvent);
       } catch (nextError) {
-        reportError(nextError);
+        if (!destroyed && socket === currentSocket) {
+          reportError(nextError);
+        }
       }
     };
 
