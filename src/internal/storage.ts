@@ -1,3 +1,5 @@
+'use fict-compiler-disable';
+
 import { createSignal } from '@fictjs/runtime/advanced';
 import { defaultWindow } from './env';
 import { tryOnDestroy } from './lifecycle';
