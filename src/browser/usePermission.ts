@@ -87,29 +87,74 @@ export function usePermission(
     return { permission: activePermission.current, changed };
   };
 
-  const bindStatus = (nextStatus: PermissionStatus, statusPermission: PermissionDescriptor) => {
+  const bindStatus = (
+    nextStatus: PermissionStatus,
+    statusPermission: PermissionDescriptor,
+    statusQueryId: number
+  ) => {
+    const ownsStatus = () => !disposed && statusQueryId === queryId;
     cleanup();
+    if (!ownsStatus()) {
+      return;
+    }
     state(nextStatus.state);
-    if (disposed) {
+    if (!ownsStatus()) {
       return;
     }
 
     const onChange = () => {
-      if (disposed) {
+      if (!ownsStatus()) {
         return;
       }
 
       const matchesCurrentPermission = isSamePermission(statusPermission, readPermission());
-      if (!disposed && matchesCurrentPermission) {
+      if (ownsStatus() && matchesCurrentPermission) {
         state(nextStatus.state);
       }
     };
 
-    nextStatus.addEventListener('change', onChange as EventListener);
-    cleanup = () => {
+    let registrationComplete = false;
+    let cleanupRequested = false;
+    const removeListener = () => {
       nextStatus.removeEventListener('change', onChange as EventListener);
-      cleanup = () => {};
     };
+    const cleanupStatus = () => {
+      cleanupRequested = true;
+      if (cleanup === cleanupStatus) {
+        cleanup = () => {};
+      }
+      if (registrationComplete) {
+        removeListener();
+      }
+    };
+    cleanup = cleanupStatus;
+
+    try {
+      nextStatus.addEventListener('change', onChange as EventListener);
+    } catch (error) {
+      registrationComplete = true;
+      if (cleanup === cleanupStatus) {
+        cleanup = () => {};
+      }
+      try {
+        removeListener();
+      } catch {
+        // Preserve the listener registration failure after best-effort rollback.
+      }
+      throw error;
+    }
+
+    registrationComplete = true;
+    if (!ownsStatus() || cleanupRequested || cleanup !== cleanupStatus) {
+      if (cleanup === cleanupStatus) {
+        cleanup = () => {};
+      }
+      try {
+        removeListener();
+      } catch {
+        // A terminal or superseded registration has no owner for cleanup failures.
+      }
+    }
   };
 
   const queryPermission = async (
@@ -133,7 +178,7 @@ export function usePermission(
       if (disposed || currentQueryId !== queryId) {
         return null;
       }
-      bindStatus(nextStatus, currentPermission);
+      bindStatus(nextStatus, currentPermission, currentQueryId);
       return nextStatus;
     } catch {
       if (currentQueryId === queryId) {

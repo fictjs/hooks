@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { usePermission } from '../../src/browser/usePermission';
@@ -380,6 +381,121 @@ describe('usePermission', () => {
 
     expect(root.value.state()).toBe('granted');
     expect(addEventListener).not.toHaveBeenCalled();
+  });
+
+  it('rolls back a listener registered after addEventListener disposes the owner', async () => {
+    const listeners = new Set<EventListener>();
+    let dispose = () => {};
+    const status = {
+      name: 'camera',
+      state: 'granted',
+      addEventListener(_type: string, listener: EventListener) {
+        dispose();
+        listeners.add(listener);
+      },
+      removeEventListener(_type: string, listener: EventListener) {
+        listeners.delete(listener);
+      }
+    } as unknown as PermissionStatus;
+    const root = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query: vi.fn(async () => status) } },
+        immediate: false
+      })
+    );
+    dispose = root.dispose;
+
+    await expect(root.value.query()).resolves.toBe(status);
+
+    expect(listeners.size).toBe(0);
+    expect(root.value.state()).toBe('granted');
+  });
+
+  it('best-effort rolls back a listener when registration throws', async () => {
+    const registrationError = new Error('permission listener registration failed');
+    const rollbackError = new Error('permission listener rollback failed');
+    const listeners = new Set<EventListener>();
+    const removeEventListener = vi.fn((_type: string, listener: EventListener) => {
+      listeners.delete(listener);
+      throw rollbackError;
+    });
+    const status = {
+      name: 'camera',
+      state: 'granted',
+      addEventListener(_type: string, listener: EventListener) {
+        listeners.add(listener);
+        throw registrationError;
+      },
+      removeEventListener
+    } as unknown as PermissionStatus;
+    const state = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query: vi.fn(async () => status) } },
+        immediate: false
+      })
+    ).value;
+
+    await expect(state.query()).resolves.toBeNull();
+
+    expect(removeEventListener).toHaveBeenCalledOnce();
+    expect(listeners.size).toBe(0);
+    expect(state.state()).toBe('prompt');
+  });
+
+  it('does not bind a status superseded from its state signal notification', async () => {
+    const firstStatus = new MockPermissionStatus('camera', 'granted');
+    const secondStatus = new MockPermissionStatus('camera', 'denied');
+    const firstAddListener = vi.spyOn(firstStatus, 'addEventListener');
+    let resolveSecond: (status: PermissionStatus) => void = () => {};
+    const secondQuery = new Promise<PermissionStatus>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const query = vi
+      .fn<() => Promise<PermissionStatus>>()
+      .mockResolvedValueOnce(firstStatus)
+      .mockReturnValueOnce(secondQuery);
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    let state: ReturnType<typeof usePermission>;
+    let nested: Promise<PermissionStatus | null> | undefined;
+    let reenter = false;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (reenter && value === 'granted') {
+          reenter = false;
+          nested = state.query();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      state = createRoot(() =>
+        usePermission('camera', {
+          navigator: { permissions: { query } },
+          immediate: false
+        })
+      ).value;
+      reenter = true;
+
+      await expect(state.query()).resolves.toBe(firstStatus);
+      firstStatus.update('denied');
+
+      expect(firstAddListener).not.toHaveBeenCalled();
+      expect(state.state()).toBe('granted');
+
+      resolveSecond(secondStatus);
+      await expect(nested).resolves.toBe(secondStatus);
+      expect(state.state()).toBe('denied');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('does not query or bind a status after dispose', async () => {

@@ -618,6 +618,20 @@ describe('distribution runtime', () => {
     ).not.toThrow();
   });
 
+  it.each(['esm', 'cjs'])(
+    'rolls back terminal permission listener registration in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-permission-registration.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
   it.each(['esm', 'cjs'])('executes useWindowSize from the built %s entry', (format) => {
     const fixture = resolve('test/fixtures/distribution-window-size.mjs');
 
