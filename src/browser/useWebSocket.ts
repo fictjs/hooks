@@ -534,15 +534,47 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
 
     const currentSocket = socket;
-    if (!currentSocket || currentSocket.readyState !== currentSocket.OPEN) {
+    if (!currentSocket) {
+      return false;
+    }
+    const initialReadyState = currentSocket.readyState;
+    if (destroyed || manuallyClosed || socket !== currentSocket) {
+      return false;
+    }
+    const initialOpenState = currentSocket.OPEN;
+    if (destroyed || manuallyClosed || socket !== currentSocket) {
+      return false;
+    }
+    if (initialReadyState !== initialOpenState) {
       return false;
     }
 
     try {
-      currentSocket.send(serialize(payload));
+      const serialized = serialize(payload);
+      if (destroyed || manuallyClosed || socket !== currentSocket) {
+        return false;
+      }
+      const currentReadyState = currentSocket.readyState;
+      if (destroyed || manuallyClosed || socket !== currentSocket) {
+        return false;
+      }
+      const currentOpenState = currentSocket.OPEN;
+      if (destroyed || manuallyClosed || socket !== currentSocket) {
+        return false;
+      }
+      if (currentReadyState !== currentOpenState) {
+        return false;
+      }
+      const sendCurrent = currentSocket.send;
+      if (destroyed || manuallyClosed || socket !== currentSocket) {
+        return false;
+      }
+      sendCurrent.call(currentSocket, serialized);
       return true;
     } catch (nextError) {
-      reportError(nextError);
+      if (!destroyed && socket === currentSocket) {
+        reportError(nextError);
+      }
       return false;
     }
   };

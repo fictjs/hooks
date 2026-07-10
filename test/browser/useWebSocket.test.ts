@@ -830,6 +830,58 @@ describe('useWebSocket', () => {
     expect(onError).toHaveBeenCalledWith(sendError);
   });
 
+  it('does not send after serialize disposes the owner', () => {
+    let dispose = () => {};
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false,
+        serialize(payload: string) {
+          dispose();
+          return payload;
+        }
+      })
+    );
+    dispose = root.dispose;
+    root.value.open();
+    const currentSocket = MockWebSocket.instances[0]!;
+    currentSocket.open();
+
+    expect(root.value.send('terminal-send')).toBe(false);
+    expect(currentSocket.send).not.toHaveBeenCalled();
+    expect(currentSocket.close).toHaveBeenCalledOnce();
+    expect(root.value.status()).toBe('CLOSED');
+  });
+
+  it('does not send on a stale socket after serialize reconnects', () => {
+    let reconnect = () => false;
+    let armed = false;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false,
+        serialize(payload: string) {
+          if (armed) {
+            armed = false;
+            reconnect();
+          }
+          return payload;
+        }
+      })
+    );
+    reconnect = root.value.reconnect;
+    root.value.open();
+    const oldSocket = MockWebSocket.instances[0]!;
+    oldSocket.open();
+    armed = true;
+
+    expect(root.value.send('stale-send')).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(oldSocket.send).not.toHaveBeenCalled();
+    expect(oldSocket.close).toHaveBeenCalledOnce();
+    root.dispose();
+  });
+
   it('auto reconnects on unexpected close', () => {
     vi.useFakeTimers();
 
