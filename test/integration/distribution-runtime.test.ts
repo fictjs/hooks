@@ -3,6 +3,17 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
+  it('executes useDocumentVisibility from the built ESM entry', () => {
+    const fixture = resolve('test/fixtures/distribution-document-visibility.mjs');
+
+    expect(() =>
+      execFileSync(process.execPath, [fixture], {
+        cwd: process.cwd(),
+        stdio: 'pipe'
+      })
+    ).not.toThrow();
+  });
+
   it('executes usePermission from the built ESM entry', () => {
     const fixture = resolve('test/fixtures/distribution-permission.mjs');
 
