@@ -43,17 +43,20 @@ export function useFocusWithin(
     focused(false);
   });
 
-  createEffect(() => {
+  const syncTarget = () => {
     const currentTarget = resolveMaybeTarget(target);
     if (currentTarget !== previousTarget) {
       previousTarget = currentTarget;
       focused(initialValue);
     }
-  });
+  };
+
+  createEffect(syncTarget);
 
   return {
     focused,
     refresh() {
+      syncTarget();
       focusInListener.refresh();
       focusOutListener.refresh();
     }

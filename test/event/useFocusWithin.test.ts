@@ -58,6 +58,29 @@ describe('useFocusWithin', () => {
     expect(state.focused()).toBe(false);
   });
 
+  it('resets when a ref-like target is refreshed', () => {
+    const first = document.createElement('div');
+    const firstChild = document.createElement('input');
+    const second = document.createElement('div');
+    const secondChild = document.createElement('input');
+    first.appendChild(firstChild);
+    second.appendChild(secondChild);
+    const ref = { current: first as Element | null };
+    const { value: state } = createRoot(() => useFocusWithin(ref));
+
+    firstChild.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    expect(state.focused()).toBe(true);
+
+    ref.current = second;
+    state.refresh();
+
+    expect(state.focused()).toBe(false);
+    firstChild.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    expect(state.focused()).toBe(false);
+    secondChild.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    expect(state.focused()).toBe(true);
+  });
+
   it('supports initial fallback without target', () => {
     const { value: state } = createRoot(() =>
       useFocusWithin(null, {

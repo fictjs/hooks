@@ -54,6 +54,25 @@ describe('useHover', () => {
     expect(state.hovered()).toBe(false);
   });
 
+  it('resets when a ref-like target is refreshed', () => {
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const { value: state } = createRoot(() => useHover(ref));
+
+    first.dispatchEvent(new Event('pointerenter'));
+    expect(state.hovered()).toBe(true);
+
+    ref.current = second;
+    state.refresh();
+
+    expect(state.hovered()).toBe(false);
+    first.dispatchEvent(new Event('pointerenter'));
+    expect(state.hovered()).toBe(false);
+    second.dispatchEvent(new Event('pointerenter'));
+    expect(state.hovered()).toBe(true);
+  });
+
   it('uses initial fallback when target is unavailable', () => {
     const { value: state } = createRoot(() =>
       useHover(null, {

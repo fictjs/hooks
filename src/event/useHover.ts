@@ -29,17 +29,20 @@ export function useHover(target: MaybeElement, options: UseHoverOptions = {}): U
     hovered(false);
   });
 
-  createEffect(() => {
+  const syncTarget = () => {
     const currentTarget = resolveMaybeTarget(target);
     if (currentTarget !== previousTarget) {
       previousTarget = currentTarget;
       hovered(initialValue);
     }
-  });
+  };
+
+  createEffect(syncTarget);
 
   return {
     hovered,
     refresh() {
+      syncTarget();
       enterListener.refresh();
       leaveListener.refresh();
     }
