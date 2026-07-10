@@ -1,4 +1,5 @@
 import { createSignal } from '@fictjs/runtime/advanced';
+import { tryOnDestroy } from '../internal/lifecycle';
 
 interface UseAsyncStateBaseOptions {
   resetOnExecute?: boolean;
@@ -45,8 +46,13 @@ export function useAsyncState<T, Args extends unknown[] = []>(
   const error = createSignal<unknown>(null);
 
   let callId = 0;
+  let disposed = false;
 
   const execute = async (...args: Args): Promise<T> => {
+    if (disposed) {
+      return state();
+    }
+
     const id = ++callId;
 
     if (options.resetOnExecute) {
@@ -81,6 +87,12 @@ export function useAsyncState<T, Args extends unknown[] = []>(
       // ignore by default; error signal + onError handle it
     });
   }
+
+  tryOnDestroy(() => {
+    disposed = true;
+    callId += 1;
+    isLoading(false);
+  });
 
   return {
     state,

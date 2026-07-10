@@ -122,4 +122,51 @@ describe('useAsyncState', () => {
     expect(state.state()).toBe('7:ready');
     expect(state.isLoading()).toBe(false);
   });
+
+  it('does not commit a pending result or execute again after dispose', async () => {
+    let resolveExecution: ((value: number) => void) | undefined;
+    const executor = vi.fn(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveExecution = resolve;
+        })
+    );
+    const root = createRoot(() => useAsyncState(executor, 1));
+
+    const pending = root.value.execute();
+    expect(root.value.isLoading()).toBe(true);
+    root.dispose();
+    resolveExecution!(2);
+
+    await expect(pending).resolves.toBe(2);
+    expect(root.value.state()).toBe(1);
+    expect(root.value.isLoading()).toBe(false);
+    await expect(root.value.execute()).resolves.toBe(1);
+    expect(executor).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report a pending error after dispose', async () => {
+    let rejectExecution: ((reason: unknown) => void) | undefined;
+    const executionError = new Error('late failure');
+    const onError = vi.fn();
+    const root = createRoot(() =>
+      useAsyncState(
+        () =>
+          new Promise<number>((_resolve, reject) => {
+            rejectExecution = reject;
+          }),
+        1,
+        { onError }
+      )
+    );
+
+    const pending = root.value.execute();
+    root.dispose();
+    rejectExecution!(executionError);
+
+    await expect(pending).rejects.toBe(executionError);
+    expect(root.value.error()).toBeNull();
+    expect(root.value.isLoading()).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
