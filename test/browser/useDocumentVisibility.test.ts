@@ -32,6 +32,30 @@ describe('useDocumentVisibility', () => {
     expect(state.hidden()).toBe(true);
   });
 
+  it('does not update when reading visibility disposes the owner', () => {
+    const documentRef = new EventTarget() as Document;
+    let dispose = () => {};
+    let disposeOnRead = false;
+    Object.defineProperty(documentRef, 'visibilityState', {
+      configurable: true,
+      get() {
+        if (disposeOnRead) {
+          dispose();
+          return 'hidden';
+        }
+        return 'visible';
+      }
+    });
+    const root = createRoot(() => useDocumentVisibility({ document: documentRef }));
+    dispose = root.dispose;
+
+    disposeOnRead = true;
+    documentRef.dispatchEvent(new Event('visibilitychange'));
+
+    expect(root.value.visibility()).toBe('visible');
+    expect(root.value.hidden()).toBe(false);
+  });
+
   it('uses fallback without document', () => {
     const { value: state } = createRoot(() =>
       useDocumentVisibility({ document: null, initialVisibility: 'hidden' })

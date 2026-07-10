@@ -3,6 +3,20 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
+  it.each(['esm', 'cjs'])(
+    'keeps useDocumentVisibility terminal after getter disposal in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-visibility-terminal.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
   it.each(['esm', 'cjs'])('keeps useTitle restoration terminal in the built %s entry', (format) => {
     const fixture = resolve('test/fixtures/distribution-title-terminal.mjs');
 
