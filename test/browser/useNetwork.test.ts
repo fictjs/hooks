@@ -116,6 +116,60 @@ describe('useNetwork', () => {
     }
   });
 
+  it.each(['connection', 'online', 'downlink'] as const)(
+    'stops an update when the %s getter disposes the owner',
+    (phase) => {
+      const connection = new MockConnection();
+      const windowRef = new EventTarget() as Window;
+      let dispose = () => {};
+      let armed = false;
+      let online = true;
+      let downlink = 10;
+      const navigatorRef = {} as { onLine: boolean; connection: MockConnection };
+      Object.defineProperty(navigatorRef, 'connection', {
+        configurable: true,
+        get() {
+          if (armed && phase === 'connection') {
+            dispose();
+          }
+          return connection;
+        }
+      });
+      Object.defineProperty(navigatorRef, 'onLine', {
+        configurable: true,
+        get() {
+          if (armed && phase === 'online') {
+            dispose();
+          }
+          return online;
+        }
+      });
+      Object.defineProperty(connection, 'downlink', {
+        configurable: true,
+        get() {
+          if (armed && phase === 'downlink') {
+            dispose();
+          }
+          return downlink;
+        }
+      });
+      const root = createRoot(() =>
+        useNetwork({ window: windowRef, navigator: navigatorRef as never })
+      );
+      dispose = root.dispose;
+      online = false;
+      downlink = 1;
+      connection.effectiveType = '3g';
+      armed = true;
+
+      windowRef.dispatchEvent(new Event('offline'));
+
+      expect(root.value.online()).toBe(phase === 'downlink' ? false : true);
+      expect(root.value.downlink()).toBe(10);
+      expect(root.value.effectiveType()).toBe('4g');
+    }
+  );
+
   it('falls back without navigator', () => {
     const { value: state } = createRoot(() => useNetwork({ window: null, navigator: null }));
 
