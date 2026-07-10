@@ -2,6 +2,7 @@ import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { deferTargetResolution, resolveMaybeTarget, type MaybeTarget } from '../internal/target';
 
 export interface ScrollPosition {
@@ -96,6 +97,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   const y = createSignal(fallback.y);
   const previous = { current: { ...fallback } };
   let cancelDeferredUpdate = () => {};
+  let disposed = false;
 
   const resolveScrollTarget = (): Element | Document | Window | undefined => {
     if (options.target === null) {
@@ -108,6 +110,9 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   };
 
   const update = () => {
+    if (disposed) {
+      return;
+    }
     const next = readScrollPosition(resolveScrollTarget(), windowRef, fallback);
     const shouldUpdate = options.shouldUpdate?.(next, previous.current) ?? true;
     if (!shouldUpdate) {
@@ -132,14 +137,23 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   );
 
   const scheduleDeferredUpdate = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredUpdate = deferTargetResolution(() => {
       cancelDeferredUpdate = () => {};
+      if (disposed) {
+        return;
+      }
       scrollListener.refresh();
       update();
     });
   };
 
   const refresh = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredUpdate();
     cancelDeferredUpdate = () => {};
     scrollListener.refresh();
@@ -156,6 +170,12 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
       cancelDeferredUpdate();
       cancelDeferredUpdate = () => {};
     });
+  });
+
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelDeferredUpdate();
+    cancelDeferredUpdate = () => {};
   });
 
   return {

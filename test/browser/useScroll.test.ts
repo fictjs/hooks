@@ -252,4 +252,23 @@ describe('useScroll', () => {
       expect.objectContaining({ passive: false, capture: true })
     );
   });
+
+  it('does not refresh or update after dispose', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1, writable: true });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2, writable: true });
+    const addEventListener = vi.spyOn(element, 'addEventListener');
+    const root = createRoot(() => useScroll({ target: element }));
+    const registrations = addEventListener.mock.calls.length;
+
+    root.dispose();
+    element.scrollLeft = 10;
+    element.scrollTop = 20;
+    root.value.refresh();
+    element.dispatchEvent(new Event('scroll'));
+
+    expect(addEventListener).toHaveBeenCalledTimes(registrations);
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
 });
