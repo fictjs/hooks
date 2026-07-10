@@ -109,6 +109,41 @@ describe('useDebounceFn', () => {
     expect(() => controls.run('recovered')).not.toThrow();
   });
 
+  it('ignores an old callback after cleanup fails and a new call is scheduled', () => {
+    const cleanupError = new Error('cleanup failed');
+    let timerId = 0;
+    const scheduled = new Map<number, () => void>();
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn((callback: () => void) => {
+        const id = ++timerId;
+        scheduled.set(id, callback);
+        return id;
+      })
+    );
+    vi.stubGlobal(
+      'clearTimeout',
+      vi.fn(() => {
+        throw cleanupError;
+      })
+    );
+    const callback = vi.fn();
+    const controls = createRoot(() => useDebounceFn(callback, 100)).value;
+
+    controls.run('old');
+    expect(() => controls.cancel()).toThrow(cleanupError);
+    controls.run('new');
+
+    scheduled.get(1)!();
+    expect(callback).not.toHaveBeenCalled();
+    expect(controls.pending()).toBe(true);
+
+    scheduled.get(2)!();
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback).toHaveBeenCalledWith('new');
+    expect(controls.pending()).toBe(false);
+  });
+
   it('debounces trailing calls by default', () => {
     vi.useFakeTimers();
     const callback = vi.fn();

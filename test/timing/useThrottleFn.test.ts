@@ -107,6 +107,45 @@ describe('useThrottleFn', () => {
     expect(callback).toHaveBeenCalledWith('leading');
   });
 
+  it('ignores an old tick after cleanup fails and a new window is scheduled', () => {
+    const cleanupError = new Error('cleanup failed');
+    let timerId = 0;
+    const scheduled = new Map<number, () => void>();
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn((callback: () => void) => {
+        const id = ++timerId;
+        scheduled.set(id, callback);
+        return id;
+      })
+    );
+    vi.stubGlobal(
+      'clearTimeout',
+      vi.fn(() => {
+        throw cleanupError;
+      })
+    );
+    const callback = vi.fn();
+    const controls = createRoot(() => useThrottleFn(callback, 100)).value;
+
+    controls.run('old-leading');
+    controls.run('old-trailing');
+    expect(() => controls.cancel()).toThrow(cleanupError);
+    controls.run('new-leading');
+    controls.run('new-trailing');
+
+    scheduled.get(1)!();
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenNthCalledWith(1, 'old-leading');
+    expect(callback).toHaveBeenNthCalledWith(2, 'new-leading');
+    expect(controls.pending()).toBe(true);
+
+    scheduled.get(2)!();
+    expect(callback).toHaveBeenCalledTimes(3);
+    expect(callback).toHaveBeenLastCalledWith('new-trailing');
+    expect(controls.pending()).toBe(false);
+  });
+
   it('throttles calls with leading and trailing by default', () => {
     vi.useFakeTimers();
     const callback = vi.fn();
