@@ -5,7 +5,7 @@ const { useDocumentVisibility } = hooks;
 const { __fictPopContext, __fictPushContext } = internal;
 const { createRoot } = runtime;
 
-const documentRef = new EventTarget();
+const documentRef = new globalThis.EventTarget();
 let dispose = () => {};
 let disposeOnRead = false;
 Object.defineProperty(documentRef, 'visibilityState', {
@@ -28,7 +28,7 @@ try {
 }
 dispose = root.dispose;
 disposeOnRead = true;
-documentRef.dispatchEvent(new Event('visibilitychange'));
+documentRef.dispatchEvent(new globalThis.Event('visibilitychange'));
 
 if (root.value.visibility() !== 'visible' || root.value.hidden()) {
   throw new Error('built useDocumentVisibility committed after getter disposal');
