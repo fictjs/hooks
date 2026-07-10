@@ -1,7 +1,30 @@
 import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useScroll } from '../../src/browser/useScroll';
+
+function createDocumentTarget(options: {
+  defaultView?: Window | null;
+  scrollingElement?: Element | null;
+  documentElement?: Element | null;
+  body?: HTMLElement | null;
+}): Document {
+  const target = new EventTarget();
+  Object.defineProperties(target, {
+    defaultView: { configurable: true, value: options.defaultView ?? null },
+    scrollingElement: { configurable: true, value: options.scrollingElement ?? null },
+    documentElement: { configurable: true, value: options.documentElement ?? null },
+    body: { configurable: true, value: options.body ?? null }
+  });
+  return target as Document;
+}
+
+function createScroller(x: number, y: number): Element {
+  return {
+    scrollLeft: x,
+    scrollTop: y
+  } as Element;
+}
 
 describe('useScroll', () => {
   it('reads and updates window scroll position', () => {
@@ -37,6 +60,68 @@ describe('useScroll', () => {
     expect(state.y()).toBe(16);
   });
 
+  it('reads document scroll from its default view', () => {
+    const view = {
+      pageXOffset: 11,
+      pageYOffset: 12
+    } as Window;
+    const documentRef = createDocumentTarget({ defaultView: view });
+
+    const { value: state } = createRoot(() => useScroll({ target: documentRef, window: null }));
+
+    expect(state.x()).toBe(11);
+    expect(state.y()).toBe(12);
+  });
+
+  it('uses the supplied window when a document has no default view', () => {
+    const windowRef = {
+      pageXOffset: 21,
+      pageYOffset: 22
+    } as Window;
+    const documentRef = createDocumentTarget({ defaultView: null });
+
+    const { value: state } = createRoot(() =>
+      useScroll({ target: documentRef, window: windowRef })
+    );
+
+    expect(state.x()).toBe(21);
+    expect(state.y()).toBe(22);
+  });
+
+  it.each([
+    ['scrolling element', { scrollingElement: createScroller(31, 32) }, 31, 32],
+    ['document element', { documentElement: createScroller(41, 42) }, 41, 42],
+    ['body', { body: createScroller(51, 52) as HTMLElement }, 51, 52]
+  ] as const)('falls back to the document %s', (_name, documentOptions, expectedX, expectedY) => {
+    const documentRef = createDocumentTarget(documentOptions);
+
+    const { value: state } = createRoot(() => useScroll({ target: documentRef, window: null }));
+
+    expect(state.x()).toBe(expectedX);
+    expect(state.y()).toBe(expectedY);
+  });
+
+  it('reads scrollX and scrollY from window-like targets', () => {
+    const windowTarget = new EventTarget() as Window;
+    Object.defineProperties(windowTarget, {
+      scrollX: { configurable: true, value: 61, writable: true },
+      scrollY: { configurable: true, value: 62, writable: true }
+    });
+    const { value: state } = createRoot(() => useScroll({ target: windowTarget, window: null }));
+
+    expect(state.x()).toBe(61);
+    expect(state.y()).toBe(62);
+
+    Object.defineProperties(windowTarget, {
+      scrollX: { configurable: true, value: 71 },
+      scrollY: { configurable: true, value: 72 }
+    });
+    windowTarget.dispatchEvent(new Event('scroll'));
+
+    expect(state.x()).toBe(71);
+    expect(state.y()).toBe(72);
+  });
+
   it('reacts to target accessor changes', async () => {
     const a = document.createElement('div');
     const b = document.createElement('div');
@@ -59,6 +144,30 @@ describe('useScroll', () => {
     await Promise.resolve();
     expect(state.x()).toBe(30);
     expect(state.y()).toBe(40);
+  });
+
+  it('binds and updates when an accessor target appears later', async () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 81 });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 82 });
+    const current = createSignal<Element | undefined>(undefined);
+    const root = createRoot(() =>
+      useScroll({
+        target: () => current(),
+        initialX: 1,
+        initialY: 2
+      })
+    );
+
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+
+    current(element);
+    await Promise.resolve();
+
+    expect(root.value.x()).toBe(81);
+    expect(root.value.y()).toBe(82);
+    root.dispose();
   });
 
   it('uses fallback values without target/window', () => {
@@ -96,5 +205,24 @@ describe('useScroll', () => {
     element.scrollTop = 2;
     element.dispatchEvent(new Event('scroll'));
     expect(state.y()).toBe(2);
+  });
+
+  it('passes explicit passive and capture options to the listener', () => {
+    const element = document.createElement('div');
+    const addEventListener = vi.spyOn(element, 'addEventListener');
+
+    createRoot(() =>
+      useScroll({
+        target: element,
+        passive: false,
+        capture: true
+      })
+    );
+
+    expect(addEventListener).toHaveBeenCalledWith(
+      'scroll',
+      expect.any(Function),
+      expect.objectContaining({ passive: false, capture: true })
+    );
   });
 });

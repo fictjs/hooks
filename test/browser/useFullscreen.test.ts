@@ -13,6 +13,28 @@ type FullscreenMockElement = Element & {
   requestFullscreen: () => Promise<void>;
 };
 
+type PrefixedFullscreenMockDocument = Document & {
+  documentElement: Element;
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+  webkitFullscreenEnabled?: boolean;
+  mozFullScreenEnabled?: boolean;
+  msFullscreenEnabled?: boolean;
+  webkitExitFullscreen?: () => Promise<void>;
+  mozCancelFullScreen?: () => Promise<void>;
+  msExitFullscreen?: () => Promise<void>;
+};
+
+type PrefixedFullscreenMockElement = Element & {
+  webkitRequestFullscreen?: () => Promise<void>;
+  webkitRequestFullScreen?: () => Promise<void>;
+  mozRequestFullScreen?: () => Promise<void>;
+  msRequestFullscreen?: () => Promise<void>;
+};
+
+type PrefixedApi = 'webkit' | 'webkitLegacy' | 'moz' | 'ms';
+
 function createFullscreenMock() {
   const documentTarget = new EventTarget();
   const documentMock = documentTarget as FullscreenMockDocument;
@@ -45,6 +67,51 @@ function createFullscreenMock() {
     documentMock,
     main,
     other
+  };
+}
+
+function createPrefixedFullscreenMock(api: PrefixedApi) {
+  const documentMock = new EventTarget() as PrefixedFullscreenMockDocument;
+  const element = new EventTarget() as PrefixedFullscreenMockElement;
+  Object.defineProperty(documentMock, 'documentElement', {
+    configurable: true,
+    value: element
+  });
+
+  if (api === 'webkit' || api === 'webkitLegacy') {
+    documentMock.webkitFullscreenEnabled = true;
+    const request = async () => {
+      documentMock.webkitFullscreenElement = element;
+    };
+    if (api === 'webkit') {
+      element.webkitRequestFullscreen = vi.fn(request);
+    } else {
+      element.webkitRequestFullScreen = vi.fn(request);
+    }
+    documentMock.webkitExitFullscreen = vi.fn(async () => {
+      documentMock.webkitFullscreenElement = null;
+    });
+  } else if (api === 'moz') {
+    documentMock.mozFullScreenEnabled = true;
+    element.mozRequestFullScreen = vi.fn(async () => {
+      documentMock.mozFullScreenElement = element;
+    });
+    documentMock.mozCancelFullScreen = vi.fn(async () => {
+      documentMock.mozFullScreenElement = null;
+    });
+  } else {
+    documentMock.msFullscreenEnabled = true;
+    element.msRequestFullscreen = vi.fn(async () => {
+      documentMock.msFullscreenElement = element;
+    });
+    documentMock.msExitFullscreen = vi.fn(async () => {
+      documentMock.msFullscreenElement = null;
+    });
+  }
+
+  return {
+    documentMock,
+    element
   };
 }
 
@@ -85,6 +152,38 @@ describe('useFullscreen', () => {
     await state.toggle();
     expect(state.isFullscreen()).toBe(false);
   });
+
+  it('uses the document element as the default target', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    const { value: state } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document
+      })
+    );
+
+    await expect(state.enter()).resolves.toBe(true);
+    expect(main.requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(state.isFullscreen()).toBe(true);
+  });
+
+  it.each(['webkit', 'webkitLegacy', 'moz', 'ms'] as const)(
+    'supports the %s prefixed API',
+    async (api) => {
+      const { documentMock, element } = createPrefixedFullscreenMock(api);
+      const { value: state } = createRoot(() =>
+        useFullscreen({
+          document: documentMock as unknown as Document,
+          target: element
+        })
+      );
+
+      expect(state.isSupported()).toBe(true);
+      await expect(state.enter()).resolves.toBe(true);
+      expect(state.isFullscreen()).toBe(true);
+      await expect(state.exit()).resolves.toBe(true);
+      expect(state.isFullscreen()).toBe(false);
+    }
+  );
 
   it('does not report fullscreen when another element is fullscreen', async () => {
     const { documentMock, main, other } = createFullscreenMock();
@@ -133,6 +232,79 @@ describe('useFullscreen', () => {
     expect(documentMock.exitFullscreen).not.toHaveBeenCalled();
   });
 
+  it('reports request and exit failures while refreshing state', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    main.requestFullscreen = vi.fn(async () => {
+      throw new Error('request denied');
+    });
+    const { value: state } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main
+      })
+    );
+
+    await expect(state.enter()).resolves.toBe(false);
+    expect(state.isFullscreen()).toBe(false);
+
+    documentMock.fullscreenElement = main;
+    documentMock.dispatchEvent(new Event('fullscreenchange'));
+    documentMock.exitFullscreen = vi.fn(async () => {
+      throw new Error('exit denied');
+    });
+
+    await expect(state.exit()).resolves.toBe(false);
+    expect(state.isFullscreen()).toBe(true);
+  });
+
+  it('returns false when the target or fullscreen methods are missing', async () => {
+    const { documentMock, main } = createFullscreenMock();
+    const { value: nullTargetState } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: null
+      })
+    );
+
+    expect(nullTargetState.isSupported()).toBe(true);
+    await expect(nullTargetState.enter()).resolves.toBe(false);
+
+    Object.defineProperty(main, 'requestFullscreen', {
+      configurable: true,
+      value: undefined
+    });
+    const { value: missingRequestState } = createRoot(() =>
+      useFullscreen({
+        document: documentMock as unknown as Document,
+        target: main
+      })
+    );
+    await expect(missingRequestState.enter()).resolves.toBe(false);
+
+    Object.defineProperty(documentMock, 'exitFullscreen', {
+      configurable: true,
+      value: undefined
+    });
+    await expect(missingRequestState.exit()).resolves.toBe(false);
+  });
+
+  it('detects support from an exit method when enabled flags are false', () => {
+    const documentMock = new EventTarget() as FullscreenMockDocument;
+    const element = new EventTarget() as Element;
+    Object.defineProperties(documentMock, {
+      documentElement: { configurable: true, value: element },
+      fullscreenElement: { configurable: true, value: null, writable: true },
+      fullscreenEnabled: { configurable: true, value: false },
+      exitFullscreen: { configurable: true, value: vi.fn(async () => {}) }
+    });
+
+    const { value: state } = createRoot(() =>
+      useFullscreen({ document: documentMock as unknown as Document, target: element })
+    );
+
+    expect(state.isSupported()).toBe(true);
+  });
+
   it('returns unsupported state without document', async () => {
     const { value: state } = createRoot(() =>
       useFullscreen({
@@ -143,5 +315,11 @@ describe('useFullscreen', () => {
     expect(state.isSupported()).toBe(false);
     expect(await state.enter()).toBe(false);
     expect(await state.exit()).toBe(false);
+  });
+
+  it('disposes auto-exit safely without a document', () => {
+    const { dispose } = createRoot(() => useFullscreen({ document: null, autoExit: true }));
+
+    expect(dispose).not.toThrow();
   });
 });
