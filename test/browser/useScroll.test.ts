@@ -1,5 +1,6 @@
 import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useScroll } from '../../src/browser/useScroll';
 
@@ -270,5 +271,101 @@ describe('useScroll', () => {
     expect(addEventListener).toHaveBeenCalledTimes(registrations);
     expect(root.value.x()).toBe(1);
     expect(root.value.y()).toBe(2);
+  });
+
+  it('does not update when target resolution disposes the owner', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1, writable: true });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2, writable: true });
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useScroll({
+        target: () => {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return element;
+        }
+      })
+    );
+    dispose = root.dispose;
+
+    element.scrollLeft = 10;
+    element.scrollTop = 20;
+    disposeOnRead = true;
+    element.dispatchEvent(new Event('scroll'));
+
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
+  it('does not rebind when refresh target resolution disposes the owner', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1 });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2 });
+    const addEventListener = vi.spyOn(element, 'addEventListener');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      useScroll({
+        target: () => {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return element;
+        }
+      })
+    );
+    dispose = root.dispose;
+    const registrations = addEventListener.mock.calls.length;
+
+    disposeOnRead = true;
+    root.value.refresh();
+
+    expect(addEventListener).toHaveBeenCalledTimes(registrations);
+    expect(root.value.x()).toBe(1);
+    expect(root.value.y()).toBe(2);
+  });
+
+  it('stops coordinate writes when the x signal update disposes the owner', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1, writable: true });
+    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2, writable: true });
+    let dispose = () => {};
+    const updates: unknown[] = [];
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        updates.push(value);
+        if (value === 10) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useScroll({ target: element }));
+      dispose = root.dispose;
+      updates.length = 0;
+      element.scrollLeft = 10;
+      element.scrollTop = 20;
+
+      element.dispatchEvent(new Event('scroll'));
+
+      expect(updates).toEqual([10]);
+      expect(root.value.x()).toBe(10);
+      expect(root.value.y()).toBe(2);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 });

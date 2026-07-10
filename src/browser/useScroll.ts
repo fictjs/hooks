@@ -113,9 +113,16 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     if (disposed) {
       return;
     }
-    const next = readScrollPosition(resolveScrollTarget(), windowRef, fallback);
+    const nextTarget = resolveScrollTarget();
+    if (disposed) {
+      return;
+    }
+    const next = readScrollPosition(nextTarget, windowRef, fallback);
+    if (disposed) {
+      return;
+    }
     const shouldUpdate = options.shouldUpdate?.(next, previous.current) ?? true;
-    if (!shouldUpdate) {
+    if (disposed || !shouldUpdate) {
       return;
     }
     if (next.x === previous.current.x && next.y === previous.current.y) {
@@ -123,11 +130,17 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     }
     previous.current = next;
     x(next.x);
+    if (disposed) {
+      return;
+    }
     y(next.y);
   };
 
   const scrollListener = useEventListener(
-    () => resolveScrollTarget() as EventTarget | undefined,
+    () => {
+      const nextTarget = resolveScrollTarget();
+      return disposed ? undefined : (nextTarget as EventTarget | undefined);
+    },
     'scroll',
     update,
     {
@@ -146,7 +159,14 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
         return;
       }
       scrollListener.refresh();
+      if (disposed) {
+        scrollListener.stop();
+        return;
+      }
       update();
+      if (disposed) {
+        scrollListener.stop();
+      }
     });
   };
 
@@ -157,8 +177,21 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     cancelDeferredUpdate();
     cancelDeferredUpdate = () => {};
     scrollListener.refresh();
+    if (disposed) {
+      scrollListener.stop();
+      return;
+    }
     update();
-    if (!resolveScrollTarget()) {
+    if (disposed) {
+      scrollListener.stop();
+      return;
+    }
+    const nextTarget = resolveScrollTarget();
+    if (disposed) {
+      scrollListener.stop();
+      return;
+    }
+    if (!nextTarget) {
       scheduleDeferredUpdate();
     }
   };
