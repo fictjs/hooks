@@ -47,6 +47,13 @@ function fallbackCopy(value: string, documentRef: Document): boolean {
     } catch {
       // Cleanup failures must not change the boolean copy result.
     }
+    try {
+      if (textarea?.parentNode) {
+        textarea.parentNode.removeChild(textarea);
+      }
+    } catch {
+      // Older or custom DOM implementations may reject both cleanup paths.
+    }
   }
 }
 

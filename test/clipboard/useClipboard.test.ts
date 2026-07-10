@@ -144,6 +144,30 @@ describe('useClipboard', () => {
     await expect(state.copy('copied')).resolves.toBe(true);
     expect(state.copied()).toBe(true);
     expect(execCommand).toHaveBeenCalledWith('copy');
+    expect(documentRef.body.querySelector('textarea')).toBeNull();
+  });
+
+  it('removes the fallback textarea when the element remove method is unavailable', async () => {
+    const execCommand = vi.fn(() => true);
+    const documentRef = createClipboardDocument(execCommand);
+    const createElement = documentRef.createElement.bind(documentRef);
+    vi.spyOn(documentRef, 'createElement').mockImplementation((tagName) => {
+      const element = createElement(tagName);
+      if (tagName === 'textarea') {
+        Object.defineProperty(element, 'remove', {
+          configurable: true,
+          value: undefined
+        });
+      }
+      return element;
+    });
+    const { value: state } = createRoot(() =>
+      useClipboard({ navigator: null, document: documentRef, window })
+    );
+
+    await expect(state.copy('copied')).resolves.toBe(true);
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    expect(documentRef.body.querySelector('textarea')).toBeNull();
   });
 
   it('reports Clipboard API failures without retaining copied state', async () => {
