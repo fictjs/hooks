@@ -2,7 +2,7 @@ import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useWebSocket } from '../../src/browser/useWebSocket';
+import { useWebSocket, type UseWebSocketOptions } from '../../src/browser/useWebSocket';
 
 class MockWebSocket extends EventTarget {
   static instances: MockWebSocket[] = [];
@@ -296,6 +296,57 @@ describe('useWebSocket', () => {
       expect(root.value.status()).toBe('CLOSED');
     } finally {
       globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it.each(
+    (['dispose', 'reconnect'] as const).flatMap((operation) =>
+      (['onOpen', 'onMessage', 'onError', 'onClose'] as const).map(
+        (callback) => [operation, callback] as const
+      )
+    )
+  )('does not invoke an %s-invalidated %s getter result', (operation, callbackName) => {
+    const callback = vi.fn();
+    let invalidate = () => {};
+    const options: UseWebSocketOptions = {
+      webSocket: MockWebSocket as unknown as typeof WebSocket,
+      immediate: false
+    };
+    Object.defineProperty(options, callbackName, {
+      configurable: true,
+      get() {
+        invalidate();
+        return callback;
+      }
+    });
+    const root = createRoot(() => useWebSocket('ws://fict.test', options));
+    invalidate = operation === 'dispose' ? root.dispose : root.value.reconnect;
+    root.value.open();
+    const currentSocket = MockWebSocket.instances[0]!;
+
+    switch (callbackName) {
+      case 'onOpen':
+        currentSocket.open();
+        break;
+      case 'onMessage':
+        currentSocket.open();
+        currentSocket.message('message');
+        break;
+      case 'onError':
+        currentSocket.fail();
+        break;
+      case 'onClose':
+        currentSocket.serverClose();
+        break;
+    }
+
+    expect(callback).not.toHaveBeenCalled();
+    if (operation === 'reconnect') {
+      expect(MockWebSocket.instances).toHaveLength(2);
+      expect(root.value.status()).toBe('CONNECTING');
+      root.dispose();
+    } else {
+      expect(root.value.status()).toBe('CLOSED');
     }
   });
 

@@ -123,13 +123,22 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
   const hasOwnedSocket = () => socket !== null;
 
-  const reportError = (nextError: unknown) => {
+  const reportError = (nextError: unknown, ownsContext: () => boolean = () => true) => {
+    const reportOperation = operationEpoch;
+    const canReport = () => !destroyed && reportOperation === operationEpoch && ownsContext();
+    if (!canReport()) {
+      return;
+    }
     error(nextError);
-    if (destroyed) {
+    if (!canReport()) {
       return;
     }
     try {
-      options.onError?.(nextError);
+      const onError = options.onError;
+      if (!canReport()) {
+        return;
+      }
+      onError?.(nextError);
     } catch {
       // User callbacks must not interrupt socket recovery or control contracts.
     }
@@ -237,7 +246,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       }
       manuallyClosed = previousManuallyClosed;
       status(toStatus(currentSocket.readyState, currentSocket));
-      reportError(nextError);
+      reportError(nextError, () => socket === currentSocket);
       return false;
     }
 
@@ -333,7 +342,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     try {
       currentSocket = new webSocketCtor(resolvedUrl, options.protocols);
     } catch (nextError) {
-      reportError(nextError);
+      reportError(nextError, () => socket === null);
       if (destroyed || currentOperation !== operationEpoch) {
         return hasOwnedSocket();
       }
@@ -359,47 +368,64 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     const ownsSocketSetup = () => !destroyed && !manuallyClosed && socket === currentSocket;
 
     const onOpen = (event: Event) => {
-      if (destroyed || socket !== currentSocket) {
+      const eventOperation = operationEpoch;
+      const ownsEvent = () =>
+        !destroyed && eventOperation === operationEpoch && socket === currentSocket;
+      if (!ownsEvent()) {
         return;
       }
       status('OPEN');
-      if (destroyed || socket !== currentSocket) {
+      if (!ownsEvent()) {
         return;
       }
       resetReconnectAttempts();
-      if (destroyed || socket !== currentSocket) {
+      if (!ownsEvent()) {
         return;
       }
-      options.onOpen?.(event);
+      const onOpenCallback = options.onOpen;
+      if (!ownsEvent()) {
+        return;
+      }
+      onOpenCallback?.(event);
     };
 
     const onMessage = (event: Event) => {
-      if (destroyed || socket !== currentSocket) {
+      const eventOperation = operationEpoch;
+      const ownsEvent = () =>
+        !destroyed && eventOperation === operationEpoch && socket === currentSocket;
+      if (!ownsEvent()) {
         return;
       }
       const messageEvent = event as MessageEvent;
       try {
         const nextData = deserialize(messageEvent);
-        if (destroyed || socket !== currentSocket) {
+        if (!ownsEvent()) {
           return;
         }
         data(nextData);
-        if (destroyed || socket !== currentSocket) {
+        if (!ownsEvent()) {
           return;
         }
-        options.onMessage?.(nextData, messageEvent);
+        const onMessageCallback = options.onMessage;
+        if (!ownsEvent()) {
+          return;
+        }
+        onMessageCallback?.(nextData, messageEvent);
       } catch (nextError) {
-        if (!destroyed && socket === currentSocket) {
-          reportError(nextError);
+        if (ownsEvent()) {
+          reportError(nextError, () => ownsEvent());
         }
       }
     };
 
     const onError = (event: Event) => {
-      if (destroyed || socket !== currentSocket) {
+      const eventOperation = operationEpoch;
+      const ownsEvent = () =>
+        !destroyed && eventOperation === operationEpoch && socket === currentSocket;
+      if (!ownsEvent()) {
         return;
       }
-      reportError(event);
+      reportError(event, ownsEvent);
     };
 
     const onClose = (event: Event) => {
@@ -419,9 +445,13 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         return;
       }
       try {
-        options.onClose?.(event as CloseEvent);
+        const onCloseCallback = options.onClose;
+        if (destroyed || socket !== null || closeOperation !== operationEpoch) {
+          return;
+        }
+        onCloseCallback?.(event as CloseEvent);
       } catch (nextError) {
-        reportError(nextError);
+        reportError(nextError, () => socket === null && closeOperation === operationEpoch);
       } finally {
         if (!destroyed && !manuallyClosed && socket == null && reconnectTimer == null) {
           scheduleReconnect();
@@ -511,7 +541,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       if (destroyed || currentOperation !== operationEpoch || socket !== null) {
         return hasOwnedSocket();
       }
-      reportError(initialStateError);
+      reportError(initialStateError, () => socket === null);
       if (destroyed || currentOperation !== operationEpoch || socket !== null) {
         return hasOwnedSocket();
       }
@@ -598,7 +628,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       if (!ownsCloseOperation() || socket !== currentSocket) {
         return;
       }
-      reportError(nextError);
+      reportError(nextError, () => socket === currentSocket);
     }
   };
 
@@ -672,7 +702,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return true;
     } catch (nextError) {
       if (!destroyed && socket === currentSocket) {
-        reportError(nextError);
+        reportError(nextError, () => socket === currentSocket);
       }
       return false;
     }
