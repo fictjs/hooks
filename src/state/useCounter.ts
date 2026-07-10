@@ -32,9 +32,23 @@ function clamp(value: number, min: number | undefined, max: number | undefined):
 export function useCounter(initial = 0, options: UseCounterOptions = {}): UseCounterReturn {
   const start = clamp(initial, options.min, options.max);
   const countSignal = createSignal(start);
+  let operationGeneration = 0;
 
   const setCount = (next: number) => {
-    countSignal(clamp(next, options.min, options.max));
+    const operation = ++operationGeneration;
+    const min = options.min;
+    if (operation !== operationGeneration) {
+      return;
+    }
+    const max = options.max;
+    if (operation !== operationGeneration) {
+      return;
+    }
+    const nextCount = clamp(next, min, max);
+    if (operation !== operationGeneration) {
+      return;
+    }
+    countSignal(nextCount);
   };
 
   const count = function count(next?: number) {

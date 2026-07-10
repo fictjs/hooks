@@ -4,6 +4,20 @@ import { describe, expect, it } from 'vitest';
 
 describe('distribution runtime', () => {
   it.each(['esm', 'cjs'])(
+    'preserves useCounter bounds ownership in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-counter-reentry.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps usePrevious terminal after source disposal in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-previous-terminal.mjs');

@@ -52,4 +52,26 @@ describe('useCounter', () => {
     counter.reset();
     expect(counter.count()).toBe(5);
   });
+
+  it('preserves a nested set started by a bounds getter', () => {
+    let setNested: (value: number) => void = () => {};
+    let reenter = false;
+    const options = {
+      min: 0,
+      get max() {
+        if (reenter) {
+          reenter = false;
+          setNested(5);
+        }
+        return 10;
+      }
+    };
+    const counter = createRoot(() => useCounter(0, options)).value;
+    setNested = counter.set;
+
+    reenter = true;
+    counter.set(7);
+
+    expect(counter.count()).toBe(5);
+  });
 });
