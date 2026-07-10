@@ -86,9 +86,13 @@ export function createDebouncedFn<T extends Procedure>(
     pending(true);
 
     if (shouldCallLeading) {
-      fn(...args);
-      state.lastArgs = undefined;
-      pending(false);
+      try {
+        fn(...args);
+      } finally {
+        state.lastArgs = undefined;
+        pending(false);
+        clearTimers();
+      }
     }
 
     scheduleTimers();

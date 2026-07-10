@@ -42,6 +42,30 @@ describe('useDebounceFn', () => {
     expect(callback).toHaveBeenCalledWith('first');
   });
 
+  it('resets leading state when the callback throws', () => {
+    vi.useFakeTimers();
+    const callbackError = new Error('leading failed');
+    const callback = vi
+      .fn<(value: string) => void>()
+      .mockImplementationOnce(() => {
+        throw callbackError;
+      })
+      .mockImplementation(() => {});
+    const { value: controls } = createRoot(() =>
+      useDebounceFn(callback, 100, { leading: true, trailing: true })
+    );
+
+    expect(() => controls.run('first')).toThrow(callbackError);
+    expect(controls.pending()).toBe(false);
+
+    controls.flush();
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    controls.run('second');
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenLastCalledWith('second');
+  });
+
   it('does not run trailing callback for a single leading call', () => {
     vi.useFakeTimers();
     const callback = vi.fn();
