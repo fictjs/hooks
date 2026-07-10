@@ -1,6 +1,7 @@
 import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
-import { describe, expect, it } from 'vitest';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
+import { describe, expect, it, vi } from 'vitest';
 import { useTitle } from '../../src/browser/useTitle';
 
 describe('useTitle', () => {
@@ -50,6 +51,41 @@ describe('useTitle', () => {
     expect(document.title).toBe('temp');
     dispose();
     expect(document.title).toBe('original');
+  });
+
+  it('does not overwrite the restored title after a signal update disposes the owner', () => {
+    document.title = 'original';
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 'next') {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useTitle('initial', { restoreOnUnmount: true }));
+      dispose = root.dispose;
+
+      (root.value.title as (next: string) => void)('next');
+
+      expect(root.value.title()).toBe('next');
+      expect(document.title).toBe('original');
+      (root.value.title as (next: string) => void)('ignored');
+      expect(document.title).toBe('original');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('works without document reference', () => {

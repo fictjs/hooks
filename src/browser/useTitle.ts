@@ -25,9 +25,16 @@ export function useTitle(
   const documentRef = options.document === undefined ? defaultDocument : options.document;
   const initialTitle = documentRef?.title ?? '';
   const titleSignal = createSignal(documentRef?.title ?? toValue(value as MaybeAccessor<string>));
+  let disposed = false;
 
   const setTitle = (nextTitle: string) => {
+    if (disposed) {
+      return;
+    }
     titleSignal(nextTitle);
+    if (disposed) {
+      return;
+    }
     if (documentRef) {
       documentRef.title = nextTitle;
     }
@@ -45,13 +52,12 @@ export function useTitle(
     setTitle(nextTitle);
   });
 
-  if (options.restoreOnUnmount) {
-    tryOnDestroy(() => {
-      if (documentRef) {
-        documentRef.title = initialTitle;
-      }
-    });
-  }
+  tryOnDestroy(() => {
+    disposed = true;
+    if (options.restoreOnUnmount && documentRef) {
+      documentRef.title = initialTitle;
+    }
+  });
 
   return { title };
 }
