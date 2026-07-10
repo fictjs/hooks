@@ -18,6 +18,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'keeps click-outside start transactional in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-click-outside-start-reentry.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves mutation observer operation ownership in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-mutation-observer-reentry.mjs');

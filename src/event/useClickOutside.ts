@@ -254,21 +254,26 @@ export function useClickOutside(
 
   return {
     start() {
-      operation += 1;
+      const startOperation = ++operation;
       try {
         downControls.start();
+        if (operation !== startOperation) {
+          return;
+        }
         clickControls.start();
       } catch (error) {
-        pointerDownOutside = false;
-        try {
-          clickControls.stop();
-        } catch {
-          // Preserve the setup failure after best-effort rollback.
-        }
-        try {
-          downControls.stop();
-        } catch {
-          // Preserve the setup failure after best-effort rollback.
+        if (operation === startOperation) {
+          pointerDownOutside = false;
+          try {
+            clickControls.stop();
+          } catch {
+            // Preserve the setup failure after best-effort rollback.
+          }
+          try {
+            downControls.stop();
+          } catch {
+            // Preserve the setup failure after best-effort rollback.
+          }
         }
         throw error;
       }

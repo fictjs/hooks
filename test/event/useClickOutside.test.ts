@@ -240,6 +240,40 @@ describe('useClickOutside', () => {
     expect(listeners.size).toBe(0);
   });
 
+  it('aborts start when pointerdown registration synchronously stops the controls', () => {
+    const target = document.createElement('div');
+    const listeners = new Map<string, Set<EventListener>>();
+    let stopOnPointerAdd = false;
+    const windowRef = {
+      Event: window.Event,
+      MouseEvent: window.MouseEvent,
+      Node: window.Node,
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        const registered = listeners.get(type) ?? new Set<EventListener>();
+        registered.add(listener as EventListener);
+        listeners.set(type, registered);
+        if (stopOnPointerAdd && type === 'pointerdown') {
+          stopOnPointerAdd = false;
+          controls.stop();
+        }
+      },
+      removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        listeners.get(type)?.delete(listener as EventListener);
+        if (listeners.get(type)?.size === 0) listeners.delete(type);
+      }
+    } as unknown as Window;
+    const controls = createRoot(() =>
+      useClickOutside(target, vi.fn(), { window: windowRef, document })
+    ).value;
+    controls.stop();
+
+    stopOnPointerAdd = true;
+    controls.start();
+
+    expect(controls.active()).toBe(false);
+    expect(listeners.size).toBe(0);
+  });
+
   it('continues stopping after one listener cleanup fails', () => {
     const target = document.createElement('div');
     const { windowRef, listeners, failures } = createListenerWindow();
