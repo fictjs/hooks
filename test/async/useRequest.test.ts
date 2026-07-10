@@ -406,6 +406,35 @@ describe('useRequest', () => {
     expect(service).toHaveBeenCalledTimes(2);
   });
 
+  it('clears a zero-valued polling timer on dispose', async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const setTimeoutRef = vi.fn(() => 0);
+    const clearTimeoutRef = vi.fn();
+    globalThis.setTimeout = setTimeoutRef as unknown as typeof setTimeout;
+    globalThis.clearTimeout = clearTimeoutRef as unknown as typeof clearTimeout;
+
+    try {
+      const service = vi.fn(async () => 'ok');
+      const { value: state, dispose } = createRoot(() =>
+        useRequest(service, {
+          manual: true,
+          pollingInterval: 20
+        })
+      );
+
+      await state.runAsync();
+      expect(setTimeoutRef).toHaveBeenCalledTimes(1);
+
+      dispose();
+
+      expect(clearTimeoutRef).toHaveBeenCalledWith(0);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
+  });
+
   it('does not restart requests or polling after dispose', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');

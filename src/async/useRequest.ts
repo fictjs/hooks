@@ -187,7 +187,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const stopPolling = () => {
-    if (pollingTimer) {
+    if (pollingTimer !== undefined) {
       clearTimeout(pollingTimer);
       pollingTimer = undefined;
     }
