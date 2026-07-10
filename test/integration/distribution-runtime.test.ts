@@ -18,6 +18,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'preserves event restart ownership from signal notification in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-event-listener-signal-reentry.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'keeps useDocumentVisibility terminal after getter disposal in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-visibility-terminal.mjs');

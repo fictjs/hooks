@@ -30,8 +30,10 @@ export function useEventListener<E extends Event = Event>(
   let disposed = false;
   let bindingGeneration = 0;
   let refreshGeneration = 0;
+  let controlGeneration = 0;
 
   const canBind = () => !disposed && active();
+  const ownsControl = (generation: number) => !disposed && generation === controlGeneration;
   const ownsRefresh = (generation: number) => !disposed && generation === refreshGeneration;
   const canRunBind = (generation: number) => ownsRefresh(generation) && active();
 
@@ -163,6 +165,7 @@ export function useEventListener<E extends Event = Event>(
 
   tryOnDestroy(() => {
     disposed = true;
+    controlGeneration += 1;
     active(false);
     cancelDeferredBind();
     cancelDeferredBind = () => {};
@@ -174,10 +177,11 @@ export function useEventListener<E extends Event = Event>(
       if (disposed) {
         return;
       }
+      const controlId = ++controlGeneration;
       if (!active()) {
         active(true);
       }
-      if (disposed) {
+      if (!ownsControl(controlId)) {
         return;
       }
       if (!bound) {
@@ -188,13 +192,14 @@ export function useEventListener<E extends Event = Event>(
       if (disposed || !active()) {
         return;
       }
+      const controlId = ++controlGeneration;
       active(false);
-      if (disposed) {
+      if (!ownsControl(controlId)) {
         return;
       }
       cancelDeferredBind();
       cancelDeferredBind = () => {};
-      if (disposed) {
+      if (!ownsControl(controlId)) {
         return;
       }
       stopCurrent();

@@ -1,5 +1,6 @@
 import { createRoot } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useEventListener } from '../../src/event/useEventListener';
 
@@ -103,6 +104,54 @@ describe('useEventListener', () => {
 
     expect(controls.active()).toBe(true);
     expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a listener restarted from the active signal notification', () => {
+    const target = new EventTarget();
+    const activeListeners = new Set<EventListenerOrEventListenerObject>();
+    const addListener = target.addEventListener.bind(target);
+    const removeListener = target.removeEventListener.bind(target);
+    vi.spyOn(target, 'addEventListener').mockImplementation((...args) => {
+      if (args[1]) activeListeners.add(args[1]);
+      addListener(...args);
+    });
+    vi.spyOn(target, 'removeEventListener').mockImplementation((...args) => {
+      if (args[1]) activeListeners.delete(args[1]);
+      removeListener(...args);
+    });
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    let controls: ReturnType<typeof useEventListener>;
+    let restart = false;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (restart && value === false) {
+          restart = false;
+          controls.start();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      controls = createRoot(() => useEventListener(target, 'signal-restart', vi.fn())).value;
+      restart = true;
+      controls.stop();
+
+      expect(controls.active()).toBe(true);
+      expect(activeListeners.size).toBe(1);
+
+      controls.stop();
+      expect(activeListeners.size).toBe(0);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('keeps the listener created by a refresh reentered from removal', () => {
