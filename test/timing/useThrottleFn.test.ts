@@ -5,6 +5,50 @@ import { useThrottleFn } from '../../src/timing/useThrottleFn';
 describe('useThrottleFn', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('treats a zero-valued timer handle as scheduled', () => {
+    let scheduled: (() => void) | undefined;
+    const clearTimeoutMock = vi.fn(() => {
+      scheduled = undefined;
+    });
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      scheduled = callback;
+      return 0;
+    });
+    vi.stubGlobal('clearTimeout', clearTimeoutMock);
+    const callback = vi.fn();
+    const controls = createRoot(() => useThrottleFn(callback, 100)).value;
+
+    controls.run('first');
+    controls.run('second');
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenLastCalledWith('first');
+    expect(controls.pending()).toBe(true);
+
+    scheduled?.();
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenLastCalledWith('second');
+  });
+
+  it('does not strand trailing state when the timer fires synchronously', () => {
+    vi.stubGlobal('setTimeout', (callback: () => void) => {
+      callback();
+      return 1;
+    });
+    vi.stubGlobal('clearTimeout', vi.fn());
+    const callback = vi.fn();
+    const controls = createRoot(() => useThrottleFn(callback, 100)).value;
+
+    controls.run('first');
+    controls.run('second');
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenNthCalledWith(1, 'first');
+    expect(callback).toHaveBeenNthCalledWith(2, 'second');
+    expect(controls.pending()).toBe(false);
   });
 
   it('throttles calls with leading and trailing by default', () => {

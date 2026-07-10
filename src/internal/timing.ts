@@ -28,18 +28,25 @@ export function createDebouncedFn<T extends Procedure>(
   const state: {
     timer?: ReturnType<typeof setTimeout>;
     maxTimer?: ReturnType<typeof setTimeout>;
+    timerScheduled: boolean;
+    maxTimerScheduled: boolean;
     lastArgs?: Parameters<T>;
-  } = {};
+  } = {
+    timerScheduled: false,
+    maxTimerScheduled: false
+  };
   const pending = createSignal(false);
 
   const clearTimers = () => {
-    if (state.timer) {
-      clearTimeout(state.timer);
+    if (state.timerScheduled) {
+      clearTimeout(state.timer as ReturnType<typeof setTimeout>);
       state.timer = undefined;
+      state.timerScheduled = false;
     }
-    if (state.maxTimer) {
-      clearTimeout(state.maxTimer);
+    if (state.maxTimerScheduled) {
+      clearTimeout(state.maxTimer as ReturnType<typeof setTimeout>);
       state.maxTimer = undefined;
+      state.maxTimerScheduled = false;
     }
   };
 
@@ -57,12 +64,20 @@ export function createDebouncedFn<T extends Procedure>(
     fn(...args);
   };
 
-  const scheduleTimers = () => {
-    if (state.timer) {
-      clearTimeout(state.timer);
+  const scheduleTimers = (): boolean => {
+    let firedSynchronously = false;
+
+    if (state.timerScheduled) {
+      clearTimeout(state.timer as ReturnType<typeof setTimeout>);
+      state.timer = undefined;
+      state.timerScheduled = false;
     }
 
-    state.timer = setTimeout(() => {
+    state.timerScheduled = true;
+    const timer = setTimeout(() => {
+      firedSynchronously = true;
+      state.timer = undefined;
+      state.timerScheduled = false;
       if (trailing) {
         invoke();
       } else {
@@ -71,24 +86,36 @@ export function createDebouncedFn<T extends Procedure>(
         clearTimers();
       }
     }, wait);
+    if (state.timerScheduled) {
+      state.timer = timer;
+    }
 
-    if (trailing && maxWait != null && maxWait >= 0 && !state.maxTimer) {
+    if (trailing && maxWait != null && maxWait >= 0 && !state.maxTimerScheduled) {
       const effectiveMaxWait = Math.max(maxWait, wait);
-      state.maxTimer = setTimeout(() => {
+      state.maxTimerScheduled = true;
+      const maxTimer = setTimeout(() => {
+        firedSynchronously = true;
+        state.maxTimer = undefined;
+        state.maxTimerScheduled = false;
         invoke();
       }, effectiveMaxWait);
+      if (state.maxTimerScheduled) {
+        state.maxTimer = maxTimer;
+      }
     }
+
+    return firedSynchronously;
   };
 
   const run = (...args: Parameters<T>) => {
-    const shouldCallLeading = leading && !state.timer;
+    const shouldCallLeading = leading && !state.timerScheduled;
     if (trailing) {
       state.lastArgs = args;
       pending(true);
     }
-    scheduleTimers();
+    const firedSynchronously = scheduleTimers();
 
-    if (shouldCallLeading) {
+    if (shouldCallLeading && !(trailing && firedSynchronously)) {
       state.lastArgs = undefined;
       pending(false);
       try {
@@ -136,6 +163,7 @@ export function createThrottledFn<T extends Procedure>(
   const trailing = options.trailing ?? true;
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timerScheduled = false;
   let lastArgs: Parameters<T> | undefined;
   const pending = createSignal(false);
 
@@ -144,22 +172,35 @@ export function createThrottledFn<T extends Procedure>(
   };
 
   const tick = () => {
+    timer = undefined;
+    timerScheduled = false;
     if (trailing && lastArgs) {
       const args = lastArgs;
       lastArgs = undefined;
       pending(false);
-      timer = setTimeout(tick, wait);
+      scheduleTick();
       invoke(args);
       return;
     }
 
-    timer = undefined;
     pending(false);
   };
 
+  const scheduleTick = () => {
+    timerScheduled = true;
+    const nextTimer = setTimeout(tick, wait);
+    if (timerScheduled) {
+      timer = nextTimer;
+    }
+  };
+
   const run = (...args: Parameters<T>) => {
-    if (!timer) {
-      timer = setTimeout(tick, wait);
+    if (!timerScheduled) {
+      if (!leading && trailing) {
+        lastArgs = args;
+        pending(true);
+      }
+      scheduleTick();
       if (leading) {
         try {
           invoke(args);
@@ -167,9 +208,6 @@ export function createThrottledFn<T extends Procedure>(
           cancel();
           throw error;
         }
-      } else if (trailing) {
-        lastArgs = args;
-        pending(true);
       }
       return;
     }
@@ -181,9 +219,10 @@ export function createThrottledFn<T extends Procedure>(
   };
 
   const cancel = () => {
-    if (timer) {
-      clearTimeout(timer);
+    if (timerScheduled) {
+      clearTimeout(timer as ReturnType<typeof setTimeout>);
       timer = undefined;
+      timerScheduled = false;
     }
     lastArgs = undefined;
     pending(false);
