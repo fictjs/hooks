@@ -327,6 +327,95 @@ describe('useGeolocation', () => {
     expect(state.error()).toBeNull();
   });
 
+  it.each([
+    'coords',
+    'accuracy',
+    'latitude',
+    'longitude',
+    'altitude',
+    'altitudeAccuracy',
+    'heading',
+    'speed'
+  ] as const)('does not commit a snapshot when the %s getter pauses the watcher', (getterName) => {
+    const geolocation = new MockGeolocation();
+    const root = createRoot(() => useGeolocation({ navigator: { geolocation } }));
+    const previousCoords = root.value.coords();
+    const coords = new Proxy<GeolocationCoordinates>(
+      {
+        accuracy: 1,
+        latitude: 35,
+        longitude: 120,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+        toJSON: () => ({})
+      },
+      {
+        get(target, property, receiver) {
+          if (property === getterName) {
+            root.value.pause();
+          }
+          return Reflect.get(target, property, receiver);
+        }
+      }
+    );
+    const position = new Proxy<GeolocationPosition>(
+      {
+        coords,
+        timestamp: 1234,
+        toJSON: () => ({})
+      },
+      {
+        get(target, property, receiver) {
+          if (property === getterName) {
+            root.value.pause();
+          }
+          return Reflect.get(target, property, receiver);
+        }
+      }
+    );
+
+    geolocation.successCallbacks[0]!(position);
+
+    expect(root.value.coords()).toBe(previousCoords);
+    expect(root.value.locatedAt()).toBeNull();
+    expect(root.value.active()).toBe(false);
+    expect(geolocation.clearWatch).toHaveBeenCalledOnce();
+  });
+
+  it('does not commit a snapshot when the timestamp getter disposes the owner', () => {
+    const geolocation = new MockGeolocation();
+    let disposeOwner = () => {};
+    const root = createRoot(() => useGeolocation({ navigator: { geolocation } }));
+    disposeOwner = root.dispose;
+    const previousCoords = root.value.coords();
+    const position: GeolocationPosition = {
+      coords: {
+        accuracy: 1,
+        latitude: 35,
+        longitude: 120,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+        toJSON: () => ({})
+      },
+      get timestamp() {
+        disposeOwner();
+        return 1234;
+      },
+      toJSON: () => ({})
+    };
+
+    geolocation.successCallbacks[0]!(position);
+
+    expect(root.value.coords()).toBe(previousCoords);
+    expect(root.value.locatedAt()).toBeNull();
+    expect(root.value.active()).toBe(false);
+    expect(geolocation.clearWatch).toHaveBeenCalledOnce();
+  });
+
   it('stops success writes when the coords update disposes the owner', () => {
     const geolocation = new MockGeolocation();
     let dispose = () => {};

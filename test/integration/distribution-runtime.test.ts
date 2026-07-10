@@ -891,4 +891,18 @@ describe('distribution runtime', () => {
       ).not.toThrow();
     }
   );
+
+  it.each(['esm', 'cjs'])(
+    'keeps useGeolocation snapshots owned in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-geolocation-snapshot-ownership.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
 });

@@ -83,23 +83,62 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
     const currentGeneration = ++generation;
     const nextWatchId = geolocationRef.watchPosition(
       (position) => {
-        if (disposed || currentGeneration !== generation) {
+        const ownsSnapshot = () => !disposed && currentGeneration === generation;
+        if (!ownsSnapshot()) {
           return;
         }
+
+        const positionCoords = position.coords;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const accuracy = positionCoords.accuracy;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const latitude = positionCoords.latitude;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const longitude = positionCoords.longitude;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const altitude = positionCoords.altitude;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const altitudeAccuracy = positionCoords.altitudeAccuracy;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const heading = positionCoords.heading;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const speed = positionCoords.speed;
+        if (!ownsSnapshot()) {
+          return;
+        }
+        const timestamp = position.timestamp;
+        if (!ownsSnapshot()) {
+          return;
+        }
+
         coords({
-          accuracy: position.coords.accuracy,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          altitude: position.coords.altitude,
-          altitudeAccuracy: position.coords.altitudeAccuracy,
-          heading: position.coords.heading,
-          speed: position.coords.speed
+          accuracy,
+          latitude,
+          longitude,
+          altitude,
+          altitudeAccuracy,
+          heading,
+          speed
         });
-        if (disposed || currentGeneration !== generation) {
+        if (!ownsSnapshot()) {
           return;
         }
-        locatedAt(position.timestamp);
-        if (disposed || currentGeneration !== generation) {
+        locatedAt(timestamp);
+        if (!ownsSnapshot()) {
           return;
         }
         error(null);
