@@ -70,9 +70,10 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
 
   let watchId: number | null = null;
   let generation = 0;
+  let disposed = false;
 
   const resume = () => {
-    if (!geolocationRef || active()) {
+    if (disposed || !geolocationRef || active()) {
       if (!geolocationRef) {
         isSupported(false);
       }
@@ -129,6 +130,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
   }
 
   tryOnDestroy(() => {
+    disposed = true;
     pause();
   });
 

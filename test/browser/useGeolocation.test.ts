@@ -222,6 +222,23 @@ describe('useGeolocation', () => {
     expect(geolocation.clearWatch).toHaveBeenCalledTimes(1);
   });
 
+  it('does not create another watcher after dispose', () => {
+    const geolocation = new MockGeolocation();
+    const navigatorRef = { geolocation } as unknown as Navigator;
+    const root = createRoot(() =>
+      useGeolocation({
+        navigator: navigatorRef as never,
+        immediate: false
+      })
+    );
+
+    root.dispose();
+    root.value.resume();
+
+    expect(geolocation.watchPosition).not.toHaveBeenCalled();
+    expect(root.value.active()).toBe(false);
+  });
+
   it('ignores queued watcher callbacks after dispose', () => {
     const geolocation = new MockGeolocation();
     const navigatorRef = { geolocation } as unknown as Navigator;
