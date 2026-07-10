@@ -266,49 +266,59 @@ describe('useScroll', () => {
     expect(controls.y()).toBe(40);
   });
 
-  it('keeps coordinates coherent when the x write refreshes synchronously', () => {
-    const element = document.createElement('div');
-    Object.defineProperty(element, 'scrollLeft', { configurable: true, value: 1, writable: true });
-    Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2, writable: true });
-    let refresh = () => {};
-    let refreshOnX = false;
-    const globalWithHook = globalThis as typeof globalThis & {
-      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
-    };
-    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
-    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
-      registerSignal: vi.fn(),
-      updateSignal: (_id, value) => {
-        if (refreshOnX && value === 10) {
-          refreshOnX = false;
-          refresh();
-        }
-      },
-      registerComputed: vi.fn(),
-      updateComputed: vi.fn(),
-      registerEffect: vi.fn(),
-      effectRun: vi.fn()
-    };
+  it.each([
+    ['x', 10],
+    ['y', 20]
+  ] as const)(
+    'keeps coordinates coherent when the %s write refreshes synchronously',
+    (_axis, trigger) => {
+      const element = document.createElement('div');
+      Object.defineProperty(element, 'scrollLeft', {
+        configurable: true,
+        value: 1,
+        writable: true
+      });
+      Object.defineProperty(element, 'scrollTop', { configurable: true, value: 2, writable: true });
+      let refresh = () => {};
+      let refreshOnCoordinate = false;
+      const globalWithHook = globalThis as typeof globalThis & {
+        __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+      };
+      const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+        registerSignal: vi.fn(),
+        updateSignal: (_id, value) => {
+          if (refreshOnCoordinate && value === trigger) {
+            refreshOnCoordinate = false;
+            refresh();
+          }
+        },
+        registerComputed: vi.fn(),
+        updateComputed: vi.fn(),
+        registerEffect: vi.fn(),
+        effectRun: vi.fn()
+      };
 
-    try {
-      const root = createRoot(() => useScroll({ target: element }));
-      refresh = root.value.refresh;
-      element.scrollLeft = 10;
-      element.scrollTop = 20;
-      refreshOnX = true;
+      try {
+        const root = createRoot(() => useScroll({ target: element }));
+        refresh = root.value.refresh;
+        element.scrollLeft = 10;
+        element.scrollTop = 20;
+        refreshOnCoordinate = true;
 
-      element.dispatchEvent(new Event('scroll'));
+        element.dispatchEvent(new Event('scroll'));
 
-      expect(root.value.x()).toBe(10);
-      expect(root.value.y()).toBe(20);
-      root.value.refresh();
-      expect(root.value.x()).toBe(10);
-      expect(root.value.y()).toBe(20);
-      root.dispose();
-    } finally {
-      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+        expect(root.value.x()).toBe(10);
+        expect(root.value.y()).toBe(20);
+        root.value.refresh();
+        expect(root.value.x()).toBe(10);
+        expect(root.value.y()).toBe(20);
+        root.dispose();
+      } finally {
+        globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+      }
     }
-  });
+  );
 
   it('passes explicit passive and capture options to the listener', () => {
     const element = document.createElement('div');
