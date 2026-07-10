@@ -107,14 +107,22 @@ export function useClickOutside(
   };
 
   const onPointerDown = (event: Event) => {
-    pointerDownOutside = isOutside(event);
+    try {
+      pointerDownOutside = isOutside(event);
+    } catch (error) {
+      pointerDownOutside = false;
+      throw error;
+    }
   };
 
   const onClick = (event: Event) => {
-    if ((pointerDownOutside || isKeyboardClick(event, MouseEventCtor)) && isOutside(event)) {
-      handler(event);
+    try {
+      if ((pointerDownOutside || isKeyboardClick(event, MouseEventCtor)) && isOutside(event)) {
+        handler(event);
+      }
+    } finally {
+      pointerDownOutside = false;
     }
-    pointerDownOutside = false;
   };
 
   const downControls = useEventListener(windowRef, 'pointerdown', onPointerDown, {
@@ -132,6 +140,7 @@ export function useClickOutside(
       clickControls.start();
     },
     stop() {
+      pointerDownOutside = false;
       downControls.stop();
       clickControls.stop();
     },

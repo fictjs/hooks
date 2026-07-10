@@ -122,6 +122,81 @@ describe('useClickOutside', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('clears pending pointer state when stopped and restarted', () => {
+    const target = document.createElement('div');
+    const outside = document.createElement('button');
+    document.body.append(target, outside);
+    const handler = vi.fn();
+    const { value: controls, dispose } = createRoot(() => useClickOutside(target, handler));
+
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    controls.stop();
+    controls.start();
+    outside.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+
+    expect(handler).not.toHaveBeenCalled();
+
+    dispose();
+    target.remove();
+    outside.remove();
+  });
+
+  it('clears pending pointer state when event handling throws', () => {
+    const target = document.createElement('div');
+    const outside = document.createElement('button');
+    const targetError = new Error('target resolution failed');
+    let targetThrows = false;
+    const targetAccessor = () => {
+      if (targetThrows) {
+        throw targetError;
+      }
+      return target;
+    };
+    const listeners = new Map<string, EventListener>();
+    const windowRef = {
+      Event: window.Event,
+      MouseEvent: window.MouseEvent,
+      Node: window.Node,
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        listeners.set(type, listener as EventListener);
+      },
+      removeEventListener(type: string) {
+        listeners.delete(type);
+      }
+    } as unknown as Window;
+    const handlerError = new Error('outside handler failed');
+    const handler = vi.fn().mockImplementationOnce(() => {
+      throw handlerError;
+    });
+    const { dispose } = createRoot(() =>
+      useClickOutside(targetAccessor, handler, { window: windowRef, document })
+    );
+    const withTarget = <T extends Event>(event: T): T => {
+      Object.defineProperty(event, 'target', { value: outside });
+      return event;
+    };
+
+    listeners.get('pointerdown')!(withTarget(new Event('pointerdown')));
+    expect(() =>
+      listeners.get('click')!(withTarget(new MouseEvent('click', { detail: 1 })))
+    ).toThrow(handlerError);
+    listeners.get('click')!(withTarget(new MouseEvent('click', { detail: 1 })));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    listeners.get('pointerdown')!(withTarget(new Event('pointerdown')));
+    targetThrows = true;
+    expect(() => listeners.get('pointerdown')!(withTarget(new Event('pointerdown')))).toThrow(
+      targetError
+    );
+    targetThrows = false;
+    listeners.get('click')!(withTarget(new MouseEvent('click', { detail: 1 })));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    dispose();
+  });
+
   it('allows outside click handlers to prevent the default action', () => {
     const target = document.createElement('div');
     const outside = document.createElement('a');
