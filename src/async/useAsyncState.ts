@@ -18,7 +18,7 @@ type UseAsyncStateImmediateOptions<Args extends unknown[]> = [] extends Args
           immediateArgs?: never;
         }
       | {
-          immediate: true;
+          immediate: boolean;
           immediateArgs: Args;
         };
 

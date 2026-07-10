@@ -29,3 +29,5 @@ function useAsyncState<T, Args extends unknown[] = []>(
 - Executors without required arguments can use `immediate: true` directly.
 - Executors with required arguments must provide the matching `immediateArgs` tuple when immediate
   execution is enabled. Otherwise, leave immediate execution disabled and call `execute(...args)`.
+- `immediate` may be a boolean expression for a required-argument executor when `immediateArgs` is
+  provided.

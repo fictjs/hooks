@@ -4,6 +4,11 @@ const asyncState = useAsyncState(async (count: number) => count * 2, 0, {
   immediate: true,
   immediateArgs: [2]
 });
+declare const immediate: boolean;
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate,
+  immediateArgs: [2]
+});
 asyncState.execute(3);
 // @ts-expect-error executor argument types remain intact for legacy consumers
 asyncState.execute('3');

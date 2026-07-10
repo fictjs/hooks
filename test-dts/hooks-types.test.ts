@@ -88,9 +88,16 @@ useAsyncState(async (count: number) => count * 2, 0, {
   immediate: true,
   immediateArgs: [2]
 });
+const immediate: boolean = Math.random() > 0.5;
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate,
+  immediateArgs: [2]
+});
 useAsyncState(async () => 1, 0, { immediate: true });
 // @ts-expect-error immediate execution of a required-argument executor needs immediateArgs
 useAsyncState(async (count: number) => count * 2, 0, { immediate: true });
+// @ts-expect-error a boolean immediate option still needs arguments when it may be true
+useAsyncState(async (count: number) => count * 2, 0, { immediate });
 useAsyncState(async (count: number) => count * 2, 0, {
   immediate: true,
   // @ts-expect-error immediateArgs preserves executor argument types
