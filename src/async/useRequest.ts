@@ -258,9 +258,12 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
         finalError = err;
         error(err);
-        options.onError?.(err, currentParams);
-        if (id === callId) {
-          schedulePolling(currentParams);
+        try {
+          options.onError?.(err, currentParams);
+        } finally {
+          if (id === callId) {
+            schedulePolling(currentParams);
+          }
         }
         return data();
       }

@@ -454,6 +454,34 @@ describe('useRequest', () => {
     dispose();
   });
 
+  it('continues polling when onError throws', async () => {
+    vi.useFakeTimers();
+    const requestError = new Error('request failed');
+    const callbackError = new Error('callback failed');
+    const service = vi.fn(async () => {
+      throw requestError;
+    });
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onError() {
+          throw callbackError;
+        }
+      })
+    );
+
+    await expect(root.value.runAsync()).rejects.toBe(callbackError);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(1);
+    root.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('does not restart polling when onSuccess disposes the root', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');
@@ -478,6 +506,7 @@ describe('useRequest', () => {
 
   it('does not restart polling when onError cancels the request', async () => {
     vi.useFakeTimers();
+    const callbackError = new Error('callback failed');
     const service = vi.fn(async () => {
       throw new Error('failed');
     });
@@ -489,15 +518,42 @@ describe('useRequest', () => {
         pollingInterval: 20,
         onError() {
           cancel();
+          throw callbackError;
         }
       })
     );
     cancel = state.cancel;
 
-    await state.runAsync();
+    await expect(state.runAsync()).rejects.toBe(callbackError);
     await vi.advanceTimersByTimeAsync(100);
 
     expect(service).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart polling when onError disposes the root', async () => {
+    vi.useFakeTimers();
+    const callbackError = new Error('callback failed');
+    const service = vi.fn(async () => {
+      throw new Error('failed');
+    });
+    let dispose = () => {};
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onError() {
+          dispose();
+          throw callbackError;
+        }
+      })
+    );
+    dispose = root.dispose;
+
+    await expect(root.value.runAsync()).rejects.toBe(callbackError);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('evicts stale cache entries', async () => {
