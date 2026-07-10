@@ -7,6 +7,7 @@ class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
   static observeError: unknown;
   static disconnectError: unknown;
+  static onConstruct: ((observer: MockResizeObserver) => void) | undefined;
   static onObserve: ((observer: MockResizeObserver) => void) | undefined;
 
   readonly observe = vi.fn(() => {
@@ -29,6 +30,9 @@ class MockResizeObserver {
   constructor(callback: ResizeObserverCallback) {
     this.callback = callback;
     MockResizeObserver.instances.push(this);
+    const onConstruct = MockResizeObserver.onConstruct;
+    MockResizeObserver.onConstruct = undefined;
+    onConstruct?.(this);
   }
 
   trigger(entries: ResizeObserverEntry[]) {
@@ -72,6 +76,7 @@ describe('useSize', () => {
     MockResizeObserver.instances = [];
     MockResizeObserver.observeError = undefined;
     MockResizeObserver.disconnectError = undefined;
+    MockResizeObserver.onConstruct = undefined;
     MockResizeObserver.onObserve = undefined;
     vi.restoreAllMocks();
   });
@@ -188,6 +193,55 @@ describe('useSize', () => {
     state.update();
     expect(state.width()).toBe(240);
     expect(state.height()).toBe(144);
+  });
+
+  it('supports legacy content-box entries without box-size arrays', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const { value: state } = createRoot(() => useSize(element, { box: 'content-box' }));
+    const instance = MockResizeObserver.instances[0]!;
+
+    instance.trigger([
+      {
+        target: element,
+        contentRect: {
+          width: 80,
+          height: 40
+        } as DOMRectReadOnly
+      } as unknown as ResizeObserverEntry
+    ]);
+
+    expect(state.width()).toBe(80);
+    expect(state.height()).toBe(40);
+  });
+
+  it('falls back to the current rect for incomplete or empty border-box records', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const { value: state } = createRoot(() => useSize(element));
+    const instance = MockResizeObserver.instances[0]!;
+
+    mockRect(element, { width: 130, height: 70 });
+    instance.trigger([
+      {
+        target: element,
+        contentRect: {
+          width: 80,
+          height: 40
+        } as DOMRectReadOnly
+      } as unknown as ResizeObserverEntry
+    ]);
+    expect(state.width()).toBe(130);
+    expect(state.height()).toBe(70);
+
+    mockRect(element, { width: 150, height: 90 });
+    instance.trigger([]);
+    expect(state.width()).toBe(150);
+    expect(state.height()).toBe(90);
   });
 
   it('maps logical observer axes to physical size for vertical writing modes', () => {
@@ -343,6 +397,23 @@ describe('useSize', () => {
     expect(second.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
   });
 
+  it('refreshes the owned observer when start is called while active', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const { value: state } = createRoot(() => useSize(element));
+    const first = MockResizeObserver.instances[0]!;
+
+    mockRect(element, { width: 120, height: 80 });
+    state.start();
+
+    expect(first.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances).toHaveLength(2);
+    expect(state.width()).toBe(120);
+    expect(state.height()).toBe(80);
+  });
+
   it('falls back when ResizeObserver is unavailable', () => {
     globalThis.ResizeObserver = undefined as never;
 
@@ -463,6 +534,46 @@ describe('useSize', () => {
     expect(addEventListener).not.toHaveBeenCalled();
   });
 
+  it('disconnects an observer whose constructor disposes the root', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const root = createRoot(() => useSize(element));
+    const initialObserver = MockResizeObserver.instances[0]!;
+
+    MockResizeObserver.onConstruct = () => {
+      root.dispose();
+    };
+    root.value.refresh();
+
+    const abortedObserver = MockResizeObserver.instances[1]!;
+    expect(initialObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(abortedObserver.observe).not.toHaveBeenCalled();
+    expect(abortedObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(root.value.active()).toBe(false);
+  });
+
+  it('disconnects an observer whose constructor stops the instance', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const { value: state } = createRoot(() => useSize(element));
+    const initialObserver = MockResizeObserver.instances[0]!;
+
+    MockResizeObserver.onConstruct = () => {
+      state.stop();
+    };
+    state.refresh();
+
+    const abortedObserver = MockResizeObserver.instances[1]!;
+    expect(initialObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(abortedObserver.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
+    expect(abortedObserver.disconnect).toHaveBeenCalledTimes(1);
+    expect(state.active()).toBe(false);
+  });
+
   it('keeps ownership when observe synchronously refreshes setup', () => {
     windowRef.ResizeObserver = MockResizeObserver as never;
 
@@ -502,6 +613,50 @@ describe('useSize', () => {
     expect(initialObserver.disconnect).toHaveBeenCalledTimes(1);
     expect(replacedObserver.disconnect).toHaveBeenCalledTimes(1);
     expect(currentObserver.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops refresh when disconnect synchronously disposes the root', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    const root = createRoot(() => useSize(element));
+    const observer = MockResizeObserver.instances[0]!;
+    observer.disconnect.mockImplementationOnce(() => {
+      root.dispose();
+    });
+
+    root.value.refresh();
+
+    expect(observer.disconnect).toHaveBeenCalledTimes(1);
+    expect(MockResizeObserver.instances).toHaveLength(1);
+    expect(root.value.active()).toBe(false);
+  });
+
+  it('stops deferred setup when target resolution disposes the root', async () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 60 });
+    let disposeRoot = () => {};
+    let reads = 0;
+    const target = () => {
+      reads += 1;
+      if (reads === 1) {
+        return null;
+      }
+      disposeRoot();
+      return element;
+    };
+    const root = createRoot(() => useSize(target));
+    disposeRoot = root.dispose;
+
+    await Promise.resolve();
+
+    expect(reads).toBe(2);
+    expect(root.value.active()).toBe(false);
+    expect(MockResizeObserver.instances).toHaveLength(0);
+    expect(root.value.width()).toBe(0);
   });
 
   it('does not reactivate a stopped instance after dispose', () => {
