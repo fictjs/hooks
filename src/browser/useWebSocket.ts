@@ -266,7 +266,13 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         return;
       }
       status('OPEN');
+      if (destroyed || socket !== currentSocket) {
+        return;
+      }
       resetReconnectAttempts();
+      if (destroyed || socket !== currentSocket) {
+        return;
+      }
       options.onOpen?.(event);
     };
 

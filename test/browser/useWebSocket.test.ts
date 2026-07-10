@@ -86,6 +86,63 @@ describe('useWebSocket', () => {
     expect(state.data()).toEqual({ value: 1 });
   });
 
+  it.each([
+    ['status', 'OPEN'],
+    ['reconnect count', 0]
+  ])('does not call onOpen after the %s signal update disposes the owner', (_name, trigger) => {
+    const onOpen = vi.fn();
+    const reconnecting = trigger === 0;
+    if (reconnecting) {
+      vi.useFakeTimers();
+    }
+    let dispose = () => {};
+    let triggered = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (!triggered && value === trigger) {
+          triggered = true;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useWebSocket('ws://fict.test', {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false,
+          autoReconnect: reconnecting ? { retries: 1, delay: 0 } : false,
+          onOpen
+        })
+      );
+      dispose = root.dispose;
+      root.value.open();
+
+      if (reconnecting) {
+        MockWebSocket.instances[0]!.serverClose();
+        vi.runAllTimers();
+        MockWebSocket.instances[1]!.open();
+      } else {
+        MockWebSocket.instances[0]!.open();
+      }
+
+      expect(triggered).toBe(true);
+      expect(onOpen).not.toHaveBeenCalled();
+      expect(root.value.status()).toBe('CLOSED');
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('captures deserialize errors instead of throwing globally', () => {
     const onError = vi.fn();
     const { value: state } = createRoot(() =>
