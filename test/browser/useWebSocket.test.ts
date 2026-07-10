@@ -475,6 +475,144 @@ describe('useWebSocket', () => {
     expect(currentSocket.close).toHaveBeenCalledOnce();
   });
 
+  it('stops setup when the binaryType setter disposes the owner', () => {
+    let dispose = () => {};
+    const addEventListener = vi.fn();
+    const ConfiguringWebSocket = function ConfiguringWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      vi.spyOn(currentSocket, 'addEventListener').mockImplementation(addEventListener);
+      Object.defineProperty(currentSocket, 'binaryType', {
+        configurable: true,
+        set() {
+          dispose();
+        }
+      });
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ConfiguringWebSocket,
+        immediate: false,
+        binaryType: 'arraybuffer'
+      })
+    );
+    dispose = root.dispose;
+
+    expect(root.value.open()).toBe(false);
+    expect(addEventListener).not.toHaveBeenCalled();
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+    expect(root.value.status()).toBe('CLOSED');
+  });
+
+  it('rolls back listener setup when registration disposes the owner', () => {
+    let dispose = () => {};
+    let armed = true;
+    const ConfiguringWebSocket = function ConfiguringWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      const addEventListener = currentSocket.addEventListener.bind(currentSocket);
+      vi.spyOn(currentSocket, 'addEventListener').mockImplementation((...args) => {
+        addEventListener(...args);
+        if (armed) {
+          armed = false;
+          dispose();
+        }
+      });
+      vi.spyOn(currentSocket, 'removeEventListener');
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ConfiguringWebSocket,
+        immediate: false
+      })
+    );
+    dispose = root.dispose;
+
+    const openResult = root.value.open();
+    const currentSocket = MockWebSocket.instances[0]!;
+
+    expect(openResult).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+    expect(currentSocket.close).toHaveBeenCalledOnce();
+    expect(root.value.status()).toBe('CLOSED');
+  });
+
+  it('preserves listener cleanup when registration reentrantly reconnects', () => {
+    let reconnect = () => false;
+    let armed = true;
+    const ConfiguringWebSocket = function ConfiguringWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      const addEventListener = currentSocket.addEventListener.bind(currentSocket);
+      vi.spyOn(currentSocket, 'addEventListener').mockImplementation((...args) => {
+        addEventListener(...args);
+        if (armed) {
+          armed = false;
+          reconnect();
+        }
+      });
+      vi.spyOn(currentSocket, 'removeEventListener');
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ConfiguringWebSocket,
+        immediate: false
+      })
+    );
+    reconnect = root.value.reconnect;
+
+    expect(root.value.open()).toBe(true);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(MockWebSocket.instances[0]!.removeEventListener).toHaveBeenCalledOnce();
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+
+    root.dispose();
+    expect(MockWebSocket.instances[1]!.removeEventListener).toHaveBeenCalledTimes(4);
+    expect(MockWebSocket.instances[1]!.close).toHaveBeenCalledOnce();
+  });
+
+  it('rolls back every registered listener when setup throws', () => {
+    const setupError = new Error('listener setup failed');
+    const ConfiguringWebSocket = function ConfiguringWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      const addEventListener = currentSocket.addEventListener.bind(currentSocket);
+      let addCalls = 0;
+      vi.spyOn(currentSocket, 'addEventListener').mockImplementation((...args) => {
+        addCalls += 1;
+        addEventListener(...args);
+        if (addCalls === 2) {
+          throw setupError;
+        }
+      });
+      vi.spyOn(currentSocket, 'removeEventListener');
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ConfiguringWebSocket,
+        immediate: false
+      })
+    );
+
+    expect(() => root.value.open()).toThrow(setupError);
+    expect(MockWebSocket.instances[0]!.removeEventListener).toHaveBeenCalledTimes(2);
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+    expect(root.value.status()).toBe('CLOSED');
+  });
+
   it('does not reconnect when a constructor error callback closes the connection', () => {
     vi.useFakeTimers();
     let closeFromError = () => {};

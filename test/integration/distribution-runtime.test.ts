@@ -32,6 +32,20 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'rolls back useWebSocket registration transactions in the built %s entry',
+    (format) => {
+      const fixture = resolve('test/fixtures/distribution-websocket-registration-transaction.mjs');
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves clipboard reset timer ownership in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-clipboard-reset-reentry.mjs');

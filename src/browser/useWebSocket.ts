@@ -288,12 +288,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     socket = currentSocket;
     socketUrlKey = nextUrlKey;
     status(toStatus(currentSocket.readyState, currentSocket));
-    if (destroyed || currentOpenCallId !== openCallId || socket !== currentSocket) {
+    const ownsSocketSetup = () =>
+      !destroyed && !manuallyClosed && socket === currentSocket;
+    if (!ownsSocketSetup()) {
       return hasOwnedSocket();
-    }
-
-    if (options.binaryType) {
-      currentSocket.binaryType = options.binaryType;
     }
 
     const onOpen = (event: Event) => {
@@ -358,16 +356,66 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       }
     };
 
-    currentSocket.addEventListener('open', onOpen as EventListener);
-    currentSocket.addEventListener('message', onMessage as EventListener);
-    currentSocket.addEventListener('error', onError as EventListener);
-    currentSocket.addEventListener('close', onClose as EventListener);
+    const registrations: Array<{ type: string; listener: EventListener }> = [];
+    const removeRegistrations = () => {
+      for (const registration of registrations) {
+        try {
+          currentSocket.removeEventListener(registration.type, registration.listener);
+        } catch {
+          // Setup rollback is best-effort and must preserve the triggering operation.
+        }
+      }
+    };
+    const abandonInvalidSetup = () => {
+      removeRegistrations();
+      return hasOwnedSocket();
+    };
+
+    try {
+      const binaryType = options.binaryType;
+      if (!ownsSocketSetup()) {
+        return abandonInvalidSetup();
+      }
+      if (binaryType) {
+        currentSocket.binaryType = binaryType;
+        if (!ownsSocketSetup()) {
+          return abandonInvalidSetup();
+        }
+      }
+
+      const listeners: Array<{ type: string; listener: EventListener }> = [
+        { type: 'open', listener: onOpen as EventListener },
+        { type: 'message', listener: onMessage as EventListener },
+        { type: 'error', listener: onError as EventListener },
+        { type: 'close', listener: onClose as EventListener }
+      ];
+      for (const registration of listeners) {
+        registrations.push(registration);
+        currentSocket.addEventListener(registration.type, registration.listener);
+        if (!ownsSocketSetup()) {
+          return abandonInvalidSetup();
+        }
+      }
+    } catch (setupError) {
+      removeRegistrations();
+      if (socket === currentSocket) {
+        socket = null;
+        socketUrlKey = null;
+        cleanupSocket = () => {};
+        status('CLOSED');
+        try {
+          currentSocket.close();
+        } catch {
+          // Preserve the setup failure after best-effort socket rollback.
+        }
+      }
+      throw setupError;
+    }
 
     cleanupSocket = () => {
-      currentSocket.removeEventListener('open', onOpen as EventListener);
-      currentSocket.removeEventListener('message', onMessage as EventListener);
-      currentSocket.removeEventListener('error', onError as EventListener);
-      currentSocket.removeEventListener('close', onClose as EventListener);
+      for (const registration of registrations) {
+        currentSocket.removeEventListener(registration.type, registration.listener);
+      }
       cleanupSocket = () => {};
     };
 
