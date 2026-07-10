@@ -66,6 +66,56 @@ describe('useDebounceFn', () => {
     expect(callback).toHaveBeenLastCalledWith('second');
   });
 
+  it('queues reentrant calls made by the leading callback', () => {
+    vi.useFakeTimers();
+    const controlsRef = {
+      current: undefined as ReturnType<typeof useDebounceFn<(value: string) => void>> | undefined
+    };
+    const callback = vi.fn((value: string) => {
+      if (value === 'outer') {
+        controlsRef.current!.run('inner');
+      }
+    });
+
+    const controls = createRoot(() =>
+      useDebounceFn(callback, 100, { leading: true, trailing: true })
+    ).value;
+    controlsRef.current = controls;
+
+    controls.run('outer');
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenLastCalledWith('outer');
+    expect(controls.pending()).toBe(true);
+
+    vi.advanceTimersByTime(100);
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback).toHaveBeenLastCalledWith('inner');
+  });
+
+  it('honors cancellation from the leading callback', () => {
+    vi.useFakeTimers();
+    const controlsRef = {
+      current: undefined as ReturnType<typeof useDebounceFn<(value: string) => void>> | undefined
+    };
+    const callback = vi.fn<(value: string) => void>(() => {
+      controlsRef.current!.cancel();
+    });
+
+    const controls = createRoot(() =>
+      useDebounceFn(callback, 100, { leading: true, trailing: true })
+    ).value;
+    controlsRef.current = controls;
+
+    controls.run('first');
+    controls.run('second');
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(controls.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('does not run trailing callback for a single leading call', () => {
     vi.useFakeTimers();
     const callback = vi.fn();

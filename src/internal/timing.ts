@@ -84,18 +84,18 @@ export function createDebouncedFn<T extends Procedure>(
     const shouldCallLeading = leading && !state.timer;
     state.lastArgs = args;
     pending(true);
+    scheduleTimers();
 
     if (shouldCallLeading) {
+      state.lastArgs = undefined;
+      pending(false);
       try {
         fn(...args);
-      } finally {
-        state.lastArgs = undefined;
-        pending(false);
-        clearTimers();
+      } catch (error) {
+        cancel();
+        throw error;
       }
     }
-
-    scheduleTimers();
   };
 
   const cancel = () => {
