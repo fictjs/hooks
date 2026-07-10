@@ -61,7 +61,7 @@
     "pack:dry": "pnpm run build && pnpm run verify:metadata",
     "typecheck": "tsc --noEmit",
     "test:types": "pnpm run build && tsc -p test-dts/tsconfig.json --noEmit",
-    "test:types:ts53": "pnpm run build && npm exec --yes --package=typescript@5.3.3 -- tsc -p test-dts/tsconfig.ts53.json --noEmit",
+    "test:types:ts53": "pnpm run build && npm exec --yes --package=typescript@5.3.3 -- tsc -p test-dts/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
