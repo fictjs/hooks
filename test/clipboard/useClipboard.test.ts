@@ -108,6 +108,44 @@ describe('useClipboard', () => {
     expect(throwingDocument.body.querySelector('textarea')).toBeNull();
   });
 
+  it('returns false when the fallback document has no body', async () => {
+    const execCommand = vi.fn(() => true);
+    const documentRef = createClipboardDocument(execCommand);
+    Object.defineProperty(documentRef, 'body', {
+      configurable: true,
+      value: null
+    });
+    const { value: state } = createRoot(() =>
+      useClipboard({ navigator: null, document: documentRef, window })
+    );
+
+    await expect(state.copy('missing body')).resolves.toBe(false);
+    expect(state.copied()).toBe(false);
+    expect(execCommand).not.toHaveBeenCalled();
+  });
+
+  it('does not replace a successful fallback result with a cleanup error', async () => {
+    const execCommand = vi.fn(() => true);
+    const documentRef = createClipboardDocument(execCommand);
+    const createElement = documentRef.createElement.bind(documentRef);
+    vi.spyOn(documentRef, 'createElement').mockImplementation((tagName) => {
+      const element = createElement(tagName);
+      if (tagName === 'textarea') {
+        vi.spyOn(element, 'remove').mockImplementation(() => {
+          throw new Error('cleanup failed');
+        });
+      }
+      return element;
+    });
+    const { value: state } = createRoot(() =>
+      useClipboard({ navigator: null, document: documentRef, window })
+    );
+
+    await expect(state.copy('copied')).resolves.toBe(true);
+    expect(state.copied()).toBe(true);
+    expect(execCommand).toHaveBeenCalledWith('copy');
+  });
+
   it('reports Clipboard API failures without retaining copied state', async () => {
     const writeText = vi.fn(async () => {
       throw new Error('permission denied');

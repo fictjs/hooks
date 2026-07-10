@@ -23,20 +23,30 @@ export interface UseClipboardReturn {
 }
 
 function fallbackCopy(value: string, documentRef: Document): boolean {
-  const textarea = documentRef.createElement('textarea');
-  textarea.value = value;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'absolute';
-  textarea.style.left = '-9999px';
-  documentRef.body.appendChild(textarea);
-  textarea.select();
+  let textarea: HTMLTextAreaElement | undefined;
 
   try {
+    const body = documentRef.body;
+    if (!body) {
+      return false;
+    }
+
+    textarea = documentRef.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    body.appendChild(textarea);
+    textarea.select();
     return documentRef.execCommand('copy');
   } catch {
     return false;
   } finally {
-    documentRef.body.removeChild(textarea);
+    try {
+      textarea?.remove();
+    } catch {
+      // Cleanup failures must not change the boolean copy result.
+    }
   }
 }
 
