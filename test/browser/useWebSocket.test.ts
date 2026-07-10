@@ -809,6 +809,72 @@ describe('useWebSocket', () => {
     }
   );
 
+  it.each(['getter', 'setter'] as const)(
+    'retains provisional ownership until an asynchronous binaryType %s close arrives',
+    (trigger) => {
+      let closeDuringSetup = () => {};
+      const onClose = vi.fn();
+      const ConfiguringWebSocket = function ConfiguringWebSocket(
+        url: string | URL,
+        protocols?: string | string[]
+      ) {
+        const currentSocket = new MockWebSocket(url, protocols);
+        vi.spyOn(currentSocket, 'addEventListener');
+        vi.spyOn(currentSocket, 'removeEventListener');
+        currentSocket.close.mockImplementation(() => {
+          currentSocket.readyState = MockWebSocket.CLOSING;
+        });
+        if (trigger === 'setter') {
+          Object.defineProperty(currentSocket, 'binaryType', {
+            configurable: true,
+            set() {
+              closeDuringSetup();
+            }
+          });
+        }
+        return currentSocket;
+      } as unknown as typeof WebSocket;
+      const options: UseWebSocketOptions = {
+        webSocket: ConfiguringWebSocket,
+        immediate: false,
+        onClose
+      };
+      if (trigger === 'getter') {
+        Object.defineProperty(options, 'binaryType', {
+          configurable: true,
+          get() {
+            closeDuringSetup();
+            return 'arraybuffer';
+          }
+        });
+      } else {
+        options.binaryType = 'arraybuffer';
+      }
+      const root = createRoot(() => useWebSocket('ws://fict.test', options));
+      closeDuringSetup = root.value.close;
+
+      expect(root.value.open()).toBe(true);
+      const currentSocket = MockWebSocket.instances[0]!;
+      expect(root.value.status()).toBe('CLOSING');
+      expect(currentSocket.addEventListener).toHaveBeenCalledOnce();
+      expect(currentSocket.addEventListener).toHaveBeenCalledWith('close', expect.any(Function));
+      expect(currentSocket.removeEventListener).not.toHaveBeenCalled();
+      expect(currentSocket.close).toHaveBeenCalledOnce();
+      expect(onClose).not.toHaveBeenCalled();
+
+      currentSocket.serverClose();
+
+      expect(root.value.status()).toBe('CLOSED');
+      expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+      expect(currentSocket.close).toHaveBeenCalledOnce();
+      expect(onClose).toHaveBeenCalledOnce();
+      root.dispose();
+      expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+      expect(currentSocket.close).toHaveBeenCalledOnce();
+      expect(onClose).toHaveBeenCalledOnce();
+    }
+  );
+
   it('rolls back listener setup when registration disposes the owner', () => {
     let dispose = () => {};
     let armed = true;

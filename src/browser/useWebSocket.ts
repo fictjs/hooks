@@ -532,12 +532,12 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
 
       const binaryType = options.binaryType;
       if (!ownsSocketSetup()) {
-        return abandonInvalidSetup();
+        return hasOwnedSocket();
       }
       if (binaryType) {
         currentSocket.binaryType = binaryType;
         if (!ownsSocketSetup()) {
-          return abandonInvalidSetup();
+          return hasOwnedSocket();
         }
       }
     } catch (setupError) {
