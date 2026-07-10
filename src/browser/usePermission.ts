@@ -32,10 +32,10 @@ function normalizePermission(input: PermissionInput): PermissionDescriptor {
 }
 
 function isSamePermission(a: PermissionDescriptor, b: PermissionDescriptor): boolean {
-  const aRecord = a as unknown as Record<string, unknown>;
-  const bRecord = b as unknown as Record<string, unknown>;
-  const keys = new Set([...Object.keys(aRecord), ...Object.keys(bRecord)]);
-  return [...keys].every((key) => Object.is(aRecord[key], bRecord[key]));
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].every((key) =>
+    Object.is(Reflect.get(a as object, key), Reflect.get(b as object, key))
+  );
 }
 
 /**
