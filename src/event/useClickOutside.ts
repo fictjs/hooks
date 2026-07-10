@@ -62,8 +62,13 @@ export function useClickOutside(
   handler: (event: Event) => void,
   options: UseClickOutsideOptions = {}
 ): UseClickOutsideControls {
-  const windowRef = options.window === undefined ? defaultWindow : options.window;
   const documentRef = options.document === undefined ? defaultDocument : options.document;
+  const windowRef =
+    options.window === undefined
+      ? options.document === undefined
+        ? defaultWindow
+        : documentRef?.defaultView
+      : options.window;
   const ignoreTargets = options.ignore ? toArray(options.ignore) : [];
   const realmWindow = (windowRef ?? documentRef?.defaultView) as WindowWithDomConstructors | null;
   const NodeCtor = realmWindow?.Node;

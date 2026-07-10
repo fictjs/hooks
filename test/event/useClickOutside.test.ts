@@ -172,4 +172,29 @@ describe('useClickOutside', () => {
     dispose();
     iframe.remove();
   });
+
+  it('derives the event realm from an injected document', () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const realmWindow = iframe.contentWindow as Window & typeof globalThis;
+    const realmDocument = iframe.contentDocument!;
+    realmDocument.body.innerHTML = '<div id="target"></div><button id="outside"></button>';
+    const target = realmDocument.querySelector('#target')!;
+    const outside = realmDocument.querySelector('#outside')!;
+    const handler = vi.fn();
+
+    const { dispose } = createRoot(() =>
+      useClickOutside(target, handler, {
+        document: realmDocument
+      })
+    );
+
+    outside.dispatchEvent(new realmWindow.Event('pointerdown', { bubbles: true }));
+    outside.dispatchEvent(new realmWindow.Event('click', { bubbles: true }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    dispose();
+    iframe.remove();
+  });
 });
