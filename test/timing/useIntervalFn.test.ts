@@ -5,6 +5,23 @@ import { useIntervalFn } from '../../src/timing/useIntervalFn';
 describe('useIntervalFn', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('clears a zero-valued interval handle', () => {
+    const clearIntervalMock = vi.fn();
+    vi.stubGlobal(
+      'setInterval',
+      vi.fn(() => 0)
+    );
+    vi.stubGlobal('clearInterval', clearIntervalMock);
+
+    const { value: controls } = createRoot(() => useIntervalFn(vi.fn(), 100));
+    controls.cancel();
+
+    expect(clearIntervalMock).toHaveBeenCalledOnce();
+    expect(clearIntervalMock).toHaveBeenCalledWith(0);
+    expect(controls.pending()).toBe(false);
   });
 
   it('runs callback on interval', () => {

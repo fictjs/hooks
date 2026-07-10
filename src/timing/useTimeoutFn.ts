@@ -22,7 +22,7 @@ export function useTimeoutFn(
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const cancel = () => {
-    if (timer) {
+    if (timer !== undefined) {
       clearTimeout(timer);
       timer = undefined;
     }

@@ -5,6 +5,23 @@ import { useTimeoutFn } from '../../src/timing/useTimeoutFn';
 describe('useTimeoutFn', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('clears a zero-valued timeout handle', () => {
+    const clearTimeoutMock = vi.fn();
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => 0)
+    );
+    vi.stubGlobal('clearTimeout', clearTimeoutMock);
+
+    const { value: controls } = createRoot(() => useTimeoutFn(vi.fn(), 100));
+    controls.cancel();
+
+    expect(clearTimeoutMock).toHaveBeenCalledOnce();
+    expect(clearTimeoutMock).toHaveBeenCalledWith(0);
+    expect(controls.pending()).toBe(false);
   });
 
   it('runs callback after delay', () => {

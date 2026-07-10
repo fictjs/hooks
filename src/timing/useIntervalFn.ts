@@ -22,7 +22,7 @@ export function useIntervalFn(
   let timer: ReturnType<typeof setInterval> | undefined;
 
   const cancel = () => {
-    if (timer) {
+    if (timer !== undefined) {
       clearInterval(timer);
       timer = undefined;
     }
