@@ -207,4 +207,23 @@ describe('usePermission', () => {
 
     expect(addEventListener).toHaveBeenCalledTimes(0);
   });
+
+  it('does not query or bind a status after dispose', async () => {
+    const status = new MockPermissionStatus('camera', 'granted');
+    const addEventListener = vi.spyOn(status, 'addEventListener');
+    const query = vi.fn(async () => status);
+    const root = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query } },
+        immediate: false
+      })
+    );
+
+    root.dispose();
+
+    await expect(root.value.query()).resolves.toBeNull();
+    expect(query).not.toHaveBeenCalled();
+    expect(addEventListener).not.toHaveBeenCalled();
+    expect(root.value.state()).toBe('prompt');
+  });
 });

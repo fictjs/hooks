@@ -61,6 +61,7 @@ export function usePermission(
   let initialized = false;
   let cleanup = () => {};
   let queryId = 0;
+  let disposed = false;
 
   const syncPermission = () => {
     const nextPermission = readPermission();
@@ -78,7 +79,9 @@ export function usePermission(
     state(nextStatus.state);
 
     const onChange = () => {
-      state(nextStatus.state);
+      if (!disposed) {
+        state(nextStatus.state);
+      }
     };
 
     nextStatus.addEventListener('change', onChange as EventListener);
@@ -91,6 +94,10 @@ export function usePermission(
   const queryPermission = async (
     currentPermission: PermissionDescriptor
   ): Promise<PermissionStatus | null> => {
+    if (disposed) {
+      return null;
+    }
+
     if (!navigatorRef?.permissions?.query) {
       isSupported(false);
       return null;
@@ -102,7 +109,7 @@ export function usePermission(
 
     try {
       const nextStatus = await navigatorRef.permissions.query(currentPermission);
-      if (currentQueryId !== queryId) {
+      if (disposed || currentQueryId !== queryId) {
         return null;
       }
       bindStatus(nextStatus);
@@ -116,6 +123,9 @@ export function usePermission(
   };
 
   const query = (): Promise<PermissionStatus | null> => {
+    if (disposed) {
+      return Promise.resolve(null);
+    }
     const current = syncPermission();
     return queryPermission(current.permission);
   };
@@ -131,6 +141,7 @@ export function usePermission(
   });
 
   tryOnDestroy(() => {
+    disposed = true;
     queryId += 1;
     cleanup();
   });
