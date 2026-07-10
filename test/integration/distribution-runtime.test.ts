@@ -407,6 +407,22 @@ describe('distribution runtime', () => {
   );
 
   it.each(['esm', 'cjs'])(
+    'rolls back useWebSocket reconnect registration failures in the built %s entry',
+    (format) => {
+      const fixture = resolve(
+        'test/fixtures/distribution-websocket-reconnect-registration-failure.mjs'
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [fixture, format], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        })
+      ).not.toThrow();
+    }
+  );
+
+  it.each(['esm', 'cjs'])(
     'preserves clipboard reset timer ownership in the built %s entry',
     (format) => {
       const fixture = resolve('test/fixtures/distribution-clipboard-reset-reentry.mjs');

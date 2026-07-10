@@ -1262,6 +1262,50 @@ describe('useWebSocket', () => {
     root.dispose();
   });
 
+  it('rolls back a failed reconnect timer registration and remains recoverable', () => {
+    const registrationError = new Error('timer registration failed');
+    const timers: Array<() => void> = [];
+    let failRegistration = true;
+    vi.stubGlobal('setTimeout', (callback: TimerHandler) => {
+      if (failRegistration) {
+        failRegistration = false;
+        throw registrationError;
+      }
+      if (typeof callback === 'function') {
+        timers.push(callback as () => void);
+      }
+      return timers.length;
+    });
+    vi.stubGlobal('clearTimeout', vi.fn());
+    const onError = vi.fn();
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false,
+        autoReconnect: { retries: 1, delay: 0 },
+        onError
+      })
+    );
+    root.value.open();
+
+    expect(() => MockWebSocket.instances[0]!.serverClose()).not.toThrow();
+    expect(root.value.status()).toBe('CLOSED');
+    expect(root.value.reconnectCount()).toBe(0);
+    expect(root.value.error()).toBe(registrationError);
+    expect(onError).toHaveBeenCalledWith(registrationError);
+    expect(timers).toHaveLength(0);
+
+    expect(root.value.reconnect()).toBe(true);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    MockWebSocket.instances[1]!.serverClose();
+    expect(root.value.reconnectCount()).toBe(1);
+    expect(timers).toHaveLength(1);
+
+    timers[0]!();
+    expect(MockWebSocket.instances).toHaveLength(3);
+    root.dispose();
+  });
+
   it('auto reconnects when onClose throws', () => {
     vi.useFakeTimers();
     const callbackError = new Error('close callback failed');

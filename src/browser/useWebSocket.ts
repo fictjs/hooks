@@ -176,6 +176,8 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return;
     }
 
+    const previousReconnectAttempts = reconnectAttempts;
+    const previousReconnectCount = reconnectCount();
     reconnectAttempts += 1;
     reconnectCount(reconnectAttempts);
     if (
@@ -216,7 +218,31 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       reconnectTimerEpoch += 1;
       open();
     };
-    const timer = setTimeout(handleReconnect, Math.max(0, delay));
+    let timer: ReturnType<typeof setTimeout>;
+    try {
+      timer = setTimeout(handleReconnect, Math.max(0, delay));
+    } catch (nextError) {
+      if (
+        destroyed ||
+        manuallyClosed ||
+        socket !== null ||
+        scheduleOperation !== operationEpoch ||
+        scheduleEpoch !== reconnectTimerEpoch
+      ) {
+        return;
+      }
+      reconnectTimerEpoch += 1;
+      reconnectAttempts = previousReconnectAttempts;
+      reconnectCount(previousReconnectCount);
+      if (destroyed || manuallyClosed || socket !== null || scheduleOperation !== operationEpoch) {
+        return;
+      }
+      reportError(
+        nextError,
+        () => !manuallyClosed && socket === null && scheduleOperation === operationEpoch
+      );
+      return;
+    }
     if (firedSynchronously) {
       return;
     }
