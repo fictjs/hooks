@@ -159,7 +159,13 @@ export function useRequest<TData, TParams extends unknown[] = []>(
         }
         settled = true;
         if (registration.timer !== undefined) {
-          clearTimeout(registration.timer);
+          const currentTimer = registration.timer;
+          registration.timer = undefined;
+          try {
+            clearTimeout(currentTimer);
+          } catch {
+            // Retry completion remains terminal when an injected timer rejects cleanup.
+          }
         }
         retryDelayCancelers.delete(finish);
         resolve();

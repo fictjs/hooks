@@ -813,6 +813,31 @@ describe('useRequest', () => {
     expect(state.params()).toEqual(['inner']);
   });
 
+  it('settles a retry delay when timer cleanup throws', async () => {
+    let retryTimer = () => {};
+    const setTimeout = vi.fn((callback: TimerHandler) => {
+      retryTimer = callback as () => void;
+      return 1;
+    });
+    vi.stubGlobal('setTimeout', setTimeout);
+    vi.stubGlobal('clearTimeout', () => {
+      throw new Error('timer cleanup failed');
+    });
+    const service = vi.fn().mockRejectedValueOnce(new Error('retry')).mockResolvedValue('ok');
+    const root = createRoot(() =>
+      useRequest(service, { manual: true, retryCount: 1, retryInterval: 10 })
+    );
+    const pending = root.value.runAsync();
+    await vi.waitFor(() => expect(setTimeout).toHaveBeenCalledOnce());
+
+    expect(() => retryTimer()).not.toThrow();
+
+    await expect(pending).resolves.toBe('ok');
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(root.value.loading()).toBe(false);
+    root.dispose();
+  });
+
   it('polls repeatedly and stops polling on dispose', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');
