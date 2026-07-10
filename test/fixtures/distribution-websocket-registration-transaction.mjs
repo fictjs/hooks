@@ -35,8 +35,12 @@ const createOwnedRoot = (factory) => {
   );
   armed = true;
 
-  if (root.value.open() || sockets.instances[0].addCalls !== 0) {
-    throw new Error('built useWebSocket registered listeners after terminal binaryType setup');
+  if (
+    root.value.open() ||
+    sockets.instances[0].addCalls !== 1 ||
+    sockets.instances[0].removeCalls !== 1
+  ) {
+    throw new Error('built useWebSocket did not roll back provisional binaryType setup');
   }
 }
 

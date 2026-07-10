@@ -721,13 +721,13 @@ describe('useWebSocket', () => {
 
   it('stops setup when the binaryType setter disposes the owner', () => {
     let dispose = () => {};
-    const addEventListener = vi.fn();
     const ConfiguringWebSocket = function ConfiguringWebSocket(
       url: string | URL,
       protocols?: string | string[]
     ) {
       const currentSocket = new MockWebSocket(url, protocols);
-      vi.spyOn(currentSocket, 'addEventListener').mockImplementation(addEventListener);
+      vi.spyOn(currentSocket, 'addEventListener');
+      vi.spyOn(currentSocket, 'removeEventListener');
       Object.defineProperty(currentSocket, 'binaryType', {
         configurable: true,
         set() {
@@ -746,10 +746,68 @@ describe('useWebSocket', () => {
     dispose = root.dispose;
 
     expect(root.value.open()).toBe(false);
-    expect(addEventListener).not.toHaveBeenCalled();
-    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+    const currentSocket = MockWebSocket.instances[0]!;
+    expect(currentSocket.addEventListener).toHaveBeenCalledOnce();
+    expect(currentSocket.addEventListener).toHaveBeenCalledWith('close', expect.any(Function));
+    expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+    expect(currentSocket.close).toHaveBeenCalledOnce();
     expect(root.value.status()).toBe('CLOSED');
   });
+
+  it.each(['getter', 'setter'] as const)(
+    'handles a synchronous close during the binaryType %s with provisional ownership',
+    (trigger) => {
+      let closeDuringSetup = () => {};
+      const onClose = vi.fn();
+      const ConfiguringWebSocket = function ConfiguringWebSocket(
+        url: string | URL,
+        protocols?: string | string[]
+      ) {
+        const currentSocket = new MockWebSocket(url, protocols);
+        vi.spyOn(currentSocket, 'addEventListener');
+        vi.spyOn(currentSocket, 'removeEventListener');
+        if (trigger === 'setter') {
+          Object.defineProperty(currentSocket, 'binaryType', {
+            configurable: true,
+            set() {
+              closeDuringSetup();
+            }
+          });
+        }
+        return currentSocket;
+      } as unknown as typeof WebSocket;
+      const options: UseWebSocketOptions = {
+        webSocket: ConfiguringWebSocket,
+        immediate: false,
+        onClose
+      };
+      if (trigger === 'getter') {
+        Object.defineProperty(options, 'binaryType', {
+          configurable: true,
+          get() {
+            closeDuringSetup();
+            return 'arraybuffer';
+          }
+        });
+      } else {
+        options.binaryType = 'arraybuffer';
+      }
+      const root = createRoot(() => useWebSocket('ws://fict.test', options));
+      closeDuringSetup = root.value.close;
+
+      expect(root.value.open()).toBe(false);
+      const currentSocket = MockWebSocket.instances[0]!;
+      expect(root.value.status()).toBe('CLOSED');
+      expect(currentSocket.addEventListener).toHaveBeenCalledOnce();
+      expect(currentSocket.addEventListener).toHaveBeenCalledWith('close', expect.any(Function));
+      expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+      expect(currentSocket.close).toHaveBeenCalledOnce();
+      expect(onClose).toHaveBeenCalledOnce();
+      root.dispose();
+      expect(currentSocket.removeEventListener).toHaveBeenCalledOnce();
+      expect(currentSocket.close).toHaveBeenCalledOnce();
+    }
+  );
 
   it('rolls back listener setup when registration disposes the owner', () => {
     let dispose = () => {};

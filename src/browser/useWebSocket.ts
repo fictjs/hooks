@@ -522,6 +522,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     };
 
     try {
+      const closeRegistration = { type: 'close', listener: onClose as EventListener };
+      registrations.push(closeRegistration);
+      currentSocket.addEventListener(closeRegistration.type, closeRegistration.listener);
+      if (!ownsSocketSetup()) {
+        return abandonInvalidSetup();
+      }
+      cleanupSocket = cleanupCurrentSocket;
+
       const binaryType = options.binaryType;
       if (!ownsSocketSetup()) {
         return abandonInvalidSetup();
@@ -532,14 +540,6 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
           return abandonInvalidSetup();
         }
       }
-
-      const closeRegistration = { type: 'close', listener: onClose as EventListener };
-      registrations.push(closeRegistration);
-      currentSocket.addEventListener(closeRegistration.type, closeRegistration.listener);
-      if (!ownsSocketSetup()) {
-        return abandonInvalidSetup();
-      }
-      cleanupSocket = cleanupCurrentSocket;
     } catch (setupError) {
       rollbackSetupFailure();
       throw setupError;
