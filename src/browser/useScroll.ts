@@ -131,12 +131,15 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     if (next.x === previous.current.x && next.y === previous.current.y) {
       return;
     }
-    previous.current = next;
     x(next.x);
     if (!canCommit()) {
       return;
     }
     y(next.y);
+    if (!canCommit()) {
+      return;
+    }
+    previous.current = next;
   };
 
   const scrollListener = useEventListener(
