@@ -70,6 +70,43 @@ describe('useRequest', () => {
     expect(state.data()).toBe('manual');
   });
 
+  it('does not mutate state or cache after dispose', () => {
+    const cacheProvider = new Map();
+    const root = createRoot(() =>
+      useRequest(async () => 1, {
+        manual: true,
+        cacheKey: 'disposed-mutate',
+        cacheProvider
+      })
+    );
+
+    root.dispose();
+    root.value.mutate(2);
+
+    expect(root.value.data()).toBeUndefined();
+    expect(cacheProvider.has('disposed-mutate')).toBe(false);
+  });
+
+  it('does not commit a mutate updater that disposes the root', () => {
+    const cacheProvider = new Map();
+    const root = createRoot(() =>
+      useRequest(async () => 1, {
+        manual: true,
+        cacheKey: 'reentrant-disposed-mutate',
+        cacheProvider
+      })
+    );
+    root.value.mutate(1);
+
+    root.value.mutate(() => {
+      root.dispose();
+      return 2;
+    });
+
+    expect(root.value.data()).toBe(1);
+    expect(cacheProvider.get('reentrant-disposed-mutate')?.data).toBe(1);
+  });
+
   it('retries failed requests', async () => {
     const service = vi
       .fn<(...args: [number]) => Promise<number>>()

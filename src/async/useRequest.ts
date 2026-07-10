@@ -317,8 +317,16 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const mutate = (value: TData | ((prev: TData | undefined) => TData)) => {
+    if (disposed) {
+      return;
+    }
+
     const next =
       typeof value === 'function' ? (value as (prev: TData | undefined) => TData)(data()) : value;
+    if (disposed) {
+      return;
+    }
+
     data(next);
     saveCache(next);
   };
