@@ -83,7 +83,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
     const currentGeneration = ++generation;
     const nextWatchId = geolocationRef.watchPosition(
       (position) => {
-        if (currentGeneration !== generation) {
+        if (disposed || currentGeneration !== generation) {
           return;
         }
         coords({
@@ -95,7 +95,13 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
           heading: position.coords.heading,
           speed: position.coords.speed
         });
+        if (disposed || currentGeneration !== generation) {
+          return;
+        }
         locatedAt(position.timestamp);
+        if (disposed || currentGeneration !== generation) {
+          return;
+        }
         error(null);
       },
       (nextError) => {

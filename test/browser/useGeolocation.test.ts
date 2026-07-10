@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { describe, expect, it, vi } from 'vitest';
 import { useGeolocation } from '../../src/browser/useGeolocation';
 
@@ -324,6 +325,82 @@ describe('useGeolocation', () => {
     expect(state.coords().latitude).toBe(Number.POSITIVE_INFINITY);
     expect(state.locatedAt()).toBeNull();
     expect(state.error()).toBeNull();
+  });
+
+  it('stops success writes when the coords update disposes the owner', () => {
+    const geolocation = new MockGeolocation();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (typeof value === 'object' && value !== null && 'latitude' in value) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useGeolocation({ navigator: { geolocation } }));
+      dispose = root.dispose;
+      geolocation.emitError(2, 'unavailable');
+      const previousError = root.value.error();
+
+      geolocation.emitSuccess({ latitude: 35 }, 1234);
+
+      expect(root.value.coords().latitude).toBe(35);
+      expect(root.value.locatedAt()).toBeNull();
+      expect(root.value.error()).toBe(previousError);
+      expect(root.value.active()).toBe(false);
+      expect(geolocation.clearWatch).toHaveBeenCalledOnce();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
+  it('stops clearing errors when the timestamp update disposes the owner', () => {
+    const geolocation = new MockGeolocation();
+    let dispose = () => {};
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (value === 1234) {
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() => useGeolocation({ navigator: { geolocation } }));
+      dispose = root.dispose;
+      geolocation.emitError(2, 'unavailable');
+      const previousError = root.value.error();
+
+      geolocation.emitSuccess({ latitude: 35 }, 1234);
+
+      expect(root.value.coords().latitude).toBe(35);
+      expect(root.value.locatedAt()).toBe(1234);
+      expect(root.value.error()).toBe(previousError);
+      expect(root.value.active()).toBe(false);
+      expect(geolocation.clearWatch).toHaveBeenCalledOnce();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('returns unsupported state when geolocation api is missing', () => {
