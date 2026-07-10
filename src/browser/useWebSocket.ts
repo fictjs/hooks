@@ -205,6 +205,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     const currentOpenCallId = ++openCallId;
 
     const resolvedUrl = toValue(url);
+    if (destroyed || currentOpenCallId !== openCallId) {
+      return hasOwnedSocket();
+    }
     if (!webSocketCtor) {
       isSupported(false);
       return false;
@@ -220,6 +223,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       return false;
     }
     const nextUrlKey = String(resolvedUrl);
+    if (destroyed || currentOpenCallId !== openCallId) {
+      return hasOwnedSocket();
+    }
 
     if (socket && (socket.readyState === socket.CONNECTING || socket.readyState === socket.OPEN)) {
       if (socketUrlKey === nextUrlKey) {
@@ -251,6 +257,15 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       status('CLOSED');
       scheduleReconnect();
       return false;
+    }
+
+    if (destroyed || currentOpenCallId !== openCallId) {
+      try {
+        currentSocket.close();
+      } catch {
+        // A stale constructor result has no owner to receive cleanup failures.
+      }
+      return hasOwnedSocket();
     }
 
     socket = currentSocket;

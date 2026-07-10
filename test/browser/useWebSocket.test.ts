@@ -363,6 +363,91 @@ describe('useWebSocket', () => {
     root.dispose();
   });
 
+  it.each(['close', 'dispose'] as const)(
+    'does not open after the url accessor reentrantly calls %s',
+    (operation) => {
+      let runOperation = () => {};
+      let armed = false;
+      const accessor = () => {
+        if (armed) {
+          armed = false;
+          runOperation();
+        }
+        return 'ws://fict.test';
+      };
+      const root = createRoot(() =>
+        useWebSocket<string, string>(accessor, {
+          webSocket: MockWebSocket as unknown as typeof WebSocket,
+          immediate: false
+        })
+      );
+      runOperation = operation === 'close' ? root.value.close : root.dispose;
+      armed = true;
+
+      expect(root.value.open()).toBe(false);
+      expect(MockWebSocket.instances).toHaveLength(0);
+      expect(root.value.status()).toBe('CLOSED');
+    }
+  );
+
+  it('keeps a socket opened reentrantly from a successful constructor', () => {
+    let openReentrantly = () => false;
+    let constructions = 0;
+    const ReentrantWebSocket = function ReentrantWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      constructions += 1;
+      const currentSocket = new MockWebSocket(url, protocols);
+      if (constructions === 1) {
+        openReentrantly();
+      }
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ReentrantWebSocket,
+        immediate: false
+      })
+    );
+    openReentrantly = root.value.open;
+
+    expect(root.value.open()).toBe(true);
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+    expect(MockWebSocket.instances[1]!.close).not.toHaveBeenCalled();
+    MockWebSocket.instances[1]!.open();
+    expect(root.value.status()).toBe('OPEN');
+    root.dispose();
+    expect(MockWebSocket.instances[1]!.close).toHaveBeenCalledOnce();
+  });
+
+  it('closes a constructor result that disposes the owner before returning', () => {
+    let dispose = () => {};
+    const DisposingWebSocket = function DisposingWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      const currentSocket = new MockWebSocket(url, protocols);
+      dispose();
+      return currentSocket;
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: DisposingWebSocket,
+        immediate: false
+      })
+    );
+    dispose = root.dispose;
+
+    expect(root.value.open()).toBe(false);
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(MockWebSocket.instances[0]!.close).toHaveBeenCalledOnce();
+    expect(root.value.status()).toBe('CLOSED');
+  });
+
   it('does not reconnect when a constructor error callback closes the connection', () => {
     vi.useFakeTimers();
     let closeFromError = () => {};
