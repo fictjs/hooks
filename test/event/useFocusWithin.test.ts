@@ -179,6 +179,7 @@ describe('useFocusWithin', () => {
     disposeOnRead = true;
 
     root.value.refresh();
+    root.value.refresh();
 
     expect(root.value.focused()).toBe(true);
   });
