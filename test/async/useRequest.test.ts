@@ -1,4 +1,5 @@
 import { createRoot } from '@fictjs/runtime';
+import type { FictDevtoolsHook } from '@fictjs/runtime/advanced';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearRequestCache, useRequest } from '../../src/async/useRequest';
 
@@ -105,6 +106,56 @@ describe('useRequest', () => {
 
     expect(root.value.data()).toBe(1);
     expect(cacheProvider.get('reentrant-disposed-mutate')?.data).toBe(1);
+  });
+
+  it('does not cache or call onSuccess when the data signal update disposes the root', async () => {
+    const cacheProvider = new Map();
+    const service = vi.fn(async () => 42);
+    const onSuccess = vi.fn();
+    let dispose = () => {};
+    let armed = false;
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (armed && value === 42) {
+          armed = false;
+          dispose();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      const root = createRoot(() =>
+        useRequest(service, {
+          manual: true,
+          cacheKey: 'disposed-success',
+          cacheProvider,
+          onSuccess
+        })
+      );
+      dispose = root.dispose;
+      armed = true;
+
+      await expect(root.value.runAsync()).resolves.toBe(42);
+
+      expect(root.value.data()).toBe(42);
+      expect(root.value.loading()).toBe(false);
+      expect(cacheProvider.has('disposed-success')).toBe(false);
+      expect(onSuccess).not.toHaveBeenCalled();
+
+      await expect(root.value.runAsync()).resolves.toBe(42);
+      expect(service).toHaveBeenCalledTimes(1);
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
   });
 
   it('retries failed requests', async () => {

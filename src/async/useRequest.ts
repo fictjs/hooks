@@ -274,6 +274,10 @@ export function useRequest<TData, TParams extends unknown[] = []>(
       }
 
       data(result);
+      if (disposed || id !== callId) {
+        return data();
+      }
+
       saveCache(result);
       try {
         options.onSuccess?.(result, currentParams);
