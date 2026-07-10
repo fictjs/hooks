@@ -115,6 +115,70 @@ describe('useIntersectionObserver', () => {
     expect(MockIntersectionObserver.instances[1]!.observe).toHaveBeenCalledWith(second);
   });
 
+  it('keeps the observer created by a refresh reentered from target resolution', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    let refreshOnRead = false;
+    const controls = createRoot(() =>
+      useIntersectionObserver(() => {
+        if (refreshOnRead) {
+          refreshOnRead = false;
+          controls.refresh();
+        }
+        return element;
+      })
+    ).value;
+
+    refreshOnRead = true;
+    controls.refresh();
+
+    expect(MockIntersectionObserver.instances).toHaveLength(2);
+    expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledOnce();
+    expect(MockIntersectionObserver.instances[1]!.disconnect).not.toHaveBeenCalled();
+
+    controls.stop();
+    expect(MockIntersectionObserver.instances[1]!.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('preserves an observer restarted from the active signal notification', () => {
+    windowRef.IntersectionObserver = MockIntersectionObserver as never;
+    const element = document.createElement('div');
+    const globalWithHook = globalThis as typeof globalThis & {
+      __FICT_DEVTOOLS_HOOK__?: FictDevtoolsHook;
+    };
+    const previousHook = globalWithHook.__FICT_DEVTOOLS_HOOK__;
+    let controls: ReturnType<typeof useIntersectionObserver>;
+    let restart = false;
+    globalWithHook.__FICT_DEVTOOLS_HOOK__ = {
+      registerSignal: vi.fn(),
+      updateSignal: (_id, value) => {
+        if (restart && value === false) {
+          restart = false;
+          controls.start();
+        }
+      },
+      registerComputed: vi.fn(),
+      updateComputed: vi.fn(),
+      registerEffect: vi.fn(),
+      effectRun: vi.fn()
+    };
+
+    try {
+      controls = createRoot(() => useIntersectionObserver(element)).value;
+      restart = true;
+      controls.stop();
+
+      expect(controls.active()).toBe(true);
+      expect(MockIntersectionObserver.instances).toHaveLength(1);
+      expect(MockIntersectionObserver.instances[0]!.disconnect).not.toHaveBeenCalled();
+
+      controls.stop();
+      expect(MockIntersectionObserver.instances[0]!.disconnect).toHaveBeenCalledOnce();
+    } finally {
+      globalWithHook.__FICT_DEVTOOLS_HOOK__ = previousHook;
+    }
+  });
+
   it('retains cleanup ownership when observe synchronously refreshes', () => {
     windowRef.IntersectionObserver = MockIntersectionObserver as never;
     const first = document.createElement('div');
