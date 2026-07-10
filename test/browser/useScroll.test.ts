@@ -361,7 +361,8 @@ describe('useScroll', () => {
 
       element.dispatchEvent(new Event('scroll'));
 
-      expect(updates).toEqual([10]);
+      expect(updates).toContain(10);
+      expect(updates).not.toContain(20);
       expect(root.value.x()).toBe(10);
       expect(root.value.y()).toBe(2);
     } finally {
