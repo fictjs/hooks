@@ -5,10 +5,20 @@ import { useSize } from '../../src/browser/useSize';
 
 class MockResizeObserver {
   static instances: MockResizeObserver[] = [];
+  static observeError: unknown;
+  static disconnectError: unknown;
 
-  readonly observe = vi.fn();
+  readonly observe = vi.fn(() => {
+    if (MockResizeObserver.observeError) {
+      throw MockResizeObserver.observeError;
+    }
+  });
   readonly unobserve = vi.fn();
-  readonly disconnect = vi.fn();
+  readonly disconnect = vi.fn(() => {
+    if (MockResizeObserver.disconnectError) {
+      throw MockResizeObserver.disconnectError;
+    }
+  });
 
   private readonly callback: ResizeObserverCallback;
 
@@ -56,6 +66,8 @@ describe('useSize', () => {
     windowRef.ResizeObserver = originalWindowResizeObserver;
     globalThis.ResizeObserver = originalGlobalResizeObserver;
     MockResizeObserver.instances = [];
+    MockResizeObserver.observeError = undefined;
+    MockResizeObserver.disconnectError = undefined;
     vi.restoreAllMocks();
   });
 
@@ -350,6 +362,21 @@ describe('useSize', () => {
     const instance = MockResizeObserver.instances[0]!;
 
     dispose();
+    expect(instance.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnects a failed observer without replacing the observe error', () => {
+    windowRef.ResizeObserver = MockResizeObserver as never;
+    MockResizeObserver.observeError = new Error('observe failed');
+    MockResizeObserver.disconnectError = new Error('disconnect failed');
+
+    const element = document.createElement('div');
+    mockRect(element, { width: 100, height: 100 });
+
+    expect(() => createRoot(() => useSize(element))).toThrow('observe failed');
+
+    const instance = MockResizeObserver.instances[0]!;
+    expect(instance.observe).toHaveBeenCalledWith(element, { box: 'border-box' });
     expect(instance.disconnect).toHaveBeenCalledTimes(1);
   });
 });

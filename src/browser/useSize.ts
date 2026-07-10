@@ -183,7 +183,7 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
 
     isSupported(true);
     const generation = ++observerGeneration;
-    observer = new Observer((entries: ResizeObserverEntry[]) => {
+    const nextObserver = new Observer((entries: ResizeObserverEntry[]) => {
       if (disposed || !active() || generation !== observerGeneration) {
         return;
       }
@@ -202,7 +202,20 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       applyRect(nextTarget);
     });
 
-    observer.observe(nextTarget, { box });
+    try {
+      nextObserver.observe(nextTarget, { box });
+    } catch (error) {
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
+      try {
+        nextObserver.disconnect();
+      } catch {
+        // Preserve the original observe error.
+      }
+      throw error;
+    }
+    observer = nextObserver;
   };
 
   const scheduleDeferredTarget = () => {
