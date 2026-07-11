@@ -76,6 +76,24 @@ describe('useRafFn', () => {
     expect(callback).toHaveBeenCalledTimes(2);
   });
 
+  it('does not create duplicate loops when restarted inside a callback', () => {
+    const { windowRef, tick } = createMockWindow();
+    const callback = vi.fn(() => {
+      if (callback.mock.calls.length === 1) {
+        state.stop();
+        state.start();
+      }
+    });
+
+    const { value: state } = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    tick(1);
+    tick(2);
+    tick(3);
+
+    expect(callback).toHaveBeenCalledTimes(3);
+  });
+
   it('can start lazily', () => {
     const { windowRef, tick } = createMockWindow();
     const callback = vi.fn();
@@ -105,6 +123,50 @@ describe('useRafFn', () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  it('stays inactive when starting a frame throws', () => {
+    const scheduleError = new Error('schedule failed');
+    const windowRef = {
+      requestAnimationFrame() {
+        throw scheduleError;
+      }
+    } as unknown as Window;
+    const { value: state } = createRoot(() =>
+      useRafFn(vi.fn(), { window: windowRef, immediate: false })
+    );
+
+    expect(() => state.start()).toThrow(scheduleError);
+    expect(state.active()).toBe(false);
+  });
+
+  it('recovers when scheduling the next frame throws', () => {
+    const scheduleError = new Error('schedule failed');
+    let requestCount = 0;
+    let scheduledCallback: FrameRequestCallback | undefined;
+    const windowRef = {
+      requestAnimationFrame(callback: FrameRequestCallback) {
+        requestCount += 1;
+        if (requestCount === 2) {
+          throw scheduleError;
+        }
+        scheduledCallback = callback;
+        return requestCount;
+      },
+      cancelAnimationFrame() {}
+    } as unknown as Window;
+    const callback = vi.fn();
+    const { value: state } = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    expect(() => scheduledCallback!(1)).toThrow(scheduleError);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(state.active()).toBe(false);
+
+    state.start();
+    scheduledCallback!(2);
+
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(state.active()).toBe(true);
+  });
+
   it('can restart after callback throws', () => {
     const { windowRef, tick } = createMockWindow();
     const callback = vi
@@ -124,5 +186,38 @@ describe('useRafFn', () => {
 
     expect(callback).toHaveBeenCalledTimes(2);
     expect(state.active()).toBe(true);
+  });
+
+  it('does not restart after owner disposal', () => {
+    const { windowRef } = createMockWindow();
+    const requestFrame = vi.spyOn(windowRef, 'requestAnimationFrame');
+    const callback = vi.fn();
+    const root = createRoot(() => useRafFn(callback, { window: windowRef }));
+
+    root.dispose();
+    root.value.start();
+
+    expect(root.value.active()).toBe(false);
+    expect(requestFrame).toHaveBeenCalledOnce();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('cancels a frame returned after scheduling disposes the owner', () => {
+    let dispose = () => {};
+    const cancelAnimationFrame = vi.fn();
+    const windowRef = {
+      requestAnimationFrame() {
+        dispose();
+        return 7;
+      },
+      cancelAnimationFrame
+    } as unknown as Window;
+    const root = createRoot(() => useRafFn(vi.fn(), { window: windowRef, immediate: false }));
+    dispose = root.dispose;
+
+    root.value.start();
+
+    expect(root.value.active()).toBe(false);
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(7);
   });
 });

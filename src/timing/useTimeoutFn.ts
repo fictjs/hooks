@@ -20,36 +20,89 @@ export function useTimeoutFn(
 ): UseTimeoutFnControls {
   const pending = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let generation = 0;
+  let disposed = false;
+
+  const cancelTimer = () => {
+    generation += 1;
+    const currentTimer = timer;
+    timer = undefined;
+    pending(false);
+    if (currentTimer !== undefined) {
+      clearTimeout(currentTimer);
+    }
+  };
 
   const cancel = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = undefined;
+    if (!disposed) {
+      cancelTimer();
     }
-    pending(false);
   };
 
   const run = () => {
-    cancel();
-    const wait = Math.max(0, toValue(delay as MaybeAccessor<number>));
-
-    pending(true);
-    timer = setTimeout(() => {
-      timer = undefined;
-      pending(false);
-      callback();
-    }, wait);
-  };
-
-  const flush = () => {
-    if (!pending()) {
+    if (disposed) {
       return;
     }
     cancel();
-    callback();
+    if (disposed) {
+      return;
+    }
+    const wait = Math.max(0, toValue(delay as MaybeAccessor<number>));
+    if (disposed) {
+      return;
+    }
+
+    pending(true);
+    if (disposed) {
+      return;
+    }
+    const currentGeneration = ++generation;
+    let nextTimer: ReturnType<typeof setTimeout>;
+    try {
+      nextTimer = setTimeout(() => {
+        if (disposed || currentGeneration !== generation) {
+          return;
+        }
+        timer = undefined;
+        pending(false);
+        if (!disposed) {
+          callback();
+        }
+      }, wait);
+    } catch (error) {
+      if (currentGeneration === generation) {
+        timer = undefined;
+        pending(false);
+      }
+      throw error;
+    }
+    if (disposed) {
+      try {
+        clearTimeout(nextTimer);
+      } catch {
+        // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return;
+    }
+    if (currentGeneration === generation && pending()) {
+      timer = nextTimer;
+    }
   };
 
-  tryOnDestroy(cancel);
+  const flush = () => {
+    if (disposed || !pending()) {
+      return;
+    }
+    cancel();
+    if (!disposed) {
+      callback();
+    }
+  };
+
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelTimer();
+  });
   run();
 
   return {

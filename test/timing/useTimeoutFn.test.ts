@@ -5,6 +5,71 @@ import { useTimeoutFn } from '../../src/timing/useTimeoutFn';
 describe('useTimeoutFn', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('clears a zero-valued timeout handle', () => {
+    const clearTimeoutMock = vi.fn();
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn(() => 0)
+    );
+    vi.stubGlobal('clearTimeout', clearTimeoutMock);
+
+    const { value: controls } = createRoot(() => useTimeoutFn(vi.fn(), 100));
+    controls.cancel();
+
+    expect(clearTimeoutMock).toHaveBeenCalledOnce();
+    expect(clearTimeoutMock).toHaveBeenCalledWith(0);
+    expect(controls.pending()).toBe(false);
+  });
+
+  it('rolls back pending state when scheduling fails', () => {
+    const scheduleError = new Error('schedule failed');
+    const setTimeoutMock = vi
+      .fn<() => number>()
+      .mockReturnValueOnce(1)
+      .mockImplementationOnce(() => {
+        throw scheduleError;
+      })
+      .mockReturnValue(2);
+    vi.stubGlobal('setTimeout', setTimeoutMock);
+    vi.stubGlobal('clearTimeout', vi.fn());
+    const callback = vi.fn();
+    const controls = createRoot(() => useTimeoutFn(callback, 100)).value;
+
+    expect(() => controls.run()).toThrow(scheduleError);
+    expect(controls.pending()).toBe(false);
+    controls.flush();
+    expect(callback).not.toHaveBeenCalled();
+
+    controls.run();
+    expect(controls.pending()).toBe(true);
+  });
+
+  it('invalidates the callback before a failing cleanup', () => {
+    const cleanupError = new Error('cleanup failed');
+    let scheduled: (() => void) | undefined;
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn((callback: () => void) => {
+        scheduled = callback;
+        return 1;
+      })
+    );
+    vi.stubGlobal(
+      'clearTimeout',
+      vi.fn(() => {
+        throw cleanupError;
+      })
+    );
+    const callback = vi.fn();
+    const controls = createRoot(() => useTimeoutFn(callback, 100)).value;
+
+    expect(() => controls.cancel()).toThrow(cleanupError);
+    expect(controls.pending()).toBe(false);
+    scheduled?.();
+    expect(callback).not.toHaveBeenCalled();
   });
 
   it('runs callback after delay', () => {
@@ -60,5 +125,44 @@ describe('useTimeoutFn', () => {
     vi.advanceTimersByTime(200);
 
     expect(callback).toHaveBeenCalledTimes(0);
+  });
+
+  it('does not run or flush after owner disposal', () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const root = createRoot(() => useTimeoutFn(callback, 100));
+
+    root.dispose();
+    root.value.run();
+    root.value.flush();
+    vi.advanceTimersByTime(100);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(root.value.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops running when delay resolution disposes the owner', () => {
+    vi.useFakeTimers();
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const callback = vi.fn();
+    const root = createRoot(() =>
+      useTimeoutFn(callback, () => {
+        if (disposeOnRead) {
+          dispose();
+        }
+        return 100;
+      })
+    );
+    dispose = root.dispose;
+    disposeOnRead = true;
+
+    root.value.run();
+    vi.advanceTimersByTime(100);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(root.value.pending()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

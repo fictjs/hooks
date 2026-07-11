@@ -20,29 +20,79 @@ export function useIntervalFn(
 ): UseIntervalFnControls {
   const pending = createSignal(false);
   let timer: ReturnType<typeof setInterval> | undefined;
+  let generation = 0;
+  let disposed = false;
+
+  const cancelTimer = () => {
+    generation += 1;
+    const currentTimer = timer;
+    timer = undefined;
+    pending(false);
+    if (currentTimer !== undefined) {
+      clearInterval(currentTimer);
+    }
+  };
 
   const cancel = () => {
-    if (timer) {
-      clearInterval(timer);
-      timer = undefined;
+    if (!disposed) {
+      cancelTimer();
     }
-    pending(false);
   };
 
   const run = () => {
+    if (disposed) {
+      return;
+    }
     cancel();
+    if (disposed) {
+      return;
+    }
     const wait = Math.max(0, toValue(interval as MaybeAccessor<number>));
+    if (disposed) {
+      return;
+    }
     pending(true);
-    timer = setInterval(() => {
-      callback();
-    }, wait);
+    if (disposed) {
+      return;
+    }
+    const currentGeneration = ++generation;
+    let nextTimer: ReturnType<typeof setInterval>;
+    try {
+      nextTimer = setInterval(() => {
+        if (!disposed && currentGeneration === generation) {
+          callback();
+        }
+      }, wait);
+    } catch (error) {
+      if (currentGeneration === generation) {
+        timer = undefined;
+        pending(false);
+      }
+      throw error;
+    }
+    if (disposed) {
+      try {
+        clearInterval(nextTimer);
+      } catch {
+        // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return;
+    }
+    if (currentGeneration === generation && pending()) {
+      timer = nextTimer;
+    }
   };
 
   const flush = () => {
-    callback();
+    if (!disposed) {
+      callback();
+    }
   };
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelTimer();
+  });
   run();
 
   return {

@@ -23,14 +23,65 @@ export function useRafFn(
   options: UseRafFnOptions = {}
 ): UseRafFnReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
-  const canRequestFrame = () => typeof windowRef?.requestAnimationFrame === 'function';
+  let disposed = false;
+  const canRequestFrame = () => !disposed && typeof windowRef?.requestAnimationFrame === 'function';
   const active = createSignal((options.immediate ?? true) && canRequestFrame());
 
-  let rafId = 0;
+  let rafId: number | undefined;
+  const loopState = { generation: 0 };
+  let requestGeneration = 0;
   let lastTimestamp: number | undefined;
 
-  const loop = (timestamp: number) => {
-    if (!active()) {
+  const markInactive = () => {
+    loopState.generation += 1;
+    requestGeneration += 1;
+    lastTimestamp = undefined;
+    rafId = undefined;
+    active(false);
+  };
+
+  const schedule = (frameGeneration: number) => {
+    if (disposed || frameGeneration !== loopState.generation) {
+      return;
+    }
+    const currentRequestGeneration = ++requestGeneration;
+    let nextRafId: number;
+    try {
+      nextRafId = windowRef!.requestAnimationFrame((timestamp) => {
+        if (
+          disposed ||
+          currentRequestGeneration !== requestGeneration ||
+          frameGeneration !== loopState.generation
+        ) {
+          return;
+        }
+        rafId = undefined;
+        loop(timestamp, frameGeneration);
+      });
+    } catch (error) {
+      if (frameGeneration === loopState.generation) {
+        markInactive();
+      }
+      throw error;
+    }
+    if (
+      disposed ||
+      currentRequestGeneration !== requestGeneration ||
+      frameGeneration !== loopState.generation ||
+      !active()
+    ) {
+      try {
+        windowRef?.cancelAnimationFrame?.(nextRafId);
+      } catch {
+        // Owner disposal makes this unowned frame best-effort cleanup.
+      }
+      return;
+    }
+    rafId = nextRafId;
+  };
+
+  const loop = (timestamp: number, frameGeneration: number) => {
+    if (disposed || !active() || frameGeneration !== loopState.generation) {
       return;
     }
 
@@ -39,45 +90,69 @@ export function useRafFn(
     try {
       callback(delta, timestamp);
     } catch (error) {
-      active(false);
-      lastTimestamp = undefined;
+      markInactive();
       throw error;
     }
 
-    if (canRequestFrame()) {
-      rafId = windowRef!.requestAnimationFrame(loop);
+    if (disposed || !active() || frameGeneration !== loopState.generation) {
+      return;
+    }
+
+    const canSchedule = canRequestFrame();
+    if (disposed || !active() || frameGeneration !== loopState.generation) {
+      return;
+    }
+    if (canSchedule) {
+      schedule(frameGeneration);
     } else {
-      active(false);
+      markInactive();
     }
   };
 
   const start = () => {
-    if (active()) {
+    if (disposed || active()) {
       return;
     }
-    if (!canRequestFrame()) {
+    const canSchedule = canRequestFrame();
+    if (disposed) {
+      return;
+    }
+    if (!canSchedule) {
       active(false);
       return;
     }
     active(true);
-    rafId = windowRef!.requestAnimationFrame(loop);
+    if (disposed || !active()) {
+      return;
+    }
+    loopState.generation += 1;
+    schedule(loopState.generation);
   };
 
-  const stop = () => {
-    active(false);
-    lastTimestamp = undefined;
+  const stopLoop = () => {
+    const currentRafId = rafId;
+    markInactive();
 
-    if (rafId && windowRef?.cancelAnimationFrame) {
-      windowRef.cancelAnimationFrame(rafId);
-      rafId = 0;
+    if (currentRafId !== undefined && windowRef?.cancelAnimationFrame) {
+      windowRef.cancelAnimationFrame(currentRafId);
     }
   };
 
-  if (active()) {
-    rafId = windowRef!.requestAnimationFrame(loop);
-  }
+  const stop = () => {
+    if (!disposed) {
+      stopLoop();
+    }
+  };
 
-  tryOnDestroy(stop);
+  tryOnDestroy(() => {
+    disposed = true;
+    stopLoop();
+  });
+
+  if (active()) {
+    loopState.generation += 1;
+    schedule(loopState.generation);
+  }
 
   return {
     active,

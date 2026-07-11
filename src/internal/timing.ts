@@ -28,22 +28,68 @@ export function createDebouncedFn<T extends Procedure>(
   const state: {
     timer?: ReturnType<typeof setTimeout>;
     maxTimer?: ReturnType<typeof setTimeout>;
+    timerScheduled: boolean;
+    maxTimerScheduled: boolean;
+    timerGeneration: number;
+    maxTimerGeneration: number;
     lastArgs?: Parameters<T>;
-  } = {};
+  } = {
+    timerScheduled: false,
+    maxTimerScheduled: false,
+    timerGeneration: 0,
+    maxTimerGeneration: 0
+  };
   const pending = createSignal(false);
+  let disposed = false;
+
+  const clearTimer = () => {
+    if (!state.timerScheduled) {
+      return;
+    }
+    const timer = state.timer;
+    state.timerGeneration += 1;
+    state.timer = undefined;
+    state.timerScheduled = false;
+    clearTimeout(timer as ReturnType<typeof setTimeout>);
+  };
+
+  const clearMaxTimer = () => {
+    if (!state.maxTimerScheduled) {
+      return;
+    }
+    const maxTimer = state.maxTimer;
+    state.maxTimerGeneration += 1;
+    state.maxTimer = undefined;
+    state.maxTimerScheduled = false;
+    clearTimeout(maxTimer as ReturnType<typeof setTimeout>);
+  };
 
   const clearTimers = () => {
-    if (state.timer) {
-      clearTimeout(state.timer);
-      state.timer = undefined;
+    let cleanupFailed = false;
+    let cleanupError: unknown;
+    try {
+      clearTimer();
+    } catch (error) {
+      cleanupFailed = true;
+      cleanupError = error;
     }
-    if (state.maxTimer) {
-      clearTimeout(state.maxTimer);
-      state.maxTimer = undefined;
+    try {
+      clearMaxTimer();
+    } catch (error) {
+      if (!cleanupFailed) {
+        cleanupFailed = true;
+        cleanupError = error;
+      }
+    }
+    if (cleanupFailed) {
+      throw cleanupError;
     }
   };
 
   const invoke = () => {
+    if (disposed) {
+      return;
+    }
     if (!state.lastArgs) {
       pending(false);
       clearTimers();
@@ -54,58 +100,175 @@ export function createDebouncedFn<T extends Procedure>(
     state.lastArgs = undefined;
     pending(false);
     clearTimers();
+    if (disposed) {
+      return;
+    }
     fn(...args);
   };
 
-  const scheduleTimers = () => {
-    if (state.timer) {
-      clearTimeout(state.timer);
+  const scheduleTimers = (): boolean => {
+    let firedSynchronously = false;
+
+    if (disposed) {
+      return firedSynchronously;
     }
 
-    state.timer = setTimeout(() => {
-      if (trailing) {
-        invoke();
-      } else {
-        pending(false);
-        clearTimers();
+    if (state.timerScheduled) {
+      clearTimer();
+    }
+    if (disposed) {
+      return firedSynchronously;
+    }
+
+    state.timerScheduled = true;
+    const timerGeneration = ++state.timerGeneration;
+    let timer: ReturnType<typeof setTimeout>;
+    try {
+      timer = setTimeout(() => {
+        if (disposed || timerGeneration !== state.timerGeneration || !state.timerScheduled) {
+          return;
+        }
+        firedSynchronously = true;
+        state.timer = undefined;
+        state.timerScheduled = false;
+        if (trailing) {
+          invoke();
+        } else {
+          state.lastArgs = undefined;
+          pending(false);
+          clearTimers();
+        }
+      }, wait);
+    } catch (error) {
+      if (timerGeneration === state.timerGeneration) {
+        state.timer = undefined;
+        state.timerScheduled = false;
       }
-    }, wait);
-
-    if (trailing && maxWait != null && maxWait >= 0 && !state.maxTimer) {
-      const effectiveMaxWait = Math.max(maxWait, wait);
-      state.maxTimer = setTimeout(() => {
-        invoke();
-      }, effectiveMaxWait);
+      throw error;
     }
+    if (disposed) {
+      try {
+        clearTimeout(timer);
+      } catch {
+        // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return firedSynchronously;
+    }
+    if (timerGeneration === state.timerGeneration && state.timerScheduled) {
+      state.timer = timer;
+    }
+
+    if (!disposed && trailing && maxWait != null && maxWait >= 0 && !state.maxTimerScheduled) {
+      const effectiveMaxWait = Math.max(maxWait, wait);
+      state.maxTimerScheduled = true;
+      const maxTimerGeneration = ++state.maxTimerGeneration;
+      let maxTimer: ReturnType<typeof setTimeout>;
+      try {
+        maxTimer = setTimeout(() => {
+          if (
+            disposed ||
+            maxTimerGeneration !== state.maxTimerGeneration ||
+            !state.maxTimerScheduled
+          ) {
+            return;
+          }
+          firedSynchronously = true;
+          state.maxTimer = undefined;
+          state.maxTimerScheduled = false;
+          invoke();
+        }, effectiveMaxWait);
+      } catch (error) {
+        if (maxTimerGeneration === state.maxTimerGeneration) {
+          state.maxTimer = undefined;
+          state.maxTimerScheduled = false;
+        }
+        throw error;
+      }
+      if (disposed) {
+        try {
+          clearTimeout(maxTimer);
+        } catch {
+          // Owner disposal makes this unowned timer best-effort cleanup.
+        }
+        return firedSynchronously;
+      }
+      if (maxTimerGeneration === state.maxTimerGeneration && state.maxTimerScheduled) {
+        state.maxTimer = maxTimer;
+      }
+    }
+
+    return firedSynchronously;
   };
 
   const run = (...args: Parameters<T>) => {
-    const shouldCallLeading = leading && !state.timer;
-    state.lastArgs = args;
-    pending(true);
-
-    if (shouldCallLeading) {
-      fn(...args);
+    if (disposed) {
+      return;
+    }
+    const shouldCallLeading = leading && !state.timerScheduled;
+    if (trailing) {
+      state.lastArgs = args;
+      pending(true);
+      if (disposed) {
+        state.lastArgs = undefined;
+        return;
+      }
+    }
+    let firedSynchronously: boolean;
+    try {
+      firedSynchronously = scheduleTimers();
+    } catch (error) {
       state.lastArgs = undefined;
       pending(false);
+      try {
+        clearTimers();
+      } catch {
+        // Preserve the scheduling failure after best-effort rollback.
+      }
+      throw error;
     }
 
-    scheduleTimers();
+    if (disposed) {
+      return;
+    }
+
+    if (shouldCallLeading && !(trailing && firedSynchronously)) {
+      state.lastArgs = undefined;
+      pending(false);
+      try {
+        fn(...args);
+      } catch (error) {
+        try {
+          cancel();
+        } catch {
+          // Preserve the callback failure after best-effort cleanup.
+        }
+        throw error;
+      }
+    }
   };
 
-  const cancel = () => {
+  const cancelPending = () => {
     pending(false);
     state.lastArgs = undefined;
     clearTimers();
   };
 
+  const cancel = () => {
+    if (!disposed) {
+      cancelPending();
+    }
+  };
+
   const flush = () => {
-    if (pending()) {
+    if (!disposed && pending()) {
       invoke();
     }
   };
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelPending();
+  });
 
   return {
     run,
@@ -129,36 +292,104 @@ export function createThrottledFn<T extends Procedure>(
   const trailing = options.trailing ?? true;
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timerScheduled = false;
+  let timerGeneration = 0;
   let lastArgs: Parameters<T> | undefined;
   const pending = createSignal(false);
+  let disposed = false;
 
   const invoke = (args: Parameters<T>) => {
     fn(...args);
   };
 
-  const tick = () => {
+  const tick = (generation: number) => {
+    if (disposed || generation !== timerGeneration || !timerScheduled) {
+      return;
+    }
+    timer = undefined;
+    timerScheduled = false;
     if (trailing && lastArgs) {
       const args = lastArgs;
       lastArgs = undefined;
       pending(false);
+      if (disposed) {
+        return;
+      }
+      scheduleTick();
+      if (disposed) {
+        return;
+      }
       invoke(args);
-      timer = setTimeout(tick, wait);
       return;
     }
 
-    timer = undefined;
     pending(false);
   };
 
+  const scheduleTick = () => {
+    if (disposed) {
+      return;
+    }
+    timerScheduled = true;
+    const generation = ++timerGeneration;
+    let nextTimer: ReturnType<typeof setTimeout>;
+    try {
+      nextTimer = setTimeout(() => tick(generation), wait);
+    } catch (error) {
+      if (generation === timerGeneration) {
+        timer = undefined;
+        timerScheduled = false;
+      }
+      throw error;
+    }
+    if (disposed) {
+      try {
+        clearTimeout(nextTimer);
+      } catch {
+        // Owner disposal makes this unowned timer best-effort cleanup.
+      }
+      return;
+    }
+    if (generation === timerGeneration && timerScheduled) {
+      timer = nextTimer;
+    }
+  };
+
   const run = (...args: Parameters<T>) => {
-    if (!timer) {
-      if (leading) {
-        invoke(args);
-      } else if (trailing) {
+    if (disposed) {
+      return;
+    }
+    if (!timerScheduled) {
+      if (!leading && trailing) {
         lastArgs = args;
         pending(true);
+        if (disposed) {
+          lastArgs = undefined;
+          return;
+        }
       }
-      timer = setTimeout(tick, wait);
+      try {
+        scheduleTick();
+      } catch (error) {
+        lastArgs = undefined;
+        pending(false);
+        throw error;
+      }
+      if (disposed) {
+        return;
+      }
+      if (leading) {
+        try {
+          invoke(args);
+        } catch (error) {
+          try {
+            cancel();
+          } catch {
+            // Preserve the callback failure after best-effort cleanup.
+          }
+          throw error;
+        }
+      }
       return;
     }
 
@@ -168,25 +399,40 @@ export function createThrottledFn<T extends Procedure>(
     }
   };
 
-  const cancel = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = undefined;
-    }
+  const cancelPending = () => {
+    const currentTimer = timer;
+    const shouldClear = timerScheduled;
+    timerGeneration += 1;
+    timer = undefined;
+    timerScheduled = false;
     lastArgs = undefined;
     pending(false);
+    if (shouldClear) {
+      clearTimeout(currentTimer as ReturnType<typeof setTimeout>);
+    }
+  };
+
+  const cancel = () => {
+    if (!disposed) {
+      cancelPending();
+    }
   };
 
   const flush = () => {
-    if (lastArgs) {
+    if (!disposed && lastArgs) {
       const args = lastArgs;
       lastArgs = undefined;
       pending(false);
-      invoke(args);
+      if (!disposed) {
+        invoke(args);
+      }
     }
   };
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelPending();
+  });
 
   return {
     run,
