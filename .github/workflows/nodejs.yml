@@ -9,22 +9,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [22.x]
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22.x
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
@@ -32,11 +31,97 @@ jobs:
       - name: Verify
         run: |
           pnpm lint
+          pnpm run format:check
           pnpm typecheck
           pnpm test:types
+          pnpm test:types:ts53
           pnpm test:coverage
           pnpm build
+          pnpm verify:size
+          pnpm lint:dist
           pnpm verify:metadata
           pnpm test:attw
         env:
           CI: true
+      - name: Pack package
+        run: |
+          mkdir package-artifact
+          npm pack --pack-destination package-artifact
+      - name: Upload package tarball
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: package-tarball
+          path: package-artifact/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  packed-package-smoke:
+    name: Packed package smoke (Node ${{ matrix.node-version }})
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x, 22.x, 24.x]
+
+    steps:
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Download package tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: package-tarball
+          path: package-artifact
+      - name: Install packed package and peer dependency
+        run: |
+          mkdir consumer
+          cd consumer
+          npm init --yes
+          npm install --ignore-scripts --no-audit --no-fund ../package-artifact/*.tgz @fictjs/runtime@^0.26.0
+      - name: Verify CommonJS entry
+        working-directory: consumer
+        run: |
+          node <<'NODE'
+          const hooks = require('@fictjs/hooks');
+
+          if (typeof hooks.useDebounceFn !== 'function') {
+            throw new TypeError('CommonJS entry does not export useDebounceFn');
+          }
+
+          const calls = [];
+          const controls = hooks.useDebounceFn((value) => calls.push(value), 10, {
+            leading: true,
+            trailing: false
+          });
+          controls.run('cjs');
+          controls.cancel();
+
+          if (calls.length !== 1 || calls[0] !== 'cjs') {
+            throw new Error('CommonJS entry failed useDebounceFn smoke test');
+          }
+          NODE
+      - name: Verify ESM entry
+        working-directory: consumer
+        run: |
+          node --input-type=module <<'NODE'
+          import { useDebounceFn } from '@fictjs/hooks';
+
+          if (typeof useDebounceFn !== 'function') {
+            throw new TypeError('ESM entry does not export useDebounceFn');
+          }
+
+          const calls = [];
+          const controls = useDebounceFn((value) => calls.push(value), 10, {
+            leading: true,
+            trailing: false
+          });
+          controls.run('esm');
+          controls.cancel();
+
+          if (calls.length !== 1 || calls[0] !== 'esm') {
+            throw new Error('ESM entry failed useDebounceFn smoke test');
+          }
+          NODE

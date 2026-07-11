@@ -57,9 +57,10 @@
     "demo:preview": "vite preview playground",
     "clean": "rimraf dist coverage",
     "audit:dev": "pnpm --ignore-workspace audit --audit-level high",
+    "verify:size": "node scripts/verify-bundle-size.mjs",
     "verify:metadata": "node scripts/verify-package-metadata.mjs",
     "lint:dist": "eslint --no-ignore --config eslint.dist.config.mjs dist/index.js dist/index.cjs",
-    "pack:dry": "pnpm run build && pnpm run lint:dist && pnpm run verify:metadata",
+    "pack:dry": "pnpm run build && pnpm run verify:size && pnpm run lint:dist && pnpm run verify:metadata",
     "typecheck": "tsc --noEmit",
     "test:types": "pnpm run build && tsc -p test-dts/tsconfig.json --noEmit",
     "test:types:ts53": "pnpm run build && npm exec --yes --package=typescript@5.3.3 -- tsc -p test-dts/tsconfig.json --noEmit",
@@ -73,7 +74,7 @@
     "test:watch": "pnpm run build && vitest",
     "prepare": "husky",
     "commit": "git-cz",
-    "prepublishOnly": "pnpm run audit:dev && pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test:types:ts53 && pnpm run test:coverage && pnpm run build && pnpm run lint:dist && pnpm run verify:metadata && pnpm run test:attw"
+    "prepublishOnly": "pnpm run audit:dev && pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test:types && pnpm run test:types:ts53 && pnpm run test:coverage && pnpm run build && pnpm run verify:size && pnpm run lint:dist && pnpm run verify:metadata && pnpm run test:attw"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
@@ -125,7 +126,7 @@
       "picomatch@>=4.0.0 <4.0.4": "4.0.5",
       "postcss@>=8.0.0 <8.5.10": "8.5.16",
       "rollup@>=4.0.0 <4.59.0": "4.62.2",
-      "tmp@>=0.2.0 <0.2.7": "0.2.7",
+      "external-editor>tmp": "0.2.7",
       "undici@>=7.0.0 <7.28.0": "7.28.0",
       "yaml@>=2.0.0 <2.8.3": "2.9.0"
     }
