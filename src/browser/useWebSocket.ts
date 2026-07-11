@@ -117,10 +117,18 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempts = 0;
   let cleanupSocket = () => {};
+  let destroyed = false;
+  let openCallId = 0;
+
+  const hasOwnedSocket = () => socket !== null;
 
   const reportError = (nextError: unknown) => {
     error(nextError);
-    options.onError?.(nextError);
+    try {
+      options.onError?.(nextError);
+    } catch {
+      // User callbacks must not interrupt socket recovery or control contracts.
+    }
   };
 
   const stopReconnectTimer = () => {
@@ -137,7 +145,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const scheduleReconnect = () => {
-    if (!reconnectOptions) {
+    if (destroyed || !reconnectOptions) {
       return;
     }
 
@@ -161,7 +169,35 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     );
   };
 
+  const closeSocketForReplacement = (currentSocket: WebSocketLike): boolean => {
+    const previousManuallyClosed = manuallyClosed;
+    manuallyClosed = true;
+
+    try {
+      currentSocket.close();
+    } catch (nextError) {
+      manuallyClosed = previousManuallyClosed;
+      if (socket === currentSocket) {
+        status(toStatus(currentSocket.readyState, currentSocket));
+      }
+      reportError(nextError);
+      return false;
+    }
+
+    if (socket === currentSocket) {
+      socket = null;
+      socketUrlKey = null;
+      cleanupSocket();
+    }
+    return true;
+  };
+
   const open = (): boolean => {
+    if (destroyed) {
+      return false;
+    }
+    const currentOpenCallId = ++openCallId;
+
     const resolvedUrl = toValue(url);
     if (!webSocketCtor) {
       isSupported(false);
@@ -169,7 +205,12 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
     isSupported(true);
     if (!resolvedUrl) {
-      status('CLOSED');
+      stopReconnectTimer();
+      if (socket) {
+        close();
+      } else {
+        status('CLOSED');
+      }
       return false;
     }
     const nextUrlKey = String(resolvedUrl);
@@ -179,14 +220,8 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
         return true;
       }
 
-      const staleSocket = socket;
-      socket = null;
-      socketUrlKey = null;
-      cleanupSocket();
-      try {
-        staleSocket.close();
-      } catch (nextError) {
-        reportError(nextError);
+      if (!closeSocketForReplacement(socket)) {
+        return false;
       }
     }
     if (socket) {
@@ -204,6 +239,9 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       currentSocket = new webSocketCtor(resolvedUrl, options.protocols);
     } catch (nextError) {
       reportError(nextError);
+      if (destroyed || currentOpenCallId !== openCallId) {
+        return hasOwnedSocket();
+      }
       status('CLOSED');
       scheduleReconnect();
       return false;
@@ -218,7 +256,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     }
 
     const onOpen = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
       status('OPEN');
@@ -227,7 +265,7 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     };
 
     const onMessage = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
       const messageEvent = event as MessageEvent;
@@ -241,14 +279,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     };
 
     const onError = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
       reportError(event);
     };
 
     const onClose = (event: Event) => {
-      if (socket !== currentSocket) {
+      if (destroyed || socket !== currentSocket) {
         return;
       }
 
@@ -256,10 +294,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
       socketUrlKey = null;
       cleanupSocket();
       status('CLOSED');
-      options.onClose?.(event as CloseEvent);
-
-      if (!manuallyClosed) {
-        scheduleReconnect();
+      try {
+        options.onClose?.(event as CloseEvent);
+      } catch (nextError) {
+        reportError(nextError);
+      } finally {
+        if (!destroyed && !manuallyClosed && socket == null && reconnectTimer == null) {
+          scheduleReconnect();
+        }
       }
     };
 
@@ -280,6 +322,14 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const close = (code?: number, reason?: string) => {
+    if (destroyed) {
+      return;
+    }
+
+    openCallId += 1;
+    const previousManuallyClosed = manuallyClosed;
+    const previousReconnectAttempts = reconnectAttempts;
+    const previousReconnectCount = reconnectCount();
     stopReconnectTimer();
     resetReconnectAttempts();
     manuallyClosed = true;
@@ -294,26 +344,26 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
     try {
       currentSocket.close(code, reason);
     } catch (nextError) {
-      if (socket === currentSocket) {
-        socket = null;
-        socketUrlKey = null;
-        cleanupSocket();
-      }
+      manuallyClosed = previousManuallyClosed;
+      reconnectAttempts = previousReconnectAttempts;
+      reconnectCount(previousReconnectCount);
+      status(toStatus(currentSocket.readyState, currentSocket));
       reportError(nextError);
-      status('CLOSED');
     }
   };
 
   const reconnect = () => {
+    if (destroyed) {
+      return false;
+    }
+
     stopReconnectTimer();
 
     if (socket) {
       const currentSocket = socket;
-      socket = null;
-      socketUrlKey = null;
-      cleanupSocket();
-      manuallyClosed = true;
-      currentSocket.close();
+      if (!closeSocketForReplacement(currentSocket)) {
+        return false;
+      }
     }
 
     manuallyClosed = false;
@@ -321,6 +371,10 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   };
 
   const send = (payload: TOutgoing): boolean => {
+    if (destroyed) {
+      return false;
+    }
+
     const currentSocket = socket;
     if (!currentSocket || currentSocket.readyState !== currentSocket.OPEN) {
       return false;
@@ -351,8 +405,22 @@ export function useWebSocket<TIncoming = unknown, TOutgoing = SerializablePayloa
   });
 
   tryOnDestroy(() => {
+    destroyed = true;
     stopReconnectTimer();
-    close();
+    manuallyClosed = true;
+    resetReconnectAttempts();
+
+    const currentSocket = socket;
+    socket = null;
+    socketUrlKey = null;
+    cleanupSocket();
+    status('CLOSED');
+
+    try {
+      currentSocket?.close();
+    } catch {
+      // Disposal is terminal: do not restore ownership or invoke user callbacks.
+    }
   });
 
   return {

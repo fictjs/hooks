@@ -2,6 +2,7 @@ import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { deferTargetResolution, resolveMaybeTarget, type MaybeElement } from '../internal/target';
 
 export interface UseSizeOptions {
@@ -28,6 +29,7 @@ export interface UseSizeReturn {
   update: () => void;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
 }
 
 function readRect(target: Element) {
@@ -42,7 +44,18 @@ function readRect(target: Element) {
   };
 }
 
-function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions | undefined) {
+function usesVerticalWritingMode(target: Element, windowRef: Window | null | undefined): boolean {
+  const view = target.ownerDocument?.defaultView ?? windowRef;
+  const writingMode = view?.getComputedStyle?.(target).writingMode ?? '';
+  return /^(?:vertical|sideways|tb)/.test(writingMode);
+}
+
+function readBoxSize(
+  entry: ResizeObserverEntry,
+  box: ResizeObserverBoxOptions,
+  target: Element,
+  windowRef: Window | null | undefined
+) {
   const sizeSource =
     box === 'border-box'
       ? entry.borderBoxSize
@@ -52,13 +65,19 @@ function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions |
   const size = Array.isArray(sizeSource) ? sizeSource[0] : sizeSource;
 
   if (size) {
+    if (usesVerticalWritingMode(target, windowRef)) {
+      return {
+        width: size.blockSize,
+        height: size.inlineSize
+      };
+    }
     return {
       width: size.inlineSize,
       height: size.blockSize
     };
   }
 
-  if (!box || box === 'content-box') {
+  if (box === 'content-box') {
     return {
       width: entry.contentRect.width,
       height: entry.contentRect.height
@@ -75,6 +94,7 @@ function readBoxSize(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions |
  */
 export function useSize(target: MaybeElement | null, options: UseSizeOptions = {}): UseSizeReturn {
   const windowRef = options.window === undefined ? defaultWindow : options.window;
+  const box = options.box ?? 'border-box';
   const observerCtor = (windowRef as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)
     ?.ResizeObserver;
 
@@ -89,26 +109,67 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
 
   let observer: ResizeObserver | null = null;
   let cancelDeferredTarget = () => {};
+  let observerGeneration = 0;
+  let disposed = false;
 
   const applyRect = (nextTarget: Element) => {
+    if (disposed) {
+      return;
+    }
     const rect = readRect(nextTarget);
+    if (disposed) {
+      return;
+    }
     width(rect.width);
+    if (disposed) {
+      return;
+    }
     height(rect.height);
+    if (disposed) {
+      return;
+    }
     top(rect.top);
+    if (disposed) {
+      return;
+    }
     left(rect.left);
+    if (disposed) {
+      return;
+    }
     x(rect.x);
+    if (disposed) {
+      return;
+    }
     y(rect.y);
   };
 
   const applyPosition = (nextTarget: Element) => {
+    if (disposed) {
+      return;
+    }
     const rect = readRect(nextTarget);
+    if (disposed) {
+      return;
+    }
     top(rect.top);
+    if (disposed) {
+      return;
+    }
     left(rect.left);
+    if (disposed) {
+      return;
+    }
     x(rect.x);
+    if (disposed) {
+      return;
+    }
     y(rect.y);
   };
 
   const update = () => {
+    if (disposed) {
+      return;
+    }
     const nextTarget = resolveMaybeTarget(target);
     if (!nextTarget) {
       return;
@@ -125,14 +186,26 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     if (!observer) {
       return;
     }
-    observer.disconnect();
+    const currentObserver = observer;
     observer = null;
+    observerGeneration += 1;
+    currentObserver.disconnect();
   };
 
   const startObserving = (nextTarget: Element) => {
+    if (disposed) {
+      return;
+    }
     applyRect(nextTarget);
+    if (disposed) {
+      return;
+    }
     if (windowRef) {
       resizeListener.start();
+      if (disposed) {
+        resizeListener.stop();
+        return;
+      }
     }
 
     const Observer = observerCtor;
@@ -142,13 +215,29 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     }
 
     isSupported(true);
-    observer = new Observer((entries: ResizeObserverEntry[]) => {
+    if (disposed) {
+      return;
+    }
+    const generation = ++observerGeneration;
+    const nextObserver = new Observer((entries: ResizeObserverEntry[]) => {
+      if (disposed || !active() || generation !== observerGeneration) {
+        return;
+      }
       const entry = entries[0];
       if (entry) {
-        const boxSize = readBoxSize(entry, options.box);
+        const boxSize = readBoxSize(entry, box, nextTarget, windowRef);
+        if (disposed || !active() || generation !== observerGeneration) {
+          return;
+        }
         if (boxSize) {
           width(boxSize.width);
+          if (disposed || !active() || generation !== observerGeneration) {
+            return;
+          }
           height(boxSize.height);
+          if (disposed || !active() || generation !== observerGeneration) {
+            return;
+          }
           applyPosition(nextTarget);
           return;
         }
@@ -158,53 +247,128 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
       applyRect(nextTarget);
     });
 
-    observer.observe(nextTarget, options.box ? { box: options.box } : undefined);
+    const disconnectNextObserver = () => {
+      try {
+        nextObserver.disconnect();
+      } catch {
+        // Setup/disposal failures must not be replaced by disconnect failures.
+      }
+    };
+
+    if (disposed || generation !== observerGeneration) {
+      disconnectNextObserver();
+      return;
+    }
+
+    observer = nextObserver;
+    try {
+      nextObserver.observe(nextTarget, { box });
+    } catch (error) {
+      if (observer === nextObserver) {
+        observer = null;
+        if (generation === observerGeneration) {
+          observerGeneration += 1;
+        }
+        disconnectNextObserver();
+      }
+      throw error;
+    }
+
+    if (observer !== nextObserver) {
+      return;
+    }
+    if (disposed || !active() || generation !== observerGeneration) {
+      observer = null;
+      if (generation === observerGeneration) {
+        observerGeneration += 1;
+      }
+      disconnectNextObserver();
+    }
   };
 
   const scheduleDeferredTarget = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget();
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget = deferTargetResolution(() => {
       cancelDeferredTarget = () => {};
-      if (!active()) {
+      if (disposed || !active()) {
         return;
       }
 
       const nextTarget = target ? resolveMaybeTarget(target) : undefined;
+      if (disposed) {
+        return;
+      }
       if (!nextTarget) {
         resizeListener.stop();
         return;
       }
 
       stopObserver();
+      if (disposed) {
+        return;
+      }
       startObserving(nextTarget);
     });
   };
 
-  createEffect(() => {
+  const refresh = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget();
+    if (disposed) {
+      return;
+    }
     cancelDeferredTarget = () => {};
     stopObserver();
+    if (disposed) {
+      return;
+    }
+    resizeListener.stop();
+
+    if (disposed) {
+      return;
+    }
+
+    if (!active()) {
+      return;
+    }
 
     const nextTarget = target ? resolveMaybeTarget(target) : undefined;
-    if (!active() || !nextTarget) {
-      resizeListener.stop();
-      if (active() && target) {
+    if (disposed) {
+      return;
+    }
+    if (!nextTarget) {
+      if (target) {
         scheduleDeferredTarget();
       }
-      onCleanup(() => {
-        cancelDeferredTarget();
-        cancelDeferredTarget = () => {};
-      });
       return;
     }
 
     startObserving(nextTarget);
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredTarget();
       cancelDeferredTarget = () => {};
+      resizeListener.stop();
       stopObserver();
     });
+  });
+
+  tryOnDestroy(() => {
+    disposed = true;
+    observerGeneration += 1;
+    active(false);
   });
 
   return {
@@ -218,14 +382,25 @@ export function useSize(target: MaybeElement | null, options: UseSizeOptions = {
     active,
     update,
     start() {
-      active(true);
+      if (disposed) {
+        return;
+      }
+      if (!active()) {
+        active(true);
+      } else {
+        refresh();
+      }
     },
     stop() {
+      if (disposed) {
+        return;
+      }
       active(false);
       cancelDeferredTarget();
       cancelDeferredTarget = () => {};
       resizeListener.stop();
       stopObserver();
-    }
+    },
+    refresh
   };
 }

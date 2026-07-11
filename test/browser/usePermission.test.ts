@@ -20,6 +20,24 @@ class MockPermissionStatus extends EventTarget implements PermissionStatus {
   }
 }
 
+class GetterPermissionDescriptor implements PermissionDescriptor {
+  readonly #name: PermissionName;
+  readonly #sysex: boolean;
+
+  constructor(name: PermissionName, sysex = false) {
+    this.#name = name;
+    this.#sysex = sysex;
+  }
+
+  get name(): PermissionName {
+    return this.#name;
+  }
+
+  get sysex(): boolean {
+    return this.#sysex;
+  }
+}
+
 describe('usePermission', () => {
   it('returns unsupported state without permissions api', async () => {
     const { value: state } = createRoot(() =>
@@ -104,6 +122,160 @@ describe('usePermission', () => {
     expect(state.state()).toBe('granted');
   });
 
+  it('invalidates a manual query when the permission source changes', async () => {
+    let resolveQuery: ((status: PermissionStatus) => void) | undefined;
+    const staleStatus = new MockPermissionStatus('camera', 'denied');
+    const addEventListener = vi.spyOn(staleStatus, 'addEventListener');
+    const navigatorRef = {
+      permissions: {
+        query: vi.fn(
+          () =>
+            new Promise<PermissionStatus>((resolve) => {
+              resolveQuery = resolve;
+            })
+        )
+      }
+    } as unknown as Navigator;
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: navigatorRef as never,
+        immediate: false
+      })
+    );
+
+    const pending = state.query();
+    permission('microphone');
+    await Promise.resolve();
+    resolveQuery!(staleStatus);
+
+    expect(await pending).toBeNull();
+    expect(state.state()).toBe('prompt');
+    expect(addEventListener).not.toHaveBeenCalled();
+  });
+
+  it('queries the current permission when the source changes in the same tick', async () => {
+    const status = new MockPermissionStatus('microphone' as PermissionName, 'granted');
+    const query = vi.fn(async () => status);
+    const navigatorRef = { permissions: { query } } as unknown as Navigator;
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: navigatorRef as never,
+        immediate: false
+      })
+    );
+
+    permission('microphone');
+    const result = state.query();
+
+    expect(query).toHaveBeenCalledWith({ name: 'microphone' });
+    await expect(result).resolves.toBe(status);
+    expect(state.state()).toBe('granted');
+  });
+
+  it('reacts to permission names exposed through inherited getters', async () => {
+    const query = vi.fn(async (input: PermissionDescriptor) => {
+      return new MockPermissionStatus(input.name, 'granted');
+    });
+    const permission = createSignal<PermissionDescriptor>(new GetterPermissionDescriptor('camera'));
+    createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } }
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(query).toHaveBeenCalledTimes(1);
+
+    const microphone = new GetterPermissionDescriptor('microphone');
+    permission(microphone);
+    await Promise.resolve();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith(microphone);
+  });
+
+  it('reacts to standard descriptor options exposed through inherited getters', async () => {
+    const query = vi.fn(async (input: PermissionDescriptor) => {
+      return new MockPermissionStatus(input.name, 'granted');
+    });
+    const permission = createSignal<PermissionDescriptor>(
+      new GetterPermissionDescriptor('midi', false)
+    );
+    createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } }
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(query).toHaveBeenCalledTimes(1);
+
+    const midiWithSysex = new GetterPermissionDescriptor('midi', true);
+    permission(midiWithSysex);
+    await Promise.resolve();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith(midiWithSysex);
+  });
+
+  it('still queries an immediate source change after a stale status event', async () => {
+    const cameraStatus = new MockPermissionStatus('camera', 'granted');
+    const microphoneStatus = new MockPermissionStatus('microphone' as PermissionName, 'denied');
+    const query = vi.fn(async (input: PermissionDescriptor) => {
+      return input.name === 'camera' ? cameraStatus : microphoneStatus;
+    });
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } }
+      })
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(state.state()).toBe('granted');
+
+    permission('microphone');
+    cameraStatus.update('denied');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith({ name: 'microphone' });
+    expect(state.state()).toBe('denied');
+  });
+
+  it('resets stale state when a non-immediate permission source changes', async () => {
+    const cameraStatus = new MockPermissionStatus('camera', 'granted');
+    const query = vi.fn(async () => cameraStatus);
+    const permission = createSignal<PermissionDescriptor | string>('camera');
+    const { value: state } = createRoot(() =>
+      usePermission(() => permission(), {
+        navigator: { permissions: { query } },
+        immediate: false
+      })
+    );
+
+    await state.query();
+    expect(state.state()).toBe('granted');
+
+    permission('microphone');
+    cameraStatus.update('denied');
+
+    expect(state.state()).toBe('granted');
+    await Promise.resolve();
+    expect(state.state()).toBe('prompt');
+    expect(query).toHaveBeenCalledTimes(1);
+
+    cameraStatus.update('granted');
+    expect(state.state()).toBe('prompt');
+  });
+
   it('cleans up change listener on dispose', async () => {
     const status = new MockPermissionStatus('camera', 'granted');
     const navigatorRef = {
@@ -125,6 +297,36 @@ describe('usePermission', () => {
     dispose();
     status.update('denied');
     expect(state.state()).toBe('granted');
+  });
+
+  it('does not update state when the permission accessor disposes the owner', async () => {
+    const status = new MockPermissionStatus('camera', 'granted');
+    let dispose = () => {};
+    let disposeOnRead = false;
+    const root = createRoot(() =>
+      usePermission(
+        () => {
+          if (disposeOnRead) {
+            dispose();
+          }
+          return 'camera';
+        },
+        {
+          navigator: { permissions: { query: vi.fn(async () => status) } },
+          immediate: false
+        }
+      )
+    );
+    dispose = root.dispose;
+
+    await root.value.query();
+    expect(root.value.state()).toBe('granted');
+
+    disposeOnRead = true;
+    status.update('denied');
+
+    expect(root.value.state()).toBe('granted');
+    await expect(root.value.query()).resolves.toBeNull();
   });
 
   it('does not bind listener when query resolves after dispose', async () => {
@@ -153,5 +355,24 @@ describe('usePermission', () => {
     await Promise.resolve();
 
     expect(addEventListener).toHaveBeenCalledTimes(0);
+  });
+
+  it('does not query or bind a status after dispose', async () => {
+    const status = new MockPermissionStatus('camera', 'granted');
+    const addEventListener = vi.spyOn(status, 'addEventListener');
+    const query = vi.fn(async () => status);
+    const root = createRoot(() =>
+      usePermission('camera', {
+        navigator: { permissions: { query } },
+        immediate: false
+      })
+    );
+
+    root.dispose();
+
+    await expect(root.value.query()).resolves.toBeNull();
+    expect(query).not.toHaveBeenCalled();
+    expect(addEventListener).not.toHaveBeenCalled();
+    expect(root.value.state()).toBe('prompt');
   });
 });

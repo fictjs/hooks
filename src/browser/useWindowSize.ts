@@ -24,13 +24,13 @@ export function useWindowSize(options: UseWindowSizeOptions = {}): UseWindowSize
   const width = createSignal(windowRef?.innerWidth ?? options.initialWidth ?? 0);
   const height = createSignal(windowRef?.innerHeight ?? options.initialHeight ?? 0);
 
-  const update = () => {
+  function update(): void {
     if (!windowRef) {
       return;
     }
     width(windowRef.innerWidth);
     height(windowRef.innerHeight);
-  };
+  }
 
   useEventListener(windowRef, 'resize', update, { passive: true });
 

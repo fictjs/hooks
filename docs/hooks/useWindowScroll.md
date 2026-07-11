@@ -17,6 +17,7 @@ function useWindowScroll(options?: {
 }): {
   x: () => number;
   y: () => number;
+  refresh: () => void;
 };
 ```
 
@@ -24,3 +25,4 @@ function useWindowScroll(options?: {
 
 - Built on top of `useScroll`.
 - Supports SSR-safe fallback via `window: null`.
+- Call `refresh()` to rebind the listener and immediately read the current window position.

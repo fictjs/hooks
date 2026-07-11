@@ -24,6 +24,7 @@ function useScroll(options?: {
 }): {
   x: () => number;
   y: () => number;
+  refresh: () => void;
 };
 ```
 
@@ -32,3 +33,4 @@ function useScroll(options?: {
 - Default target is `window`.
 - `target: null` disables listener and keeps fallback values.
 - `shouldUpdate` can be used to filter noisy updates.
+- Call `refresh()` after changing a non-reactive ref to rebind the listener and read its position.

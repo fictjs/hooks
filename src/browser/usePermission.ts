@@ -24,11 +24,30 @@ export interface UsePermissionReturn {
   query: () => Promise<PermissionStatus | null>;
 }
 
+const permissionDescriptorKeys = [
+  'name',
+  'allowWithoutGesture',
+  'allowWithoutSanitization',
+  'deviceId',
+  'panTiltZoom',
+  'requestedOrigin',
+  'sysex',
+  'type',
+  'userVisibleOnly'
+] as const;
+
 function normalizePermission(input: PermissionInput): PermissionDescriptor {
   if (typeof input === 'string') {
     return { name: input as PermissionName };
   }
   return input;
+}
+
+function isSamePermission(a: PermissionDescriptor, b: PermissionDescriptor): boolean {
+  const keys = new Set([...permissionDescriptorKeys, ...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].every((key) =>
+    Object.is(Reflect.get(a as object, key), Reflect.get(b as object, key))
+  );
 }
 
 /**
@@ -48,16 +67,39 @@ export function usePermission(
   const isSupported = createSignal<boolean>(!!navigatorRef?.permissions?.query);
   const state = createSignal<PermissionState>(initialState);
 
-  let activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
+  const readPermission = () =>
+    normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
+  const activePermission = { current: readPermission() };
+  let initialized = false;
   let cleanup = () => {};
   let queryId = 0;
+  let disposed = false;
 
-  const bindStatus = (nextStatus: PermissionStatus) => {
+  const syncPermission = () => {
+    const nextPermission = readPermission();
+    const changed = !isSamePermission(activePermission.current, nextPermission);
+    if (changed) {
+      queryId += 1;
+      cleanup();
+      activePermission.current = nextPermission;
+      state(initialState);
+    }
+    return { permission: activePermission.current, changed };
+  };
+
+  const bindStatus = (nextStatus: PermissionStatus, statusPermission: PermissionDescriptor) => {
     cleanup();
     state(nextStatus.state);
 
     const onChange = () => {
-      state(nextStatus.state);
+      if (disposed) {
+        return;
+      }
+
+      const matchesCurrentPermission = isSamePermission(statusPermission, readPermission());
+      if (!disposed && matchesCurrentPermission) {
+        state(nextStatus.state);
+      }
     };
 
     nextStatus.addEventListener('change', onChange as EventListener);
@@ -67,23 +109,28 @@ export function usePermission(
     };
   };
 
-  const query = async (): Promise<PermissionStatus | null> => {
+  const queryPermission = async (
+    currentPermission: PermissionDescriptor
+  ): Promise<PermissionStatus | null> => {
+    if (disposed) {
+      return null;
+    }
+
     if (!navigatorRef?.permissions?.query) {
       isSupported(false);
       return null;
     }
 
     const currentQueryId = ++queryId;
-    const currentPermission = activePermission;
 
     isSupported(true);
 
     try {
       const nextStatus = await navigatorRef.permissions.query(currentPermission);
-      if (currentQueryId !== queryId) {
+      if (disposed || currentQueryId !== queryId) {
         return null;
       }
-      bindStatus(nextStatus);
+      bindStatus(nextStatus, currentPermission);
       return nextStatus;
     } catch {
       if (currentQueryId === queryId) {
@@ -93,15 +140,26 @@ export function usePermission(
     }
   };
 
+  const query = (): Promise<PermissionStatus | null> => {
+    if (disposed) {
+      return Promise.resolve(null);
+    }
+    const current = syncPermission();
+    return queryPermission(current.permission);
+  };
+
   createEffect(() => {
-    cleanup();
-    activePermission = normalizePermission(toValue(permission as MaybeAccessor<PermissionInput>));
-    if (options.immediate ?? true) {
-      void query();
+    const current = syncPermission();
+    if (!initialized || current.changed) {
+      initialized = true;
+      if (options.immediate ?? true) {
+        void queryPermission(current.permission);
+      }
     }
   });
 
   tryOnDestroy(() => {
+    disposed = true;
     queryId += 1;
     cleanup();
   });

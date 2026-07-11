@@ -26,9 +26,9 @@ export function useDocumentVisibility(
 
   const visibility = createSignal(documentRef?.visibilityState ?? fallback);
 
-  const update = () => {
+  function update(): void {
     visibility(documentRef?.visibilityState ?? fallback);
-  };
+  }
 
   useEventListener(documentRef, 'visibilitychange', update, { passive: true });
 

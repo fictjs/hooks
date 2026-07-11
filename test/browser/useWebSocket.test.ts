@@ -147,9 +147,142 @@ describe('useWebSocket', () => {
     expect(onError).toHaveBeenCalledWith(connectError);
   });
 
+  it('keeps reconnecting when constructor and error callback both throw', () => {
+    vi.useFakeTimers();
+    const connectError = new Error('connect failed');
+    const onError = vi.fn(() => {
+      throw new Error('error callback failed');
+    });
+    const constructor = vi.fn(() => {
+      throw connectError;
+    });
+    const ThrowingWebSocket = function ThrowingWebSocket() {
+      constructor();
+    } as unknown as typeof WebSocket;
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ThrowingWebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        onError,
+        immediate: false
+      })
+    );
+
+    expect(() => state.open()).not.toThrow();
+    expect(state.reconnectCount()).toBe(1);
+    expect(constructor).toHaveBeenCalledTimes(1);
+
+    vi.runAllTimers();
+    expect(constructor).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(state.error()).toBe(connectError);
+  });
+
+  it('preserves a socket opened reentrantly from a constructor error callback', () => {
+    vi.useFakeTimers();
+    const connectError = new Error('connect failed');
+    let openReentrantly = () => false;
+    let constructions = 0;
+    let reentered = false;
+    let reentrantOpenResult: boolean | undefined;
+    const ReentrantWebSocket = function ReentrantWebSocket(
+      url: string | URL,
+      protocols?: string | string[]
+    ) {
+      constructions += 1;
+      if (constructions === 1) {
+        throw connectError;
+      }
+      return new MockWebSocket(url, protocols);
+    } as unknown as typeof WebSocket;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ReentrantWebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        immediate: false,
+        onError() {
+          if (!reentered) {
+            reentered = true;
+            reentrantOpenResult = openReentrantly();
+            MockWebSocket.instances[0]!.open();
+          }
+          throw new Error('error callback failed');
+        }
+      })
+    );
+    openReentrantly = root.value.open;
+
+    expect(root.value.open()).toBe(true);
+
+    expect(reentrantOpenResult).toBe(true);
+    expect(constructions).toBe(2);
+    expect(root.value.status()).toBe('OPEN');
+    expect(root.value.error()).toBeNull();
+    expect(root.value.reconnectCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(root.value.send('payload')).toBe(true);
+    expect(MockWebSocket.instances[0]!.send).toHaveBeenCalledWith('payload');
+    root.dispose();
+  });
+
+  it('does not reconnect when a constructor error callback closes the connection', () => {
+    vi.useFakeTimers();
+    let closeFromError = () => {};
+    let constructions = 0;
+    class ThrowingWebSocket {
+      constructor() {
+        constructions += 1;
+        throw new Error('connect failed');
+      }
+    }
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: ThrowingWebSocket as never,
+        autoReconnect: { retries: 1, delay: 0 },
+        immediate: false,
+        onError() {
+          closeFromError();
+          throw new Error('error callback failed');
+        }
+      })
+    );
+    closeFromError = root.value.close;
+
+    expect(root.value.open()).toBe(false);
+
+    expect(root.value.status()).toBe('CLOSED');
+    expect(root.value.reconnectCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.runAllTimers();
+    expect(constructions).toBe(1);
+    root.dispose();
+  });
+
   it('reports send errors through onError', () => {
     const onError = vi.fn();
     const sendError = new Error('send failed');
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        onError
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.send.mockImplementationOnce(() => {
+      throw sendError;
+    });
+
+    expect(state.send('payload')).toBe(false);
+    expect(state.error()).toBe(sendError);
+    expect(onError).toHaveBeenCalledWith(sendError);
+  });
+
+  it('returns false when send and error callback both throw', () => {
+    const sendError = new Error('send failed');
+    const onError = vi.fn(() => {
+      throw new Error('error callback failed');
+    });
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {
         webSocket: MockWebSocket as unknown as typeof WebSocket,
@@ -198,6 +331,50 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(3);
   });
 
+  it('auto reconnects when onClose throws', () => {
+    vi.useFakeTimers();
+    const callbackError = new Error('close callback failed');
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        onClose() {
+          throw callbackError;
+        }
+      })
+    );
+
+    MockWebSocket.instances[0]!.serverClose();
+
+    expect(state.error()).toBe(callbackError);
+    expect(state.reconnectCount()).toBe(1);
+    vi.runAllTimers();
+    expect(MockWebSocket.instances).toHaveLength(2);
+  });
+
+  it('does not schedule auto reconnect when onClose opens a replacement', () => {
+    vi.useFakeTimers();
+    let openReplacement = () => false;
+    const root = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        autoReconnect: { retries: 1, delay: 100 },
+        onClose() {
+          openReplacement();
+        }
+      })
+    );
+    openReplacement = root.value.open;
+
+    MockWebSocket.instances[0]!.serverClose();
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(root.value.reconnectCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(500);
+    expect(MockWebSocket.instances).toHaveLength(2);
+  });
+
   it('does not auto reconnect after manual close', () => {
     vi.useFakeTimers();
 
@@ -233,21 +410,27 @@ describe('useWebSocket', () => {
     expect(state.status()).toBe('CLOSED');
   });
 
-  it('recovers state when close throws', () => {
+  it('keeps ownership of the socket when close throws', () => {
     const { value: state } = createRoot(() =>
       useWebSocket('ws://fict.test', {
         webSocket: MockWebSocket as unknown as typeof WebSocket
       })
     );
     const socket = MockWebSocket.instances[0]!;
+    socket.open();
     socket.close.mockImplementationOnce(() => {
       throw new Error('close failed');
     });
 
     state.close();
 
-    expect(state.status()).toBe('CLOSED');
+    expect(state.status()).toBe('OPEN');
     expect((state.error() as unknown as Error).message).toBe('close failed');
+    expect(state.send('still-open')).toBe(true);
+
+    state.close();
+    expect(state.status()).toBe('CLOSED');
+    expect(socket.close).toHaveBeenCalledTimes(2);
   });
 
   it('supports explicit reconnect', () => {
@@ -260,6 +443,27 @@ describe('useWebSocket', () => {
     const first = MockWebSocket.instances[0]!;
     expect(state.reconnect()).toBe(true);
     expect(first.close).toHaveBeenCalledTimes(1);
+    expect(MockWebSocket.instances).toHaveLength(2);
+  });
+
+  it('returns false and keeps the current socket when reconnect close throws', () => {
+    const { value: state } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    expect(state.reconnect()).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(state.status()).toBe('OPEN');
+    expect(state.send('still-open')).toBe(true);
+
+    expect(state.reconnect()).toBe(true);
     expect(MockWebSocket.instances).toHaveLength(2);
   });
 
@@ -343,6 +547,26 @@ describe('useWebSocket', () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
+  it('closes a manually opened socket when open is called with an empty url', () => {
+    const source = createSignal<string | null>('ws://fict.test');
+    const { value: state } = createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        immediate: false
+      })
+    );
+
+    expect(state.open()).toBe(true);
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    source(null);
+
+    expect(state.open()).toBe(false);
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    expect(state.status()).toBe('CLOSED');
+    expect(state.send('after-empty-url')).toBe(false);
+  });
+
   it('reconnects when accessor url changes between non-empty values', async () => {
     const source = createSignal('ws://first.fict.test');
     const { value: state } = createRoot(() =>
@@ -362,6 +586,27 @@ describe('useWebSocket', () => {
     expect(state.status()).toBe('CONNECTING');
   });
 
+  it('keeps the current socket when changing urls cannot close it', async () => {
+    const source = createSignal('ws://first.fict.test');
+    const { value: state } = createRoot(() =>
+      useWebSocket(() => source(), {
+        webSocket: MockWebSocket as unknown as typeof WebSocket
+      })
+    );
+    const first = MockWebSocket.instances[0]!;
+    first.open();
+    first.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    source('ws://second.fict.test');
+    await Promise.resolve();
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(state.status()).toBe('OPEN');
+    expect(state.send('still-open')).toBe(true);
+  });
+
   it('closes socket on dispose', () => {
     const { dispose } = createRoot(() =>
       useWebSocket('ws://fict.test', {
@@ -372,5 +617,34 @@ describe('useWebSocket', () => {
     const socket = MockWebSocket.instances[0]!;
     dispose();
     expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reconnect or call user callbacks after dispose when close throws', () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    const onError = vi.fn();
+    const { value: state, dispose } = createRoot(() =>
+      useWebSocket('ws://fict.test', {
+        webSocket: MockWebSocket as unknown as typeof WebSocket,
+        autoReconnect: { retries: 1, delay: 0 },
+        onClose,
+        onError
+      })
+    );
+    const socket = MockWebSocket.instances[0]!;
+    socket.open();
+    socket.close.mockImplementationOnce(() => {
+      throw new Error('close failed');
+    });
+
+    dispose();
+    socket.serverClose();
+    vi.runAllTimers();
+
+    expect(state.status()).toBe('CLOSED');
+    expect(state.send('after-dispose')).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 });

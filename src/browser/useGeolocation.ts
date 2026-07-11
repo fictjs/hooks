@@ -69,17 +69,23 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
   const active = createSignal(false);
 
   let watchId: number | null = null;
+  let generation = 0;
+  let disposed = false;
 
   const resume = () => {
-    if (!geolocationRef || active()) {
+    if (disposed || !geolocationRef || active()) {
       if (!geolocationRef) {
         isSupported(false);
       }
       return;
     }
 
-    watchId = geolocationRef.watchPosition(
+    const currentGeneration = ++generation;
+    const nextWatchId = geolocationRef.watchPosition(
       (position) => {
+        if (currentGeneration !== generation) {
+          return;
+        }
         coords({
           accuracy: position.coords.accuracy,
           latitude: position.coords.latitude,
@@ -93,6 +99,9 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
         error(null);
       },
       (nextError) => {
+        if (currentGeneration !== generation) {
+          return;
+        }
         error(nextError);
       },
       {
@@ -102,10 +111,18 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
       }
     );
 
+    if (disposed || currentGeneration !== generation) {
+      active(false);
+      geolocationRef.clearWatch(nextWatchId);
+      return;
+    }
+
+    watchId = nextWatchId;
     active(true);
   };
 
   const pause = () => {
+    generation += 1;
     if (!geolocationRef || watchId == null) {
       active(false);
       return;
@@ -120,6 +137,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}): UseGeolocat
   }
 
   tryOnDestroy(() => {
+    disposed = true;
     pause();
   });
 

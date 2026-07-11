@@ -2,6 +2,7 @@ import { createEffect, onCleanup } from '@fictjs/runtime';
 import { createSignal } from '@fictjs/runtime/advanced';
 import { useEventListener } from '../event/useEventListener';
 import { defaultWindow } from '../internal/env';
+import { tryOnDestroy } from '../internal/lifecycle';
 import { deferTargetResolution, resolveMaybeTarget, type MaybeTarget } from '../internal/target';
 
 export interface ScrollPosition {
@@ -22,6 +23,7 @@ export interface UseScrollOptions {
 export interface UseScrollReturn {
   x: () => number;
   y: () => number;
+  refresh: () => void;
 }
 
 function isWindowLike(target: unknown): target is Window {
@@ -95,6 +97,7 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   const y = createSignal(fallback.y);
   const previous = { current: { ...fallback } };
   let cancelDeferredUpdate = () => {};
+  let disposed = false;
 
   const resolveScrollTarget = (): Element | Document | Window | undefined => {
     if (options.target === null) {
@@ -107,9 +110,19 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
   };
 
   const update = () => {
-    const next = readScrollPosition(resolveScrollTarget(), windowRef, fallback);
+    if (disposed) {
+      return;
+    }
+    const nextTarget = resolveScrollTarget();
+    if (disposed) {
+      return;
+    }
+    const next = readScrollPosition(nextTarget, windowRef, fallback);
+    if (disposed) {
+      return;
+    }
     const shouldUpdate = options.shouldUpdate?.(next, previous.current) ?? true;
-    if (!shouldUpdate) {
+    if (disposed || !shouldUpdate) {
       return;
     }
     if (next.x === previous.current.x && next.y === previous.current.y) {
@@ -117,24 +130,74 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     }
     previous.current = next;
     x(next.x);
+    if (disposed) {
+      return;
+    }
     y(next.y);
   };
 
-  useEventListener(() => resolveScrollTarget() as EventTarget | undefined, 'scroll', update, {
-    passive: options.passive ?? true,
-    capture: options.capture
-  });
+  const scrollListener = useEventListener(
+    () => {
+      const nextTarget = resolveScrollTarget();
+      return disposed ? undefined : (nextTarget as EventTarget | undefined);
+    },
+    'scroll',
+    update,
+    {
+      passive: options.passive ?? true,
+      capture: options.capture
+    }
+  );
 
-  createEffect(() => {
+  const scheduleDeferredUpdate = () => {
+    if (disposed) {
+      return;
+    }
+    cancelDeferredUpdate = deferTargetResolution(() => {
+      cancelDeferredUpdate = () => {};
+      if (disposed) {
+        return;
+      }
+      scrollListener.refresh();
+      if (disposed) {
+        scrollListener.stop();
+        return;
+      }
+      update();
+      if (disposed) {
+        scrollListener.stop();
+      }
+    });
+  };
+
+  const refresh = () => {
+    if (disposed) {
+      return;
+    }
     cancelDeferredUpdate();
     cancelDeferredUpdate = () => {};
-    update();
-    if (!resolveScrollTarget()) {
-      cancelDeferredUpdate = deferTargetResolution(() => {
-        cancelDeferredUpdate = () => {};
-        update();
-      });
+    scrollListener.refresh();
+    if (disposed) {
+      scrollListener.stop();
+      return;
     }
+    update();
+    if (disposed) {
+      scrollListener.stop();
+      return;
+    }
+    const nextTarget = resolveScrollTarget();
+    if (disposed) {
+      scrollListener.stop();
+      return;
+    }
+    if (!nextTarget) {
+      scheduleDeferredUpdate();
+    }
+  };
+
+  createEffect(() => {
+    refresh();
 
     onCleanup(() => {
       cancelDeferredUpdate();
@@ -142,8 +205,15 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
     });
   });
 
+  tryOnDestroy(() => {
+    disposed = true;
+    cancelDeferredUpdate();
+    cancelDeferredUpdate = () => {};
+  });
+
   return {
     x,
-    y
+    y,
+    refresh
   };
 }
