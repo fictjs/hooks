@@ -70,6 +70,43 @@ describe('useRequest', () => {
     expect(state.data()).toBe('manual');
   });
 
+  it('does not mutate state or cache after dispose', () => {
+    const cacheProvider = new Map();
+    const root = createRoot(() =>
+      useRequest(async () => 1, {
+        manual: true,
+        cacheKey: 'disposed-mutate',
+        cacheProvider
+      })
+    );
+
+    root.dispose();
+    root.value.mutate(2);
+
+    expect(root.value.data()).toBeUndefined();
+    expect(cacheProvider.has('disposed-mutate')).toBe(false);
+  });
+
+  it('does not commit a mutate updater that disposes the root', () => {
+    const cacheProvider = new Map();
+    const root = createRoot(() =>
+      useRequest(async () => 1, {
+        manual: true,
+        cacheKey: 'reentrant-disposed-mutate',
+        cacheProvider
+      })
+    );
+    root.value.mutate(1);
+
+    root.value.mutate(() => {
+      root.dispose();
+      return 2;
+    });
+
+    expect(root.value.data()).toBe(1);
+    expect(cacheProvider.get('reentrant-disposed-mutate')?.data).toBe(1);
+  });
+
   it('retries failed requests', async () => {
     const service = vi
       .fn<(...args: [number]) => Promise<number>>()
@@ -198,6 +235,66 @@ describe('useRequest', () => {
     expect((state.error() as Error).message).toBe('boom');
   });
 
+  it('does not treat onSuccess exceptions as service failures', async () => {
+    const callbackError = new Error('callback failed');
+    const failure = vi.fn();
+    const done = vi.fn();
+    const service = vi.fn(async () => 10);
+
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        onSuccess() {
+          throw callbackError;
+        },
+        onError: failure,
+        onFinally: done
+      })
+    );
+
+    await expect(state.runAsync()).rejects.toBe(callbackError);
+
+    expect(state.data()).toBe(10);
+    expect(state.error()).toBeNull();
+    expect(state.loading()).toBe(false);
+    expect(failure).not.toHaveBeenCalled();
+    expect(done).toHaveBeenCalledWith([], 10, null);
+  });
+
+  it('consumes lifecycle callback failures from run()', async () => {
+    const service = vi.fn(async () => 10);
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        onFinally() {
+          throw new Error('detached callback failed');
+        }
+      })
+    );
+
+    state.run();
+    await vi.waitFor(() => expect(state.loading()).toBe(false));
+
+    expect(state.data()).toBe(10);
+    expect(state.error()).toBeNull();
+  });
+
+  it('consumes lifecycle callback failures from automatic execution', async () => {
+    const service = vi.fn(async () => 11);
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        onSuccess() {
+          throw new Error('automatic callback failed');
+        }
+      })
+    );
+
+    await vi.waitFor(() => expect(state.loading()).toBe(false));
+
+    expect(state.data()).toBe(11);
+    expect(state.error()).toBeNull();
+  });
+
   it('runs onFinally only for the latest concurrent request', async () => {
     let resolveFirst: ((value: number) => void) | undefined;
     const service = vi.fn((value: number) => {
@@ -296,6 +393,32 @@ describe('useRequest', () => {
     expect(state.loading()).toBe(false);
   });
 
+  it('settles immediately when cancel interrupts a retry delay', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => {
+      throw new Error('retry failure');
+    });
+    const { value: state } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        retryCount: 1,
+        retryInterval: 60_000
+      })
+    );
+
+    const pending = state.runAsync();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(vi.getTimerCount()).toBe(1);
+
+    state.cancel();
+    await pending;
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(state.loading()).toBe(false);
+  });
+
   it('polls repeatedly and stops polling on dispose', async () => {
     vi.useFakeTimers();
     const service = vi.fn(async () => 'ok');
@@ -318,6 +441,111 @@ describe('useRequest', () => {
     await vi.advanceTimersByTimeAsync(100);
     await Promise.resolve();
     expect(service).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears a zero-valued polling timer on dispose', async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const setTimeoutRef = vi.fn(() => 0);
+    const clearTimeoutRef = vi.fn();
+    globalThis.setTimeout = setTimeoutRef as unknown as typeof setTimeout;
+    globalThis.clearTimeout = clearTimeoutRef as unknown as typeof clearTimeout;
+
+    try {
+      const service = vi.fn(async () => 'ok');
+      const { value: state, dispose } = createRoot(() =>
+        useRequest(service, {
+          manual: true,
+          pollingInterval: 20
+        })
+      );
+
+      await state.runAsync();
+      expect(setTimeoutRef).toHaveBeenCalledTimes(1);
+
+      dispose();
+
+      expect(clearTimeoutRef).toHaveBeenCalledWith(0);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
+  });
+
+  it('does not restart requests or polling after dispose', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => 'ok');
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20
+      })
+    );
+
+    root.dispose();
+
+    await expect(root.value.runAsync()).resolves.toBeUndefined();
+    root.value.run();
+    await expect(root.value.refresh()).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(service).not.toHaveBeenCalled();
+    expect(root.value.loading()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('consumes callback failures from detached polling runs', async () => {
+    vi.useFakeTimers();
+    const service = vi.fn(async () => 12);
+    const onSuccess = vi.fn(() => {
+      if (service.mock.calls.length > 1) {
+        throw new Error('poll callback failed');
+      }
+    });
+    const { value: state, dispose } = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onSuccess
+      })
+    );
+
+    await state.runAsync();
+    await vi.advanceTimersByTimeAsync(20);
+    await Promise.resolve();
+
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(state.data()).toBe(12);
+    expect(state.loading()).toBe(false);
+    dispose();
+  });
+
+  it('continues polling when onError throws', async () => {
+    vi.useFakeTimers();
+    const requestError = new Error('request failed');
+    const callbackError = new Error('callback failed');
+    const service = vi.fn(async () => {
+      throw requestError;
+    });
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onError() {
+          throw callbackError;
+        }
+      })
+    );
+
+    await expect(root.value.runAsync()).rejects.toBe(callbackError);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(service).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(1);
+    root.dispose();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('does not restart polling when onSuccess disposes the root', async () => {
@@ -344,6 +572,7 @@ describe('useRequest', () => {
 
   it('does not restart polling when onError cancels the request', async () => {
     vi.useFakeTimers();
+    const callbackError = new Error('callback failed');
     const service = vi.fn(async () => {
       throw new Error('failed');
     });
@@ -355,15 +584,42 @@ describe('useRequest', () => {
         pollingInterval: 20,
         onError() {
           cancel();
+          throw callbackError;
         }
       })
     );
     cancel = state.cancel;
 
-    await state.runAsync();
+    await expect(state.runAsync()).rejects.toBe(callbackError);
     await vi.advanceTimersByTimeAsync(100);
 
     expect(service).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart polling when onError disposes the root', async () => {
+    vi.useFakeTimers();
+    const callbackError = new Error('callback failed');
+    const service = vi.fn(async () => {
+      throw new Error('failed');
+    });
+    let dispose = () => {};
+    const root = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        pollingInterval: 20,
+        onError() {
+          dispose();
+          throw callbackError;
+        }
+      })
+    );
+    dispose = root.dispose;
+
+    await expect(root.value.runAsync()).rejects.toBe(callbackError);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('evicts stale cache entries', async () => {
@@ -460,5 +716,42 @@ describe('useRequest', () => {
 
     expect(firstCached.data()).toBeUndefined();
     expect(secondCached.data()).toBe(2);
+  });
+
+  it('refreshes cache recency when an existing entry is updated', async () => {
+    const service = vi.fn(async (value: number) => value);
+    const cacheProvider = new Map();
+    const first = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'recency-first',
+        cacheSize: 2,
+        cacheProvider
+      })
+    ).value;
+    const second = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'recency-second',
+        cacheSize: 2,
+        cacheProvider
+      })
+    ).value;
+    const third = createRoot(() =>
+      useRequest(service, {
+        manual: true,
+        cacheKey: 'recency-third',
+        cacheSize: 2,
+        cacheProvider
+      })
+    ).value;
+
+    await first.runAsync(1);
+    await second.runAsync(2);
+    await first.runAsync(10);
+    await third.runAsync(3);
+
+    expect([...cacheProvider.keys()]).toEqual(['recency-first', 'recency-third']);
+    expect(cacheProvider.get('recency-first')?.data).toBe(10);
   });
 });

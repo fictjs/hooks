@@ -1,5 +1,7 @@
 import { createSignal } from '@fictjs/runtime/advanced';
+import { isClient } from '../internal/env';
 import { tryOnDestroy } from '../internal/lifecycle';
+import type { NoInferCompat } from '../internal/types';
 
 export interface UseRequestCacheEntry<T> {
   data: T;
@@ -12,9 +14,7 @@ const REQUEST_CANCELED = Symbol('REQUEST_CANCELED');
 const DEFAULT_CACHE_TIME = 5 * 60 * 1000;
 const DEFAULT_CACHE_SIZE = 100;
 
-export interface UseRequestOptions<TData, TParams extends unknown[]> {
-  manual?: boolean;
-  defaultParams?: TParams;
+interface UseRequestBaseOptions<TData, TParams extends unknown[]> {
   retryCount?: number;
   retryInterval?: number;
   pollingInterval?: number;
@@ -28,6 +28,27 @@ export interface UseRequestOptions<TData, TParams extends unknown[]> {
   onFinally?: (params: TParams, data?: TData, error?: unknown) => void;
 }
 
+type UseRequestExecutionOptions<TParams extends unknown[]> = [] extends TParams
+  ? {
+      manual?: boolean;
+      defaultParams?: TParams;
+    }
+  :
+      | {
+          manual: true;
+          defaultParams?: TParams;
+        }
+      | {
+          manual?: false;
+          defaultParams: TParams;
+        };
+
+export type UseRequestOptions<TData, TParams extends unknown[]> = UseRequestBaseOptions<
+  TData,
+  TParams
+> &
+  UseRequestExecutionOptions<TParams>;
+
 export interface UseRequestReturn<TData, TParams extends unknown[]> {
   data: () => TData | undefined;
   error: () => unknown;
@@ -40,9 +61,9 @@ export interface UseRequestReturn<TData, TParams extends unknown[]> {
   mutate: (value: TData | ((prev: TData | undefined) => TData)) => void;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+type UseRequestOptionsTuple<TData, TParams extends unknown[]> = [] extends TParams
+  ? [options?: UseRequestOptions<TData, TParams>]
+  : [options: UseRequestOptions<TData, TParams>];
 
 export function clearRequestCache(cacheKey?: string): void {
   if (cacheKey === undefined) {
@@ -81,16 +102,45 @@ function pruneCacheSize<T>(cache: Map<string, UseRequestCacheEntry<T>>, maxSize:
  */
 export function useRequest<TData, TParams extends unknown[] = []>(
   service: (...params: TParams) => Promise<TData>,
-  options: UseRequestOptions<TData, TParams> = {}
+  ...optionsTuple: UseRequestOptionsTuple<TData, NoInferCompat<TParams>>
 ): UseRequestReturn<TData, TParams> {
+  const options = (optionsTuple[0] ?? {}) as UseRequestOptions<TData, TParams>;
   const data = createSignal<TData | undefined>(undefined);
   const error = createSignal<unknown>(null);
   const loading = createSignal(false);
   const params = createSignal<TParams | undefined>(options.defaultParams);
-  const cache = (options.cacheProvider ?? requestCache) as Map<string, UseRequestCacheEntry<TData>>;
+  const cache = (options.cacheProvider ?? (isClient ? requestCache : new Map())) as Map<
+    string,
+    UseRequestCacheEntry<TData>
+  >;
 
   let callId = 0;
   let pollingTimer: ReturnType<typeof setTimeout> | undefined;
+  const retryDelayCancelers = new Set<() => void>();
+  let disposed = false;
+
+  const waitForRetry = (ms: number): Promise<void> => {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        retryDelayCancelers.delete(finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, ms);
+      retryDelayCancelers.add(finish);
+    });
+  };
+
+  const stopRetryDelays = () => {
+    for (const cancelDelay of [...retryDelayCancelers]) {
+      cancelDelay();
+    }
+  };
 
   const applyCache = () => {
     if (!options.cacheKey) {
@@ -127,6 +177,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
     const now = Date.now();
     pruneExpiredCache(cache, now);
+    cache.delete(options.cacheKey);
     cache.set(options.cacheKey, {
       data: value,
       timestamp: now,
@@ -136,7 +187,7 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const stopPolling = () => {
-    if (pollingTimer) {
+    if (pollingTimer !== undefined) {
       clearTimeout(pollingTimer);
       pollingTimer = undefined;
     }
@@ -145,12 +196,12 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   const schedulePolling = (currentParams: TParams) => {
     stopPolling();
 
-    if (!options.pollingInterval || options.pollingInterval <= 0) {
+    if (disposed || !options.pollingInterval || options.pollingInterval <= 0) {
       return;
     }
 
     pollingTimer = setTimeout(() => {
-      void runAsync(...currentParams);
+      runDetached(currentParams);
     }, options.pollingInterval);
   };
 
@@ -176,12 +227,17 @@ export function useRequest<TData, TParams extends unknown[] = []>(
         }
 
         attempt += 1;
-        await delay(retryInterval);
+        await waitForRetry(retryInterval);
       }
     }
   };
 
   const runAsync = async (...currentParams: TParams): Promise<TData | undefined> => {
+    if (disposed) {
+      return data();
+    }
+
+    stopRetryDelays();
     const id = ++callId;
     let finalData: TData | undefined;
     let finalError: unknown = null;
@@ -192,7 +248,26 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     params(currentParams);
 
     try {
-      const result = await runWithRetry(currentParams, id);
+      let result: TData;
+      try {
+        result = await runWithRetry(currentParams, id);
+      } catch (err) {
+        if (id !== callId || err === REQUEST_CANCELED) {
+          return data();
+        }
+
+        finalError = err;
+        error(err);
+        try {
+          options.onError?.(err, currentParams);
+        } finally {
+          if (id === callId) {
+            schedulePolling(currentParams);
+          }
+        }
+        return data();
+      }
+
       finalData = result;
       if (id !== callId) {
         return data();
@@ -200,23 +275,14 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
       data(result);
       saveCache(result);
-      options.onSuccess?.(result, currentParams);
-      if (id === callId) {
-        schedulePolling(currentParams);
+      try {
+        options.onSuccess?.(result, currentParams);
+      } finally {
+        if (id === callId) {
+          schedulePolling(currentParams);
+        }
       }
       return result;
-    } catch (err) {
-      if (id !== callId || err === REQUEST_CANCELED) {
-        return data();
-      }
-
-      finalError = err;
-      error(err);
-      options.onError?.(err, currentParams);
-      if (id === callId) {
-        schedulePolling(currentParams);
-      }
-      return data();
     } finally {
       if (id === callId) {
         loading(false);
@@ -225,14 +291,21 @@ export function useRequest<TData, TParams extends unknown[] = []>(
     }
   };
 
+  const runDetached = (currentParams: TParams) => {
+    void runAsync(...currentParams).catch(() => {
+      // Detached executions have no caller to receive lifecycle callback failures.
+    });
+  };
+
   const run = (...currentParams: TParams) => {
-    void runAsync(...currentParams);
+    runDetached(currentParams);
   };
 
   const cancel = () => {
     callId += 1;
     loading(false);
     stopPolling();
+    stopRetryDelays();
   };
 
   const refresh = async () => {
@@ -244,8 +317,16 @@ export function useRequest<TData, TParams extends unknown[] = []>(
   };
 
   const mutate = (value: TData | ((prev: TData | undefined) => TData)) => {
+    if (disposed) {
+      return;
+    }
+
     const next =
       typeof value === 'function' ? (value as (prev: TData | undefined) => TData)(data()) : value;
+    if (disposed) {
+      return;
+    }
+
     data(next);
     saveCache(next);
   };
@@ -254,10 +335,13 @@ export function useRequest<TData, TParams extends unknown[] = []>(
 
   if (!options.manual) {
     const initialParams = options.defaultParams ?? ([] as unknown as TParams);
-    void runAsync(...initialParams);
+    runDetached(initialParams);
   }
 
-  tryOnDestroy(cancel);
+  tryOnDestroy(() => {
+    disposed = true;
+    cancel();
+  });
 
   return {
     data,

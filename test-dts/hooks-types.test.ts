@@ -64,6 +64,18 @@ useRequest(async (name: string) => ({ name }), {
 });
 clearRequestCache('typed-cache-provider');
 
+useRequest(async (name: string) => name, {
+  defaultParams: ['fict']
+});
+useRequest(async () => 'ready');
+useRequest(async (name?: string) => name ?? 'ready');
+// @ts-expect-error required service parameters need manual mode or defaultParams
+useRequest(async (name: string) => name);
+// @ts-expect-error explicitly automatic requests with required parameters need defaultParams
+useRequest(async (name: string) => name, { manual: false });
+// @ts-expect-error implicit automatic requests with required parameters need defaultParams
+useRequest(async (name: string) => name, {});
+
 const fetched = useFetch<{ ok: boolean }>('https://example.com', { immediate: false });
 type FetchData = ReturnType<typeof fetched.data>;
 const _fetchData: Assert<Equal<FetchData, { ok: boolean } | null>> = true;
@@ -71,6 +83,26 @@ const _fetchData: Assert<Equal<FetchData, { ok: boolean } | null>> = true;
 const asyncState = useAsyncState(async (count: number) => count * 2, 0);
 type AsyncStateValue = ReturnType<typeof asyncState.state>;
 const _asyncStateValue: Assert<Equal<AsyncStateValue, number>> = true;
+
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate: true,
+  immediateArgs: [2]
+});
+const immediate: boolean = Math.random() > 0.5;
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate,
+  immediateArgs: [2]
+});
+useAsyncState(async () => 1, 0, { immediate: true });
+// @ts-expect-error immediate execution of a required-argument executor needs immediateArgs
+useAsyncState(async (count: number) => count * 2, 0, { immediate: true });
+// @ts-expect-error a boolean immediate option still needs arguments when it may be true
+useAsyncState(async (count: number) => count * 2, 0, { immediate });
+useAsyncState(async (count: number) => count * 2, 0, {
+  immediate: true,
+  // @ts-expect-error immediateArgs preserves executor argument types
+  immediateArgs: ['2']
+});
 
 const virtual = useVirtualList(['a', 'b'], { itemHeight: 20, containerHeight: 100 });
 type VirtualTotalHeight = ReturnType<typeof virtual.totalHeight>;

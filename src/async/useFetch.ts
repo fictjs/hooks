@@ -34,6 +34,17 @@ interface MergedAbortSignal {
   cleanup: () => void;
 }
 
+const FETCH_ABORTED = Symbol('FETCH_ABORTED');
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 function mergeAbortSignals(...signals: Array<AbortSignal | null | undefined>): MergedAbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => signal != null);
   const empty = {
@@ -117,6 +128,8 @@ export function useFetch<T = unknown>(
   let requestId = 0;
   let activeRequestId: number | null = null;
   let controller: AbortController | undefined;
+  let cancelActiveRequest: (() => void) | undefined;
+  let disposed = false;
 
   const abort = () => {
     if (activeRequestId == null) {
@@ -126,13 +139,20 @@ export function useFetch<T = unknown>(
     requestId += 1;
     activeRequestId = null;
     const currentController = controller;
+    const currentCancelRequest = cancelActiveRequest;
     controller = undefined;
-    currentController?.abort();
+    cancelActiveRequest = undefined;
     aborted(true);
     isLoading(false);
+    currentCancelRequest?.();
+    currentController?.abort();
   };
 
   const execute = async (init?: RequestInit): Promise<T | null> => {
+    if (disposed) {
+      return data();
+    }
+
     abort();
     const id = ++requestId;
     activeRequestId = id;
@@ -144,6 +164,13 @@ export function useFetch<T = unknown>(
       typeof AbortController !== 'undefined' ? new AbortController() : undefined;
     controller = currentController;
     let cleanupSignal = () => {};
+    let cleanupAbortListener = () => {};
+    let requestSignal: AbortSignal | undefined;
+    let resolveCanceledRequest = () => {};
+    const canceledRequest = new Promise<typeof FETCH_ABORTED>((resolve) => {
+      resolveCanceledRequest = () => resolve(FETCH_ABORTED);
+    });
+    cancelActiveRequest = resolveCanceledRequest;
 
     try {
       const mergedSignal = mergeAbortSignals(
@@ -152,11 +179,56 @@ export function useFetch<T = unknown>(
         currentController?.signal
       );
       cleanupSignal = mergedSignal.cleanup;
-      const response = await fetcher(toValue(input as MaybeAccessor<RequestInfo | URL>), {
-        ...options.init,
-        ...init,
-        signal: mergedSignal.signal
-      });
+      requestSignal = mergedSignal.signal;
+      const abortPromise = requestSignal
+        ? new Promise<typeof FETCH_ABORTED>((resolve) => {
+            const handleAbort = () => {
+              if (id === requestId) {
+                aborted(true);
+                isLoading(false);
+              }
+              resolve(FETCH_ABORTED);
+            };
+
+            if (requestSignal!.aborted) {
+              handleAbort();
+              return;
+            }
+
+            requestSignal!.addEventListener('abort', handleAbort, { once: true });
+            cleanupAbortListener = () => {
+              requestSignal!.removeEventListener('abort', handleAbort);
+              cleanupAbortListener = () => {};
+            };
+          })
+        : undefined;
+      const raceAbort = <Value>(promise: Promise<Value>) =>
+        Promise.race<Value | typeof FETCH_ABORTED>([
+          promise,
+          canceledRequest,
+          ...(abortPromise ? [abortPromise] : [])
+        ]);
+
+      if (disposed || id !== requestId || requestSignal?.aborted) {
+        return data();
+      }
+
+      const resolvedInput = toValue(input as MaybeAccessor<RequestInfo | URL>);
+      if (disposed || id !== requestId || requestSignal?.aborted) {
+        return data();
+      }
+
+      const response = await raceAbort(
+        fetcher(resolvedInput, {
+          ...options.init,
+          ...init,
+          signal: mergedSignal.signal
+        })
+      );
+
+      if (response === FETCH_ABORTED) {
+        return data();
+      }
 
       if (id !== requestId) {
         return data();
@@ -173,7 +245,10 @@ export function useFetch<T = unknown>(
         throw new Error(`Fetch failed with status ${response.status}`);
       }
 
-      const parsed = await parse(response);
+      const parsed = await raceAbort(parse(response));
+      if (parsed === FETCH_ABORTED) {
+        return data();
+      }
       if (id !== requestId) {
         return data();
       }
@@ -188,7 +263,7 @@ export function useFetch<T = unknown>(
         return data();
       }
 
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (requestSignal?.aborted || isAbortError(err)) {
         aborted(true);
         return data();
       }
@@ -197,9 +272,13 @@ export function useFetch<T = unknown>(
       options.onError?.(err);
       return data();
     } finally {
+      cleanupAbortListener();
       cleanupSignal();
       if (controller === currentController) {
         controller = undefined;
+      }
+      if (cancelActiveRequest === resolveCanceledRequest) {
+        cancelActiveRequest = undefined;
       }
       if (activeRequestId === id) {
         activeRequestId = null;
@@ -211,10 +290,15 @@ export function useFetch<T = unknown>(
   };
 
   if (options.immediate ?? true) {
-    void execute();
+    void execute().catch(() => {
+      // Immediate execution has no caller to receive lifecycle callback failures.
+    });
   }
 
-  tryOnDestroy(abort);
+  tryOnDestroy(() => {
+    disposed = true;
+    abort();
+  });
 
   return {
     data,
