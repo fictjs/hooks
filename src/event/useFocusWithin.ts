@@ -9,6 +9,19 @@ export interface UseFocusWithinOptions {
 
 export interface UseFocusWithinReturn {
   focused: () => boolean;
+  refresh: () => void;
+}
+
+function isTargetWithin(element: Element, target: EventTarget | null): boolean {
+  if (!target) {
+    return false;
+  }
+
+  try {
+    return element.contains(target as Node);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -24,31 +37,40 @@ export function useFocusWithin(
   const focused = createSignal(initialValue);
   let previousTarget: Element | undefined;
 
-  useEventListener(target, 'focusin', () => {
+  const focusInListener = useEventListener(target, 'focusin', () => {
     focused(true);
   });
 
-  useEventListener(target, 'focusout', (event) => {
+  const focusOutListener = useEventListener(target, 'focusout', (event) => {
     const targetElement = resolveMaybeTarget(target);
     if (!targetElement) {
       focused(false);
       return;
     }
 
-    const relatedTarget = (event as FocusEvent).relatedTarget as Node | null;
-    if (relatedTarget && targetElement.contains(relatedTarget)) {
+    const relatedTarget = (event as FocusEvent).relatedTarget;
+    if (isTargetWithin(targetElement, relatedTarget)) {
       return;
     }
     focused(false);
   });
 
-  createEffect(() => {
+  const syncTarget = () => {
     const currentTarget = resolveMaybeTarget(target);
     if (currentTarget !== previousTarget) {
       previousTarget = currentTarget;
       focused(initialValue);
     }
-  });
+  };
 
-  return { focused };
+  createEffect(syncTarget);
+
+  return {
+    focused,
+    refresh() {
+      syncTarget();
+      focusInListener.refresh();
+      focusOutListener.refresh();
+    }
+  };
 }

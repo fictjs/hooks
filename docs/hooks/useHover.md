@@ -14,6 +14,7 @@ function useHover(
   }
 ): {
   hovered: () => boolean;
+  refresh: () => void;
 };
 ```
 
@@ -21,3 +22,4 @@ function useHover(
 
 - Uses `pointerenter` / `pointerleave` events.
 - Resets to `initialValue` when target changes.
+- Call `refresh()` after assigning a non-reactive ref asynchronously.

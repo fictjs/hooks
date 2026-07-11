@@ -17,6 +17,7 @@ function useResizeObserver(
   active: () => boolean;
   start: () => void;
   stop: () => void;
+  refresh: () => void;
 };
 ```
 
@@ -24,3 +25,4 @@ function useResizeObserver(
 
 - Observer constructors are read from the provided/default `window`; Node/SSR globals are not used
   implicitly.
+- Call `refresh()` after assigning non-reactive refs asynchronously.

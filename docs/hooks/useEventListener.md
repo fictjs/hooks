@@ -15,6 +15,7 @@ function useEventListener<E extends Event>(
 ): {
   start: () => void;
   stop: () => void;
+  refresh: () => void;
   active: () => boolean;
 };
 ```
@@ -23,6 +24,8 @@ function useEventListener<E extends Event>(
 
 - Supports array events: `['pointerdown', 'click']`.
 - Supports reactive target/event via getter.
+- Call `refresh()` after assigning a non-reactive ref asynchronously. `start()` also retries
+  binding when the listener is active but has no resolved target.
 - All listeners are removed on root dispose.
 
 ## Example

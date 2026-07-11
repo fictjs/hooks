@@ -14,6 +14,7 @@ function useFocusWithin(
   }
 ): {
   focused: () => boolean;
+  refresh: () => void;
 };
 ```
 
@@ -22,3 +23,4 @@ function useFocusWithin(
 - Uses `focusin` and `focusout` events.
 - If `relatedTarget` remains inside the target, focus state stays `true`.
 - Resets to `initialValue` when target changes.
+- Call `refresh()` after assigning a non-reactive ref asynchronously.

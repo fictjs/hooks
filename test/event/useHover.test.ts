@@ -26,6 +26,19 @@ describe('useHover', () => {
     expect(state.hovered()).toBe(true);
   });
 
+  it('refreshes a ref-like target assigned after initial setup', async () => {
+    const target = document.createElement('div');
+    const ref = { current: null as Element | null };
+    const { value: state } = createRoot(() => useHover(ref));
+
+    await Promise.resolve();
+    ref.current = target;
+    state.refresh();
+    target.dispatchEvent(new Event('pointerenter'));
+
+    expect(state.hovered()).toBe(true);
+  });
+
   it('resets when accessor target changes', async () => {
     const first = document.createElement('div');
     const second = document.createElement('div');
@@ -39,6 +52,25 @@ describe('useHover', () => {
     await Promise.resolve();
 
     expect(state.hovered()).toBe(false);
+  });
+
+  it('resets when a ref-like target is refreshed', () => {
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as Element | null };
+    const { value: state } = createRoot(() => useHover(ref));
+
+    first.dispatchEvent(new Event('pointerenter'));
+    expect(state.hovered()).toBe(true);
+
+    ref.current = second;
+    state.refresh();
+
+    expect(state.hovered()).toBe(false);
+    first.dispatchEvent(new Event('pointerenter'));
+    expect(state.hovered()).toBe(false);
+    second.dispatchEvent(new Event('pointerenter'));
+    expect(state.hovered()).toBe(true);
   });
 
   it('uses initial fallback when target is unavailable', () => {

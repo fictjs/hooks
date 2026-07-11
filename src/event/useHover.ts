@@ -9,6 +9,7 @@ export interface UseHoverOptions {
 
 export interface UseHoverReturn {
   hovered: () => boolean;
+  refresh: () => void;
 }
 
 /**
@@ -21,20 +22,29 @@ export function useHover(target: MaybeElement, options: UseHoverOptions = {}): U
   const hovered = createSignal(initialValue);
   let previousTarget: Element | undefined;
 
-  useEventListener(target, 'pointerenter', () => {
+  const enterListener = useEventListener(target, 'pointerenter', () => {
     hovered(true);
   });
-  useEventListener(target, 'pointerleave', () => {
+  const leaveListener = useEventListener(target, 'pointerleave', () => {
     hovered(false);
   });
 
-  createEffect(() => {
+  const syncTarget = () => {
     const currentTarget = resolveMaybeTarget(target);
     if (currentTarget !== previousTarget) {
       previousTarget = currentTarget;
       hovered(initialValue);
     }
-  });
+  };
 
-  return { hovered };
+  createEffect(syncTarget);
+
+  return {
+    hovered,
+    refresh() {
+      syncTarget();
+      enterListener.refresh();
+      leaveListener.refresh();
+    }
+  };
 }

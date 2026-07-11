@@ -23,12 +23,17 @@ export interface UseClickOutsideControls {
   trigger: (event?: Event) => void;
 }
 
+type WindowWithDomConstructors = Window & {
+  Event: typeof Event;
+  MouseEvent: typeof MouseEvent;
+};
+
 function getEventPath(event: Event): EventTarget[] {
   return typeof event.composedPath === 'function' ? event.composedPath() : [];
 }
 
-function isKeyboardClick(event: Event): boolean {
-  return event instanceof MouseEvent && event.detail === 0;
+function isKeyboardClick(event: Event, MouseEventCtor?: typeof MouseEvent): boolean {
+  return !!MouseEventCtor && event instanceof MouseEventCtor && event.detail === 0;
 }
 
 function isNodeInside(elements: Element[], node: Node, event: Event): boolean {
@@ -37,8 +42,23 @@ function isNodeInside(elements: Element[], node: Node, event: Event): boolean {
     (element) =>
       element.contains(node) ||
       path.includes(element) ||
-      path.some((entry) => entry instanceof Node && element.contains(entry))
+      path.some((entry) => {
+        try {
+          return element.contains(entry as Node);
+        } catch {
+          return false;
+        }
+      })
   );
+}
+
+function isNodeValue(probe: Element, target: EventTarget): target is Node {
+  try {
+    probe.contains(target as Node);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -51,15 +71,22 @@ export function useClickOutside(
   handler: (event: Event) => void,
   options: UseClickOutsideOptions = {}
 ): UseClickOutsideControls {
-  const windowRef = options.window === undefined ? defaultWindow : options.window;
   const documentRef = options.document === undefined ? defaultDocument : options.document;
+  const windowRef =
+    options.window === undefined
+      ? options.document === undefined
+        ? defaultWindow
+        : documentRef?.defaultView
+      : options.window;
   const ignoreTargets = options.ignore ? toArray(options.ignore) : [];
+  const realmWindow = (windowRef ?? documentRef?.defaultView) as WindowWithDomConstructors | null;
+  const MouseEventCtor = realmWindow?.MouseEvent;
 
   let pointerDownOutside = false;
 
   const isOutside = (event: Event) => {
-    const node = event.target as Node | null;
-    if (!node || !documentRef) {
+    const eventTarget = event.target;
+    if (!eventTarget || !documentRef) {
       return false;
     }
 
@@ -67,6 +94,10 @@ export function useClickOutside(
     if (targetElements.length === 0) {
       return false;
     }
+    if (!isNodeValue(targetElements[0]!, eventTarget)) {
+      return false;
+    }
+    const node = eventTarget;
 
     const ignoreElements = ignoreTargets.flatMap((item) => {
       const resolved = resolveIgnoreElement(item, documentRef);
@@ -84,14 +115,22 @@ export function useClickOutside(
   };
 
   const onPointerDown = (event: Event) => {
-    pointerDownOutside = isOutside(event);
+    try {
+      pointerDownOutside = isOutside(event);
+    } catch (error) {
+      pointerDownOutside = false;
+      throw error;
+    }
   };
 
   const onClick = (event: Event) => {
-    if ((pointerDownOutside || isKeyboardClick(event)) && isOutside(event)) {
-      handler(event);
+    try {
+      if ((pointerDownOutside || isKeyboardClick(event, MouseEventCtor)) && isOutside(event)) {
+        handler(event);
+      }
+    } finally {
+      pointerDownOutside = false;
     }
-    pointerDownOutside = false;
   };
 
   const downControls = useEventListener(windowRef, 'pointerdown', onPointerDown, {
@@ -99,23 +138,54 @@ export function useClickOutside(
     passive: true
   });
   const clickControls = useEventListener(windowRef, 'click', onClick, {
-    capture: options.capture ?? true,
-    passive: true
+    capture: options.capture ?? true
   });
   const active = createMemo(() => downControls.active() && clickControls.active());
 
+  const stopAll = () => {
+    pointerDownOutside = false;
+    let cleanupFailed = false;
+    let cleanupError: unknown;
+    for (const controls of [downControls, clickControls]) {
+      try {
+        controls.stop();
+      } catch (error) {
+        if (!cleanupFailed) {
+          cleanupFailed = true;
+          cleanupError = error;
+        }
+      }
+    }
+    if (cleanupFailed) {
+      throw cleanupError;
+    }
+  };
+
   return {
     start() {
-      downControls.start();
-      clickControls.start();
+      try {
+        downControls.start();
+        clickControls.start();
+      } catch (error) {
+        pointerDownOutside = false;
+        try {
+          clickControls.stop();
+        } catch {
+          // Preserve the setup failure after best-effort rollback.
+        }
+        try {
+          downControls.stop();
+        } catch {
+          // Preserve the setup failure after best-effort rollback.
+        }
+        throw error;
+      }
     },
-    stop() {
-      downControls.stop();
-      clickControls.stop();
-    },
+    stop: stopAll,
     active,
     trigger(event) {
-      handler(event ?? new Event('click'));
+      const EventCtor = realmWindow?.Event ?? globalThis.Event;
+      handler(event ?? new EventCtor('click'));
     }
   };
 }
