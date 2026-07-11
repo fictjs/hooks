@@ -33,63 +33,6 @@ function walkFiles(directory) {
 
 const reactiveKinds = new Set(['signal', 'memo', 'store', 'effect']);
 
-function parseFictReturn(annotation, file) {
-  const trimmed = annotation.trim();
-  if (trimmed === '{}' || trimmed === '{ }') {
-    return null;
-  }
-
-  const directMatch = trimmed.match(/^['"]?(signal|memo|store|effect)['"]?$/);
-  if (directMatch) {
-    return { directAccessor: directMatch[1] };
-  }
-
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-    if (!/['"]?(signal|memo|store|effect)['"]?/.test(trimmed)) {
-      return null;
-    }
-    fail(`unsupported @fictReturn annotation in ${toRootRelative(file)}: ${trimmed}`);
-  }
-
-  const objectProps = {};
-  const body = trimmed.slice(1, -1);
-  const propPattern =
-    /(?:['"]?([A-Za-z_$][\w$]*)['"]?)\s*:\s*['"]?(signal|memo|store|effect)['"]?/g;
-  let match;
-  while ((match = propPattern.exec(body))) {
-    objectProps[match[1]] = match[2];
-  }
-
-  if (Object.keys(objectProps).length === 0) {
-    return null;
-  }
-
-  return { objectProps };
-}
-
-function extractReactiveHookMetadata() {
-  const sourceDir = path.join(root, 'src');
-  const hooks = new Map();
-
-  for (const file of walkFiles(sourceDir)) {
-    if (!file.endsWith('.ts')) continue;
-    const source = readFileSync(file, 'utf8');
-    const exportMatch = source.match(/export function (use[A-Z][A-Za-z0-9_]*)\b/);
-    if (!exportMatch) continue;
-
-    const annotationMatch = source.match(/@fictReturn\s+([^\n*]+)/);
-    if (!annotationMatch) continue;
-
-    const annotation = annotationMatch[1]?.trim() ?? '';
-    const hookMetadata = parseFictReturn(annotation, file);
-    if (hookMetadata) {
-      hooks.set(exportMatch[1], hookMetadata);
-    }
-  }
-
-  return hooks;
-}
-
 function assertHookMetadataMatches(hookName, expected, actual) {
   if (expected.directAccessor) {
     if (actual?.directAccessor !== expected.directAccessor) {
@@ -188,7 +131,54 @@ const requiredDistFiles = [
   'dist/index.fict.meta.json',
   'dist/index.js'
 ];
-const requiredPackageFiles = ['LICENSE', 'README.md', 'package.json', ...requiredDistFiles];
+const requiredHookDocs = [
+  'docs/hooks/useAsyncState.md',
+  'docs/hooks/useClickOutside.md',
+  'docs/hooks/useClipboard.md',
+  'docs/hooks/useCounter.md',
+  'docs/hooks/useDebounceFn.md',
+  'docs/hooks/useDocumentVisibility.md',
+  'docs/hooks/useEventListener.md',
+  'docs/hooks/useFetch.md',
+  'docs/hooks/useFocusWithin.md',
+  'docs/hooks/useFullscreen.md',
+  'docs/hooks/useGeolocation.md',
+  'docs/hooks/useHover.md',
+  'docs/hooks/useIdle.md',
+  'docs/hooks/useIntersectionObserver.md',
+  'docs/hooks/useIntervalFn.md',
+  'docs/hooks/useKeyPress.md',
+  'docs/hooks/useLocalStorage.md',
+  'docs/hooks/useMediaQuery.md',
+  'docs/hooks/useMount.md',
+  'docs/hooks/useMutationObserver.md',
+  'docs/hooks/useNetwork.md',
+  'docs/hooks/usePermission.md',
+  'docs/hooks/usePrevious.md',
+  'docs/hooks/useRafFn.md',
+  'docs/hooks/useRequest.md',
+  'docs/hooks/useResizeObserver.md',
+  'docs/hooks/useScroll.md',
+  'docs/hooks/useSessionStorage.md',
+  'docs/hooks/useSize.md',
+  'docs/hooks/useStorage.md',
+  'docs/hooks/useThrottleFn.md',
+  'docs/hooks/useTimeoutFn.md',
+  'docs/hooks/useTitle.md',
+  'docs/hooks/useToggle.md',
+  'docs/hooks/useUnmount.md',
+  'docs/hooks/useVirtualList.md',
+  'docs/hooks/useWebSocket.md',
+  'docs/hooks/useWindowScroll.md',
+  'docs/hooks/useWindowSize.md'
+];
+const requiredPackageFiles = [
+  'LICENSE',
+  'README.md',
+  'package.json',
+  ...requiredDistFiles,
+  ...requiredHookDocs
+];
 
 const pkg = readJson('package.json');
 if (pkg.name !== '@fictjs/hooks') {
@@ -203,7 +193,26 @@ if (
 if (pkg.fict?.metadata !== './dist/index.fict.meta.json') {
   fail('package.json must declare fict.metadata as ./dist/index.fict.meta.json');
 }
-assertSameSet('package.json files allowlist', pkg.files ?? [], ['dist']);
+assertSameSet('package.json files allowlist', pkg.files ?? [], ['dist', 'docs']);
+
+const hookDocFiles = walkFiles(path.join(root, 'docs/hooks')).map(toRootRelative);
+assertSameSet('hook documentation files', hookDocFiles, requiredHookDocs);
+
+const readme = readFileSync(path.join(root, 'README.md'), 'utf8');
+const versionedDocsRoot = `https://github.com/fictjs/hooks/tree/v${pkg.version}/docs/hooks`;
+const versionedDocsFileRoot = `https://github.com/fictjs/hooks/blob/v${pkg.version}/`;
+const expectedReadmeHookDocLinks = [
+  versionedDocsRoot,
+  ...requiredHookDocs.map((doc) => `${versionedDocsFileRoot}${doc}`)
+];
+const readmeHookDocLinks = [...readme.matchAll(/\]\(([^)\s]*docs\/hooks[^)\s]*)\)/g)].map(
+  (match) => match[1]
+);
+assertSameSet(
+  'versioned README hook documentation links',
+  readmeHookDocLinks,
+  expectedReadmeHookDocLinks
+);
 
 const packageEntryPaths = [
   ['main', pkg.main],
@@ -254,12 +263,24 @@ const cjsEntry = require(path.join(root, 'dist/index.cjs'));
 smokeDistEntry(cjsEntry, 'cjs');
 
 const metadata = readJson('dist/index.fict.meta.json');
-if (metadata.version !== 1) {
-  fail(`expected metadata version 1, got ${metadata.version}`);
+const metadataContract = readJson('contracts/fict-metadata.json');
+const expectedRuntimeExports = new Set([
+  'clearRequestCache',
+  'useMount',
+  'useUnmount',
+  ...Object.keys(metadataContract.hooks ?? {})
+]);
+assertSameSet('ESM runtime exports', Object.keys(esmEntry), expectedRuntimeExports);
+assertSameSet('CommonJS runtime exports', Object.keys(cjsEntry), expectedRuntimeExports);
+if (metadata.version !== metadataContract.version) {
+  fail(`expected metadata version ${metadataContract.version}, got ${metadata.version}`);
+}
+if (JSON.stringify(metadata.exports ?? {}) !== JSON.stringify(metadataContract.exports ?? {})) {
+  fail('metadata exports do not match contracts/fict-metadata.json');
 }
 
 const metadataHooks = new Set(Object.keys(metadata.hooks ?? {}));
-const expectedHookMetadata = extractReactiveHookMetadata();
+const expectedHookMetadata = new Map(Object.entries(metadataContract.hooks ?? {}));
 const expectedHooks = new Set(expectedHookMetadata.keys());
 const missingHooks = [...expectedHooks].filter((hook) => !metadataHooks.has(hook));
 if (missingHooks.length > 0) {
@@ -297,5 +318,6 @@ const packedFiles = new Set(packed.files.map((file) => file.path));
 assertSameSet('npm pack output files', packedFiles, requiredPackageFiles);
 
 console.log(
-  `metadata verification passed: ${expectedHooks.size} reactive hooks, ${packed.files.length} packed files`
+  `metadata verification passed: ${expectedRuntimeExports.size} runtime exports, ` +
+    `${expectedHooks.size} reactive hooks, ${packed.files.length} packed files`
 );

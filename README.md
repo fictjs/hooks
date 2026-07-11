@@ -30,8 +30,9 @@ pnpm add @fictjs/hooks @fictjs/runtime
 
 ## Requirements
 
-- Runtime package: Node.js >= 18
-- Development/build/test: Node.js 22.x or newer; release publishing runs on Node.js 24
+- Runtime consumers: Node.js >= 18
+- Repository development/build/test: Node.js `^22.18.0 || >=24.11.0` (the supported range of the build toolchain)
+- Release publishing: Node.js 24.11 or newer
 - Peer dependency: `@fictjs/runtime@^0.26.0`
 
 ## Quick Start
@@ -78,18 +79,17 @@ Run `pnpm verify:metadata` after `pnpm build` to verify the generated metadata a
 
 ## Hook Docs
 
-All hook docs live in
-[`docs/hooks`](https://github.com/fictjs/hooks/tree/main/docs/hooks).
+All hook docs are versioned with each release under [`docs/hooks`](https://github.com/fictjs/hooks/tree/v0.28.0/docs/hooks).
 
-- Lifecycle: [`useMount`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useMount.md), [`useUnmount`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useUnmount.md)
-- Event: [`useEventListener`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useEventListener.md), [`useClickOutside`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useClickOutside.md), [`useHover`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useHover.md), [`useFocusWithin`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useFocusWithin.md), [`useKeyPress`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useKeyPress.md)
-- Timing: [`useDebounceFn`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useDebounceFn.md), [`useThrottleFn`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useThrottleFn.md), [`useTimeoutFn`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useTimeoutFn.md), [`useIntervalFn`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useIntervalFn.md), [`useRafFn`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useRafFn.md)
-- State: [`useToggle`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useToggle.md), [`useCounter`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useCounter.md), [`usePrevious`](https://github.com/fictjs/hooks/blob/main/docs/hooks/usePrevious.md), [`useVirtualList`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useVirtualList.md)
-- Browser: [`useScroll`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useScroll.md), [`useWindowScroll`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useWindowScroll.md), [`useWindowSize`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useWindowSize.md), [`useTitle`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useTitle.md), [`useFullscreen`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useFullscreen.md), [`usePermission`](https://github.com/fictjs/hooks/blob/main/docs/hooks/usePermission.md), [`useGeolocation`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useGeolocation.md), [`useIdle`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useIdle.md), [`useSize`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useSize.md), [`useWebSocket`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useWebSocket.md), [`useMediaQuery`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useMediaQuery.md), [`useDocumentVisibility`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useDocumentVisibility.md), [`useNetwork`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useNetwork.md)
-- Storage: [`useStorage`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useStorage.md), [`useLocalStorage`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useLocalStorage.md), [`useSessionStorage`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useSessionStorage.md)
-- Observer: [`useIntersectionObserver`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useIntersectionObserver.md), [`useResizeObserver`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useResizeObserver.md), [`useMutationObserver`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useMutationObserver.md)
-- Async: [`useAsyncState`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useAsyncState.md), [`useFetch`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useFetch.md), [`useRequest`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useRequest.md)
-- Clipboard: [`useClipboard`](https://github.com/fictjs/hooks/blob/main/docs/hooks/useClipboard.md)
+- Lifecycle: [`useMount`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useMount.md), [`useUnmount`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useUnmount.md)
+- Event: [`useEventListener`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useEventListener.md), [`useClickOutside`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useClickOutside.md), [`useHover`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useHover.md), [`useFocusWithin`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useFocusWithin.md), [`useKeyPress`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useKeyPress.md)
+- Timing: [`useDebounceFn`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useDebounceFn.md), [`useThrottleFn`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useThrottleFn.md), [`useTimeoutFn`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useTimeoutFn.md), [`useIntervalFn`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useIntervalFn.md), [`useRafFn`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useRafFn.md)
+- State: [`useToggle`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useToggle.md), [`useCounter`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useCounter.md), [`usePrevious`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/usePrevious.md), [`useVirtualList`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useVirtualList.md)
+- Browser: [`useScroll`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useScroll.md), [`useWindowScroll`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useWindowScroll.md), [`useWindowSize`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useWindowSize.md), [`useTitle`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useTitle.md), [`useFullscreen`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useFullscreen.md), [`usePermission`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/usePermission.md), [`useGeolocation`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useGeolocation.md), [`useIdle`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useIdle.md), [`useSize`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useSize.md), [`useWebSocket`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useWebSocket.md), [`useMediaQuery`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useMediaQuery.md), [`useDocumentVisibility`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useDocumentVisibility.md), [`useNetwork`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useNetwork.md)
+- Storage: [`useStorage`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useStorage.md), [`useLocalStorage`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useLocalStorage.md), [`useSessionStorage`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useSessionStorage.md)
+- Observer: [`useIntersectionObserver`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useIntersectionObserver.md), [`useResizeObserver`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useResizeObserver.md), [`useMutationObserver`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useMutationObserver.md)
+- Async: [`useAsyncState`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useAsyncState.md), [`useFetch`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useFetch.md), [`useRequest`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useRequest.md)
+- Clipboard: [`useClipboard`](https://github.com/fictjs/hooks/blob/v0.28.0/docs/hooks/useClipboard.md)
 
 ## Demo Website
 
@@ -109,13 +109,15 @@ pnpm demo:build
 
 Before publish, these checks must pass:
 
-1. `pnpm lint`
-2. `pnpm typecheck`
-3. `pnpm test:types`
-4. `pnpm test:coverage`
-5. `pnpm build`
-6. `pnpm verify:metadata`
-7. `pnpm test:attw`
+1. `pnpm audit:dev`
+2. `pnpm lint`
+3. `pnpm typecheck`
+4. `pnpm test:types`
+5. `pnpm test:types:ts53`
+6. `pnpm test:coverage`
+7. `pnpm build`
+8. `pnpm verify:metadata`
+9. `pnpm test:attw`
 
 `prepublishOnly` already enforces this pipeline.
 

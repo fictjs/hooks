@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "exports": {},
+  "hooks": {
+    "useAsyncState": {
+      "objectProps": {
+        "state": "signal",
+        "isLoading": "signal",
+        "error": "signal"
+      }
+    },
+    "useFetch": {
+      "objectProps": {
+        "data": "signal",
+        "error": "signal",
+        "isLoading": "signal",
+        "status": "signal",
+        "aborted": "signal"
+      }
+    },
+    "useRequest": {
+      "objectProps": {
+        "data": "signal",
+        "error": "signal",
+        "loading": "signal",
+        "params": "signal"
+      }
+    },
+    "useClipboard": {
+      "objectProps": {
+        "text": "signal",
+        "copied": "signal",
+        "isSupported": "signal"
+      }
+    },
+    "useEventListener": {
+      "objectProps": {
+        "active": "signal"
+      }
+    },
+    "useClickOutside": {
+      "objectProps": {
+        "active": "memo"
+      }
+    },
+    "useFocusWithin": {
+      "objectProps": {
+        "focused": "signal"
+      }
+    },
+    "useHover": {
+      "objectProps": {
+        "hovered": "signal"
+      }
+    },
+    "useKeyPress": {
+      "objectProps": {
+        "active": "signal"
+      }
+    },
+    "useDebounceFn": {
+      "objectProps": {
+        "pending": "signal"
+      }
+    },
+    "useIntervalFn": {
+      "objectProps": {
+        "pending": "signal"
+      }
+    },
+    "useRafFn": {
+      "objectProps": {
+        "active": "signal"
+      }
+    },
+    "useThrottleFn": {
+      "objectProps": {
+        "pending": "signal"
+      }
+    },
+    "useTimeoutFn": {
+      "objectProps": {
+        "pending": "signal"
+      }
+    },
+    "useLocalStorage": {
+      "objectProps": {
+        "value": "signal"
+      }
+    },
+    "useSessionStorage": {
+      "objectProps": {
+        "value": "signal"
+      }
+    },
+    "useStorage": {
+      "objectProps": {
+        "value": "signal"
+      }
+    },
+    "useIntersectionObserver": {
+      "objectProps": {
+        "entries": "signal",
+        "isSupported": "signal",
+        "active": "signal"
+      }
+    },
+    "useMutationObserver": {
+      "objectProps": {
+        "records": "signal",
+        "isSupported": "signal",
+        "active": "signal"
+      }
+    },
+    "useResizeObserver": {
+      "objectProps": {
+        "entries": "signal",
+        "isSupported": "signal",
+        "active": "signal"
+      }
+    },
+    "useCounter": {
+      "objectProps": {
+        "count": "signal"
+      }
+    },
+    "usePrevious": {
+      "directAccessor": "signal"
+    },
+    "useToggle": {
+      "objectProps": {
+        "value": "signal"
+      }
+    },
+    "useVirtualList": {
+      "objectProps": {
+        "list": "memo",
+        "totalHeight": "memo",
+        "start": "memo",
+        "end": "memo",
+        "scrollTop": "signal"
+      }
+    },
+    "useDocumentVisibility": {
+      "objectProps": {
+        "visibility": "signal",
+        "hidden": "memo"
+      }
+    },
+    "useMediaQuery": {
+      "objectProps": {
+        "matches": "signal",
+        "query": "signal",
+        "isSupported": "signal"
+      }
+    },
+    "useNetwork": {
+      "objectProps": {
+        "online": "signal",
+        "downlink": "signal",
+        "effectiveType": "signal",
+        "rtt": "signal",
+        "saveData": "signal",
+        "type": "signal",
+        "isSupported": "signal"
+      }
+    },
+    "useScroll": {
+      "objectProps": {
+        "x": "signal",
+        "y": "signal"
+      }
+    },
+    "usePermission": {
+      "objectProps": {
+        "state": "signal",
+        "isSupported": "signal"
+      }
+    },
+    "useGeolocation": {
+      "objectProps": {
+        "isSupported": "signal",
+        "coords": "signal",
+        "locatedAt": "signal",
+        "error": "signal",
+        "active": "signal"
+      }
+    },
+    "useIdle": {
+      "objectProps": {
+        "idle": "signal",
+        "lastActive": "signal",
+        "isSupported": "signal",
+        "active": "signal"
+      }
+    },
+    "useSize": {
+      "objectProps": {
+        "width": "signal",
+        "height": "signal",
+        "top": "signal",
+        "left": "signal",
+        "x": "signal",
+        "y": "signal",
+        "isSupported": "signal",
+        "active": "signal"
+      }
+    },
+    "useWebSocket": {
+      "objectProps": {
+        "data": "signal",
+        "error": "signal",
+        "status": "signal",
+        "isSupported": "signal",
+        "reconnectCount": "signal"
+      }
+    },
+    "useWindowSize": {
+      "objectProps": {
+        "width": "signal",
+        "height": "signal"
+      }
+    },
+    "useWindowScroll": {
+      "objectProps": {
+        "x": "signal",
+        "y": "signal"
+      }
+    },
+    "useTitle": {
+      "objectProps": {
+        "title": "signal"
+      }
+    },
+    "useFullscreen": {
+      "objectProps": {
+        "isSupported": "signal",
+        "isFullscreen": "signal"
+      }
+    }
+  }
+}

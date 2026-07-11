@@ -29,7 +29,8 @@
     "metadata": "./dist/index.fict.meta.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "docs"
   ],
   "sideEffects": false,
   "engines": {
@@ -55,10 +56,13 @@
     "demo:build": "vite build playground",
     "demo:preview": "vite preview playground",
     "clean": "rimraf dist coverage",
+    "audit:dev": "pnpm --ignore-workspace audit --audit-level high",
     "verify:metadata": "node scripts/verify-package-metadata.mjs",
-    "pack:dry": "pnpm run build && pnpm run verify:metadata",
+    "lint:dist": "eslint --no-ignore --config eslint.dist.config.mjs dist/index.js dist/index.cjs",
+    "pack:dry": "pnpm run build && pnpm run lint:dist && pnpm run verify:metadata",
     "typecheck": "tsc --noEmit",
     "test:types": "pnpm run build && tsc -p test-dts/tsconfig.json --noEmit",
+    "test:types:ts53": "pnpm run build && npm exec --yes --package=typescript@5.3.3 -- tsc -p test-dts/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -69,7 +73,7 @@
     "test:watch": "pnpm run build && vitest",
     "prepare": "husky",
     "commit": "git-cz",
-    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test:coverage && pnpm run build && pnpm run verify:metadata && pnpm run test:attw"
+    "prepublishOnly": "pnpm run audit:dev && pnpm run lint && pnpm run typecheck && pnpm run test:types && pnpm run test:types:ts53 && pnpm run test:coverage && pnpm run build && pnpm run lint:dist && pnpm run verify:metadata && pnpm run test:attw"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
@@ -89,7 +93,7 @@
     "@fictjs/runtime": "^0.26.0",
     "@fictjs/vite-plugin": "^0.26.0",
     "@types/node": "^25.2.2",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^4.1.10",
     "commitizen": "^4.3.1",
     "eslint": "^10.0.0",
     "husky": "^9.1.7",
@@ -99,9 +103,32 @@
     "rimraf": "^6.1.2",
     "tsdown": "^0.22.3",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.54.0",
-    "vite": "^7.3.1",
-    "vitest": "^4.0.18"
+    "typescript-eslint": "^8.63.0",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10"
+  },
+  "pnpm": {
+    "overrides": {
+      "ajv@>=6.0.0 <6.14.0": "6.14.0",
+      "ajv@>=8.0.0 <8.18.0": "8.20.0",
+      "brace-expansion@>=1.0.0 <1.1.13": "1.1.13",
+      "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
+      "esbuild@>=0.27.3 <0.28.1": "0.28.1",
+      "fast-uri@>=3.0.0 <=3.1.1": "3.1.3",
+      "flatted@>=3.0.0 <3.4.2": "3.4.2",
+      "js-yaml@>=4.0.0 <=4.1.1": "4.3.0",
+      "lodash@>=4.0.0 <4.18.0": "4.18.1",
+      "minimatch@>=3.0.0 <3.1.4": "3.1.5",
+      "minimatch@>=9.0.0 <9.0.7": "9.0.9",
+      "minimatch@>=10.0.0 <10.2.3": "10.2.5",
+      "picomatch@>=2.0.0 <2.3.2": "2.3.2",
+      "picomatch@>=4.0.0 <4.0.4": "4.0.5",
+      "postcss@>=8.0.0 <8.5.10": "8.5.16",
+      "rollup@>=4.0.0 <4.59.0": "4.62.2",
+      "tmp@>=0.2.0 <0.2.7": "0.2.7",
+      "undici@>=7.0.0 <7.28.0": "7.28.0",
+      "yaml@>=2.0.0 <2.8.3": "2.9.0"
+    }
   },
   "author": "unadlib",
   "license": "MIT"
