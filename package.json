@@ -50,7 +50,7 @@
     "url": "git+https://github.com/fictjs/hooks.git"
   },
   "scripts": {
-    "build": "tsdown && rimraf dist/fict.manifest.json",
+    "build": "tsdown && node scripts/finalize-package-metadata.mjs && rimraf dist/fict.manifest.json",
     "dev": "tsdown --watch",
     "demo:dev": "vite playground",
     "demo:build": "vite build playground",
@@ -86,13 +86,13 @@
     ]
   },
   "peerDependencies": {
-    "@fictjs/runtime": "^0.26.0"
+    "@fictjs/runtime": "^0.32.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.4",
     "@eslint/js": "^10.0.1",
-    "@fictjs/runtime": "^0.26.0",
-    "@fictjs/vite-plugin": "^0.26.0",
+    "@fictjs/runtime": "^0.32.0",
+    "@fictjs/vite-plugin": "^0.32.0",
     "@types/node": "^25.2.2",
     "@vitest/coverage-v8": "^4.1.10",
     "commitizen": "^4.3.1",
@@ -112,22 +112,24 @@
     "overrides": {
       "ajv@>=6.0.0 <6.14.0": "6.14.0",
       "ajv@>=8.0.0 <8.18.0": "8.20.0",
-      "brace-expansion@>=1.0.0 <1.1.13": "1.1.13",
+      "brace-expansion@>=1.0.0 <1.1.18": "1.1.18",
       "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
+      "brace-expansion@>=5.0.0 <5.0.9": "5.0.9",
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
-      "fast-uri@>=3.0.0 <=3.1.1": "3.1.3",
+      "fast-uri@>=3.0.0 <3.1.5": "3.1.5",
       "flatted@>=3.0.0 <3.4.2": "3.4.2",
-      "js-yaml@>=4.0.0 <=4.1.1": "4.3.0",
+      "js-yaml@>=4.0.0 <4.3.1": "4.3.1",
       "lodash@>=4.0.0 <4.18.0": "4.18.1",
       "minimatch@>=3.0.0 <3.1.4": "3.1.5",
       "minimatch@>=9.0.0 <9.0.7": "9.0.9",
       "minimatch@>=10.0.0 <10.2.3": "10.2.5",
+      "nanoid@>=3.0.0 <3.3.18": "3.3.18",
       "picomatch@>=2.0.0 <2.3.2": "2.3.2",
       "picomatch@>=4.0.0 <4.0.4": "4.0.5",
-      "postcss@>=8.0.0 <8.5.10": "8.5.16",
+      "postcss@>=8.0.0 <8.5.18": "8.5.18",
       "rollup@>=4.0.0 <4.59.0": "4.62.2",
       "external-editor>tmp": "0.2.7",
-      "undici@>=7.0.0 <7.28.0": "7.28.0",
+      "undici@>=7.0.0 <7.29.0": "7.29.0",
       "yaml@>=2.0.0 <2.8.3": "2.9.0"
     }
   },

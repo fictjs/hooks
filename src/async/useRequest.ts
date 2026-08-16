@@ -73,9 +73,10 @@ export function clearRequestCache(cacheKey?: string): void {
   requestCache.delete(cacheKey);
 }
 
-function pruneExpiredCache<T>(cache: Map<string, UseRequestCacheEntry<T>>, now = Date.now()): void {
+function pruneExpiredCache<T>(cache: Map<string, UseRequestCacheEntry<T>>, now?: number): void {
+  const currentTime = now === undefined ? Date.now() : now;
   for (const [key, entry] of cache) {
-    if (entry.expiresAt <= now) {
+    if (entry.expiresAt <= currentTime) {
       cache.delete(key);
     }
   }

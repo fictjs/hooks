@@ -80,7 +80,7 @@ jobs:
           mkdir consumer
           cd consumer
           npm init --yes
-          npm install --ignore-scripts --no-audit --no-fund ../package-artifact/*.tgz @fictjs/runtime@^0.26.0
+          npm install --ignore-scripts --no-audit --no-fund ../package-artifact/*.tgz @fictjs/runtime@^0.32.0
       - name: Verify CommonJS entry
         working-directory: consumer
         run: |

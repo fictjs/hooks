@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import {
   copyFileSync,
   existsSync,
@@ -105,15 +107,15 @@ describe('compiler chain integration', () => {
       import { useCounter, usePrevious, useStorage, useVirtualList } from '@fictjs/hooks';
 
       export function App() {
-        const { count } = useCounter();
-        const previous = usePrevious(count);
-        const { value } = useStorage('compiler-chain', 1, { window: null });
-        const { list, totalHeight } = useVirtualList([1, 2, 3], {
+        const counter = useCounter();
+        const previous = usePrevious(counter.count);
+        const storage = useStorage('compiler-chain', 1, { window: null });
+        const virtualList = useVirtualList([1, 2, 3], {
           itemHeight: 20,
           containerHeight: 40
         });
 
-        return <div>{count}{previous}{value}{list.length}{totalHeight}</div>;
+        return <div>{counter.count}{previous}{storage.value}{virtualList.list.length}{virtualList.totalHeight}</div>;
       }
     `;
 
@@ -149,11 +151,11 @@ describe('compiler chain integration', () => {
     try {
       const appResult = await runTransform(plugin, appSource, appEntry);
       expect(appResult).not.toBeNull();
-      expect(appResult?.code).toMatch(/count\(\)/);
+      expect(appResult?.code).toMatch(/counter\.count\(\)/);
       expect(appResult?.code).toMatch(/previous\(\)/);
-      expect(appResult?.code).toMatch(/value\(\)/);
-      expect(appResult?.code).toMatch(/list\(\)\.length/);
-      expect(appResult?.code).toMatch(/totalHeight\(\)/);
+      expect(appResult?.code).toMatch(/storage\.value\(\)/);
+      expect(appResult?.code).toMatch(/virtualList\.list\(\)\.length/);
+      expect(appResult?.code).toMatch(/virtualList\.totalHeight\(\)/);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

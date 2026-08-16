@@ -33,7 +33,7 @@ pnpm add @fictjs/hooks @fictjs/runtime
 - Runtime consumers: Node.js >= 18
 - Repository development/build/test: Node.js `^22.18.0 || >=24.11.0` (the supported range of the build toolchain)
 - Release publishing: Node.js 24.11 or newer
-- Peer dependency: `@fictjs/runtime@^0.26.0`
+- Peer dependency: `@fictjs/runtime@^0.32.0`
 
 ## Quick Start
 
@@ -66,9 +66,27 @@ In plain TypeScript/JavaScript usage (without Fict compile transforms), read rea
 - ESM/CJS runtime files
 - `.d.ts` and `.d.cts` type declarations
 
-`package.json#fict.metadata` points at the generated metadata file so Fict 0.26.0 consumers can recover hook return reactivity from the published npm package.
+`package.json#fict.metadata` points at the generated metadata file so Fict 0.32.0 consumers can recover hook return reactivity from the published npm package.
 
 Run `pnpm verify:metadata` after `pnpm build` to verify the generated metadata and the npm tarball contents.
+
+### Fict 0.32.0 compiler compatibility
+
+Fict 0.32.0 consumes object-return hook metadata when reactive properties are read through the
+returned object:
+
+```tsx
+const counter = useCounter();
+return <div>{counter.count}</div>;
+```
+
+Its native compiler does not preserve object-property metadata through destructuring. When
+destructuring with Fict 0.32.0, call the accessor explicitly:
+
+```tsx
+const { count } = useCounter();
+return <div>{count()}</div>;
+```
 
 ## Runtime Semantics
 

@@ -53,6 +53,7 @@ function fictLibraryPlugin(): NonNullable<UserConfig['plugins']> {
     tsdownConfigResolved(config) {
       callHook(plugin.configResolved, plugin, [
         {
+          base: '/',
           build: {
             outDir: config.outDir,
             ssr: false
@@ -60,6 +61,10 @@ function fictLibraryPlugin(): NonNullable<UserConfig['plugins']> {
           command: 'build',
           logger: console,
           mode: 'production',
+          resolve: {
+            alias: [],
+            preserveSymlinks: false
+          },
           root: config.cwd
         } as unknown as ViteResolvedConfig
       ]);
