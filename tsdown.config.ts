@@ -2,29 +2,34 @@ import fict from '@fictjs/vite-plugin';
 import { defineConfig, type UserConfig } from 'tsdown';
 import type { Plugin as VitePlugin, ResolvedConfig as ViteResolvedConfig } from 'vite';
 
-export default defineConfig({
-  entry: {
-    index: 'src/index.ts'
-  },
-  format: ['esm', 'cjs'],
-  dts: {
-    cjsReexport: false,
-    sourcemap: false
-  },
-  deps: {
-    neverBundle: [/^@fictjs\/runtime(?:\/.*)?$/]
-  },
-  fixedExtension: false,
-  hash: false,
-  outDir: 'dist',
-  outExtensions: ({ format }) => ({
-    dts: format === 'cjs' ? '.d.cts' : '.d.ts',
-    js: format === 'cjs' ? '.cjs' : '.js'
-  }),
-  plugins: [fictLibraryPlugin()],
-  sourcemap: false,
-  target: 'es2020'
-});
+export default defineConfig(
+  // tsdown builds formats in parallel, while each Fict plugin owns mutable metadata state.
+  (['esm', 'cjs'] as const).map(
+    (format): UserConfig => ({
+      entry: {
+        index: 'src/index.ts'
+      },
+      format,
+      dts: {
+        cjsReexport: false,
+        sourcemap: false
+      },
+      deps: {
+        neverBundle: [/^@fictjs\/runtime(?:\/.*)?$/]
+      },
+      fixedExtension: false,
+      hash: false,
+      outDir: 'dist',
+      outExtensions: ({ format: outputFormat }) => ({
+        dts: outputFormat === 'cjs' ? '.d.cts' : '.d.ts',
+        js: outputFormat === 'cjs' ? '.cjs' : '.js'
+      }),
+      plugins: [fictLibraryPlugin()],
+      sourcemap: false,
+      target: 'es2020'
+    })
+  )
+);
 
 function fictLibraryPlugin(): NonNullable<UserConfig['plugins']> {
   const plugin = fict({ library: { packageJson: false } }) as VitePlugin;
