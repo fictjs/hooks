@@ -50,6 +50,7 @@
     "url": "git+https://github.com/fictjs/hooks.git"
   },
   "scripts": {
+    "release:prepare": "node scripts/prepare-release.mjs",
     "build": "tsdown && node scripts/finalize-package-metadata.mjs && rimraf dist/fict.manifest.json",
     "dev": "tsdown --watch",
     "demo:dev": "vite playground",
