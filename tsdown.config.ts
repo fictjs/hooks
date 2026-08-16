@@ -44,7 +44,7 @@ function fictLibraryPlugin(): NonNullable<UserConfig['plugins']> {
         return null;
       }
 
-      return callHook(transform, this, [code, id, options]);
+      return callHook(transform, withoutPipelineLoader(this), [code, id, options]);
     },
     generateBundle(options, bundle, isWrite) {
       return callHook(generateBundle, this, [
@@ -79,6 +79,30 @@ function fictLibraryPlugin(): NonNullable<UserConfig['plugins']> {
 
 function isDeclarationModule(id: string): boolean {
   return /\.d\.[cm]?ts(?:$|\?)/.test(id);
+}
+
+function withoutPipelineLoader<T extends object>(context: T): T {
+  const boundMethods = new Map<PropertyKey, unknown>();
+
+  // Rolldown may resolve `load()` before a concurrent dependency transform has populated
+  // Fict metadata. Hiding it selects the plugin's deterministic filesystem graph fallback.
+  return new Proxy(Object.create(null) as T, {
+    get(_target, property) {
+      if (property === 'load') {
+        return undefined;
+      }
+
+      const value = Reflect.get(context, property);
+      if (typeof value !== 'function') {
+        return value;
+      }
+
+      if (!boundMethods.has(property)) {
+        boundMethods.set(property, value.bind(context));
+      }
+      return boundMethods.get(property);
+    }
+  });
 }
 
 function callHook(hook: unknown, context: unknown, args: unknown[]): unknown {
