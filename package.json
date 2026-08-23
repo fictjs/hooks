@@ -87,12 +87,12 @@
     ]
   },
   "peerDependencies": {
-    "@fictjs/runtime": "^0.32.0"
+    "@fictjs/runtime": "^0.33.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.4",
     "@eslint/js": "^10.0.1",
-    "@fictjs/runtime": "^0.32.0",
+    "@fictjs/runtime": "^0.33.0",
     "@fictjs/vite-plugin": "^0.32.0",
     "@types/node": "^25.2.2",
     "@vitest/coverage-v8": "^4.1.10",

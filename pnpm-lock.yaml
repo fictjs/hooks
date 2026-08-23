@@ -38,8 +38,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.0.0(jiti@2.6.1))
       '@fictjs/runtime':
-        specifier: ^0.32.0
-        version: 0.32.0
+        specifier: ^0.33.0
+        version: 0.33.0
       '@fictjs/vite-plugin':
         specifier: ^0.32.0
         version: 0.32.0(vite@7.3.6(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.9.0))
@@ -480,8 +480,8 @@ packages:
   '@fictjs/compiler@0.32.0':
     resolution: {integrity: sha512-OELEmFBKdf0tsp02tNzxE4+MAfqeKuNrOqgyQlUrt+oj6NbaH68aFzvUgGrLQ4AGDe4ZflHHaRptR1YVDLJ+VQ==}
 
-  '@fictjs/runtime@0.32.0':
-    resolution: {integrity: sha512-hjAclIF2XXX9zC5FP+LiL4P3ISDevk3hA92Yrhe56G+vUNp0I5+7vbiAlPfIcNM/Putk2Lfkw7y1+bdV7icyUg==}
+  '@fictjs/runtime@0.33.0':
+    resolution: {integrity: sha512-5i0h+psf1Ew2dN3qEYG19iFFsb/IJGdNp8jqwVd+5ypi+FER3vGUREXJZ4vsr83t9T5VFgkQe12kDnVf4eAUeQ==}
 
   '@fictjs/vite-plugin@0.32.0':
     resolution: {integrity: sha512-Pmc1OJg4kMuBvtI90uzW+x7ybLimA+K5d/3C5mHOSoXFTgWJpVfxZUlr65DVz1EtIwaiN7fV6d4O/4DBiyrzPw==}
@@ -2652,7 +2652,7 @@ snapshots:
       '@fictjs/compiler-win32-arm64-msvc': 0.32.0
       '@fictjs/compiler-win32-x64-msvc': 0.32.0
 
-  '@fictjs/runtime@0.32.0': {}
+  '@fictjs/runtime@0.33.0': {}
 
   '@fictjs/vite-plugin@0.32.0(vite@7.3.6(@types/node@25.2.2)(jiti@2.6.1)(yaml@2.9.0))':
     dependencies:
